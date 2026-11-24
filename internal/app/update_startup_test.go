@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/update"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 type recordingUpdater struct {
@@ -175,5 +177,119 @@ func TestCheckForUpdatesOnStartupStaysQuietOnError(t *testing.T) {
 	got := config.LoadState().LastUpdateCheckTime()
 	if !got.Equal(now) {
 		t.Fatalf("failed check was not recorded; last = %v", got)
+	}
+}
+
+func TestCheckForUpdatesOnStartupSkipsOpenModal(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Update.StartupCheck = true
+	a := startupTestApp(t, settings)
+	u := &recordingUpdater{release: update.Release{Tag: "v2.0.0"}}
+	a.Updates = u
+	a.tasks.post = func(fn func()) error { t.Fatal("lookup posted while a modal was open"); return nil }
+	a.ShowDialog(ui.NewWidgetAdapter(widgets.NewDialogWidget(20)))
+	now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
+
+	a.CheckForUpdatesOnStartup(now)
+
+	if u.calls.Load() != 0 {
+		t.Fatal("startup check ran while a modal was open")
+	}
+	if !config.LoadState().LastUpdateCheckTime().IsZero() {
+		t.Fatal("open modal recorded a startup check")
+	}
+}
+
+type firstBlockedUpdater struct {
+	started chan context.Context
+	release chan struct{}
+	calls   atomic.Int32
+	tag     string
+	applied atomic.Int32
+}
+
+func (u *firstBlockedUpdater) Latest(ctx context.Context) (update.Release, error) {
+	n := u.calls.Add(1)
+	if n == 1 {
+		u.started <- ctx
+		<-u.release
+	}
+	return update.Release{Tag: u.tag}, nil
+}
+
+func (u *firstBlockedUpdater) Apply(context.Context, update.Release, update.Method) error {
+	u.applied.Add(1)
+	return nil
+}
+
+func TestCheckForUpdatesOnStartupLeavesManualDialogAlone(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Update.StartupCheck = true
+	a := startupTestApp(t, settings)
+	u := &firstBlockedUpdater{started: make(chan context.Context, 1), release: make(chan struct{}), tag: "v2.0.0"}
+	a.Updates = u
+	posted := make(chan func(), 2)
+	a.tasks.post = func(fn func()) error { posted <- fn; return nil }
+	now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
+
+	a.CheckForUpdatesOnStartup(now)
+	select {
+	case <-u.started:
+	case <-time.After(time.Second):
+		t.Fatal("startup lookup did not start")
+	}
+	a.CheckForUpdates()
+	close(u.release)
+	// Manual lookup is the second call and is not blocked; its delivery should
+	// land first, and the startup callback must leave that dialog alone.
+	var first, second func()
+	select {
+	case first = <-posted:
+	case <-time.After(time.Second):
+		t.Fatal("no lookup delivery")
+	}
+	select {
+	case second = <-posted:
+	case <-time.After(time.Second):
+		t.Fatal("missing second lookup delivery")
+	}
+	first()
+	second()
+	if a.updateDialog == nil || a.updateDialog.release.Tag != "v2.0.0" {
+		t.Fatal("manual Check for Updates dialog was lost")
+	}
+	if u.applied.Load() != 0 {
+		t.Fatal("startup or manual path applied an update")
+	}
+	if !config.LoadState().LastUpdateCheckTime().IsZero() {
+		t.Fatal("abandoned startup lookup recorded a check time")
+	}
+}
+
+func TestCheckForUpdatesOnStartupDoesNotRecordWhenResultHitsAModal(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Update.StartupCheck = true
+	a := startupTestApp(t, settings)
+	u := &firstBlockedUpdater{started: make(chan context.Context, 1), release: make(chan struct{}), tag: "v2.0.0"}
+	a.Updates = u
+	posted := make(chan func(), 1)
+	a.tasks.post = func(fn func()) error { posted <- fn; return nil }
+	now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
+
+	a.CheckForUpdatesOnStartup(now)
+	select {
+	case <-u.started:
+	case <-time.After(time.Second):
+		t.Fatal("startup lookup did not start")
+	}
+	a.ShowDialog(ui.NewWidgetAdapter(widgets.NewDialogWidget(20)))
+	close(u.release)
+	deliverStartupLookup(t, posted)
+
+	if a.updateDialog != nil {
+		t.Fatal("startup check replaced the open modal")
+	}
+	if !config.LoadState().LastUpdateCheckTime().IsZero() {
+		t.Fatal("blocked update was recorded; the next launch should retry")
 	}
 }

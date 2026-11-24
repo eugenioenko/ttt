@@ -68,6 +68,9 @@ func (a *App) closeUpdateDialog() {
 	if s == nil || s.updating {
 		return
 	}
+	if s.task == a.updateStartupTask {
+		a.updateStartupTask = nil
+	}
 	a.releaseTask(s.task)
 	a.Root.RemoveOverlay(s.adapter)
 	a.updateDialog = nil
@@ -147,16 +150,7 @@ func (a *App) checkLatestUpdate() {
 			return
 		}
 		s.release = release
-		message := i18n.Format("update.available", i18n.Args{"latest": displayVersion(release.Tag), "current": displayVersion(version)})
-		buttons := []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))}
-		switch s.method.Kind {
-		case update.Dev:
-			message += "\n" + i18n.Text("update.devBuild")
-		case update.Nix:
-			message += "\n" + i18n.Text("update.nix")
-		default:
-			buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
-		}
+		message, buttons := a.availableUpdatePrompt(release, s.method, version)
 		a.showUpdateState(message, release.Notes, buttons)
 	})
 }
@@ -226,8 +220,6 @@ func (a *App) CheckForUpdatesOnStartup(now time.Time) {
 	if a.Root != nil && a.Root.HasModalOverlay() {
 		return
 	}
-	a.rememberStartupUpdateCheck(now)
-
 	service := a.Updates
 	if service == nil {
 		service = update.Service{}
@@ -250,10 +242,11 @@ func (a *App) CheckForUpdatesOnStartup(now time.Time) {
 		}
 		return service.Latest(ctx)
 	}, func(release update.Release, err error) {
-		if err != nil || a.updateDialog != nil {
+		if a.updateDialog != nil {
 			return
 		}
-		if a.Root != nil && a.Root.HasModalOverlay() {
+		if err != nil {
+			a.rememberStartupUpdateCheck(now)
 			return
 		}
 		current := version
@@ -263,9 +256,15 @@ func (a *App) CheckForUpdatesOnStartup(now time.Time) {
 		}
 		cmp, cmpErr := update.CompareVersions(current, release.Tag)
 		if cmpErr != nil || cmp >= 0 {
+			a.rememberStartupUpdateCheck(now)
 			return
 		}
-		a.showStartupUpdate(release, detected)
+		if a.Root != nil && a.Root.HasModalOverlay() {
+			return
+		}
+		if a.showStartupUpdate(release, detected) {
+			a.rememberStartupUpdateCheck(now)
+		}
 	})
 }
 
@@ -285,9 +284,23 @@ func (a *App) rememberStartupUpdateCheck(now time.Time) {
 	a.State.SetLastUpdateCheckTime(now)
 }
 
-func (a *App) showStartupUpdate(release update.Release, method update.Method) {
+func (a *App) availableUpdatePrompt(release update.Release, method update.Method, version string) (string, []widgets.DialogButton) {
+	message := i18n.Format("update.available", i18n.Args{"latest": displayVersion(release.Tag), "current": displayVersion(version)})
+	buttons := []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))}
+	switch method.Kind {
+	case update.Dev:
+		message += "\n" + i18n.Text("update.devBuild")
+	case update.Nix:
+		message += "\n" + i18n.Text("update.nix")
+	default:
+		buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
+	}
+	return message, buttons
+}
+
+func (a *App) showStartupUpdate(release update.Release, method update.Method) bool {
 	if a.Root == nil || a.Root.HasModalOverlay() {
-		return
+		return false
 	}
 	s := &updateDialogState{dialog: widgets.NewDialogWidget(76), service: a.Updates, method: method, release: release}
 	if s.service == nil {
@@ -303,16 +316,8 @@ func (a *App) showStartupUpdate(release update.Release, method update.Method) {
 		s.task = NewTask[update.Release](a, asynctask.TaskOptions{})
 	}
 	a.updateDialog = s
-	message := i18n.Format("update.available", i18n.Args{"latest": displayVersion(release.Tag), "current": displayVersion(a.Version)})
-	buttons := []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))}
-	switch s.method.Kind {
-	case update.Dev:
-		message += "\n" + i18n.Text("update.devBuild")
-	case update.Nix:
-		message += "\n" + i18n.Text("update.nix")
-	default:
-		buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
-	}
+	message, buttons := a.availableUpdatePrompt(release, method, a.Version)
 	a.showUpdateState(message, release.Notes, buttons)
 	a.ShowDialog(s.adapter)
+	return true
 }
