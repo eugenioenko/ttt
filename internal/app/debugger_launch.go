@@ -91,6 +91,9 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &debugRun{ctx: ctx, cancel: cancel}
 	a.debugger.run = run
+	a.ensureDebugPanel()
+	a.Sidebar.SetActivePanel("debug")
+	a.ShowSidebar()
 	for _, g := range a.editorGroups() {
 		a.wireDebuggerGutter(g)
 	}
@@ -144,7 +147,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			}
 			cancel()
 			a.debugger.run = nil
-			a.debugger.stoppedFile = ""
+			a.clearDebugInspection()
 			for _, lines := range a.debugger.points {
 				for line := range lines {
 					lines[line] = false
@@ -159,10 +162,11 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 		var b struct{ ThreadID int }
 		if json.Unmarshal(event.Body, &b) == nil {
 			run.thread = b.ThreadID
+			a.debugStopped(run)
 		}
 	case "continued":
 		run.thread = 0
-		a.debugger.stoppedFile = ""
+		a.clearDebugInspection()
 	case "output":
 		var b struct{ Output string }
 		if json.Unmarshal(event.Body, &b) == nil {

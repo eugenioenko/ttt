@@ -1,4 +1,8 @@
 {
+  "debug.panel": "Debug",
+  "debug.stack": "Call Stack",
+  "debug.variables": "Variables",
+  "debug.breakpoints": "Breakpoints",
   "debug.start": "Start Debugging",
   "debug.stop": "Stop Debugging",
   "debug.continue": "Debug: Continue",

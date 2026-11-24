@@ -9,6 +9,7 @@ import (
 )
 
 type debuggerState struct {
+	panel       debugSidebar
 	run         *debugRun
 	points      map[string]map[int]bool
 	stoppedFile string
@@ -22,6 +23,7 @@ func (a *App) initDebuggerGutter() {
 	for _, folder := range a.Workspace.Folders {
 		for _, dir := range []string{".ttt", ".vscode"} {
 			if _, err := os.Stat(filepath.Join(folder.Path, dir, "launch.json")); err == nil {
+				a.ensureDebugPanel()
 				a.wireDebuggerGutter(a.EditorGroup)
 				return
 			}
@@ -64,4 +66,5 @@ func (a *App) toggleBreakpoint(path string, line int) {
 	} else {
 		points[line] = false
 	}
+	a.refreshDebugPanel()
 }
