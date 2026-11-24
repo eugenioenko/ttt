@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 )
 
 func (t Target) defaultPython() string {
@@ -93,6 +94,8 @@ func OpenAdapter(ctx context.Context, t Target, args map[string]any, onEvent fun
 	}
 	cmd := exec.Command(python, "-m", "debugpy.adapter")
 	cmd.Dir = t.Folder
+	cmd.Stderr = adapterStderr(onEvent)
+	cmd.WaitDelay = time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return nil, err

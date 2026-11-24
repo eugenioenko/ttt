@@ -1,6 +1,7 @@
 {
   "debug.confirmLine": "Toggle to confirm this line",
   "debug.editedSource": "Source edited during debugging",
+  "debug.adapterClosed": "Debug adapter disconnected unexpectedly",
   "debug.exitCode": "Program exited with code {code}",
   "debug.pause": "Debug: Pause",
   "debug.toggleBreakpoint": "Toggle Breakpoint",

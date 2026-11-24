@@ -17,6 +17,7 @@ import (
 )
 
 type debugRun struct {
+	failed            bool
 	stopGeneration    uint64
 	allThreadsStopped bool
 	edited            map[string]bool
@@ -203,6 +204,13 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 				select {
 				case <-ctx.Done():
 				case <-s.Done():
+					deliver(func() {
+						if run.ctx.Err() == nil {
+							run.failed = true
+							a.StatusError(t.Name + ": " + i18n.Text("debug.adapterClosed"))
+							run.cancel()
+						}
+					})
 				}
 			}
 			s.Close(t.Request == "launch")
@@ -214,7 +222,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			a.flushDebugOutput(run, t.Name)
 			cancel()
 			a.debugger.run = nil
-			if err == nil {
+			if err == nil && !run.failed {
 				a.StatusNotify(i18n.Text("debug.finished"))
 			}
 			for _, lines := range a.debugger.points {

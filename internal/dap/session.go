@@ -34,6 +34,19 @@ type Event struct {
 	Body json.RawMessage
 }
 
+type adapterStderr func(Event)
+
+func (output adapterStderr) Write(data []byte) (int, error) {
+	if output != nil {
+		body, err := json.Marshal(map[string]string{"category": "stderr", "output": string(data)})
+		if err != nil {
+			return 0, err
+		}
+		output(Event{Name: "output", Body: body})
+	}
+	return len(data), nil
+}
+
 type Session struct {
 	jsAddr          string
 	child           *Session
@@ -61,6 +74,8 @@ func startListeningAdapter(ctx context.Context, binary string, args []string, fo
 	procCtx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(procCtx, binary, args...)
 	cmd.Dir = folder
+	cmd.Stderr = adapterStderr(onEvent)
+	cmd.WaitDelay = time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancel()
