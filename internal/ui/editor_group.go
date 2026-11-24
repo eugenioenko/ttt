@@ -2246,17 +2246,17 @@ func (g *EditorGroupWidget) IsActiveReadOnly() bool {
 	return false
 }
 
-func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
+func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) error {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].ReadOnly {
 			g.SwitchTab(i)
-			return
+			return nil
 		}
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}}
 	if err := newBuf.LoadFile(path); err != nil {
 		g.reportError(i18n.Format("editorGroup.failedToOpen", i18n.Args{"path": path, "error": err}))
-		return
+		return err
 	}
 	tabSize := g.TabSize
 	detected := buffer.DetectIndent(newBuf.Lines)
@@ -2286,6 +2286,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
+	return nil
 }
 
 func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []string) {

@@ -99,7 +99,9 @@ func TestReadOnlySourcesShareTabLabel(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
 	g.TabBar.Icons = config.IconsNone
 	g.OpenFile(diskPath)
-	g.OpenFileReadOnly(viewerPath, "")
+	if err := g.OpenFileReadOnly(viewerPath, ""); err != nil {
+		t.Fatal(err)
+	}
 
 	var disk, viewer Tab
 	for _, tab := range g.TabBar.Tabs {
