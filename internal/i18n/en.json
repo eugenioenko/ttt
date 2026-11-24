@@ -598,6 +598,7 @@
   "keybindings.pressKey": "Press key...",
   "keybindings.pressKeyCombinationEnterToConfirm": "Press key combination, Enter to confirm",
   "keybindings.resetToDefault": "Reset to default",
+  "keybindings.saveFailed": "Could not save keyboard shortcuts: {error}",
   "keybindings.searchShortcutsOrCommands": "Search shortcuts or commands...",
   "keybindings.showPanel": "Show Panel",
   "keytester.boundTo": "Bound to: {bound}",
