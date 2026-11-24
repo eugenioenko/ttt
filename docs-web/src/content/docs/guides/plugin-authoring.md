@@ -3215,7 +3215,7 @@ local debounce = settings.get("autocomplete.debounce")  -- 150
 
 #### `settings.set_default(key, value)`
 
-Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt.
+Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt. A debugger contribution requires an exact `debug.adapters.<type>` permission. Plugins can supply its initial command through `set_default` during install. Subsequent edits belong to the user.
 
 ```lua
 ttt.on_install(function()

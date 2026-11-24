@@ -55,6 +55,17 @@ func (m *Manager) callInstallHook(p *Plugin) error {
 			return err
 		}
 		added[key] = digest
+		if current, exists := m.settingsAPI.Get(key); exists {
+			canonical, err := settingDigest(current)
+			if err != nil {
+				return err
+			}
+			if canonical != digest {
+				added[key] = canonical
+				entry.InstalledDefaults[key] = canonical
+				return m.registry.Save()
+			}
+		}
 		return nil
 	}
 	defer func() { p.installDefault = nil }()

@@ -521,3 +521,18 @@ func TestNetworkRPCDiffDisplayIntersect(t *testing.T) {
 		t.Fatal("network.rpc granted by an empty set")
 	}
 }
+
+func TestAdapterSettingsRequireExplicitInstallGrant(t *testing.T) {
+	const key = "debug.adapters.gdb"
+	for _, grant := range []string{"*", "debug.*", "debug.adapters.*", key} {
+		ps := PermissionSet{Settings: true, SettingsKeys: []string{grant}}
+		for _, path := range []string{"debug", "Debug", "Debug.Adapters", "DEBUG.adapters.gdb", "debug.adapters", "debug.adapters.gdb.command", key} {
+			for _, install := range []bool{true, false} {
+				want := install && path == key && grant == key
+				if err := checkSettingsWrite(ps, path, install); (err == nil) != want {
+					t.Fatalf("grant %q write %q during install=%v: %v", grant, path, install, err)
+				}
+			}
+		}
+	}
+}

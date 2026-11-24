@@ -849,6 +849,7 @@
   "permissions.readTerminals": "Read terminals",
   "permissions.readTerminalPalette": "Read terminal color palette",
   "permissions.runBinary": "Run binary",
+  "permissions.debugCommand": "Install debugger command",
   "permissions.settingsKey": "Settings key",
   "permissions.sidebarPanel": "Sidebar panel",
   "permissions.simulateInput": "Simulate input",
