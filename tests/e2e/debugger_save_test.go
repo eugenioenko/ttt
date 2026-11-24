@@ -123,7 +123,7 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	for _, mode := range []struct {
 		start string
 		dot   rune
-	}{{"[⏵]", '⬤'}, {"[\uf04b]", '\uf111'}} {
+	}{{"[⏵]", '∙'}, {"[\uf04b]", '\uf111'}} {
 		h.assertContains(mode.start)
 		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
 		if !ok || mark.Icon != mode.dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(mode.dot)) < 2 {

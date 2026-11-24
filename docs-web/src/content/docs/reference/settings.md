@@ -138,13 +138,13 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `keyword` | `■` | `\ueb62` |  |
 | `snippet` | `■` | `\ueb66` |  |
 | `symbol` | `•` | `\ueb63` |  |
-| `breakpoint` | `⬤` | `\uf111` | Breakpoint before launch or verified by the adapter |
+| `breakpoint` | `∙` | `\uf111` | Breakpoint before launch or verified by the adapter |
 | `breakpoint-pending` | `◦` | `\uf1db` | Breakpoint awaiting verification or confirmation |
 | `debug-execution` | `⏵` | `\uf04b` | Current execution line |
 | `debug-start` | `⏵` | `\uf04b` | Start a debug session |
 | `debug-continue` | `⏵` | `\ueacf` | Continue execution |
 | `debug-pause` | `⏸` | `\uf04c` | Pause execution |
-| `debug-stop` | `⏹` | `\uf04d` | Stop the launched program |
+| `debug-stop` | `∎` | `\uf04d` | Stop the launched program |
 | `debug-detach` | `⏏` | `\uf052` | Detach from the program |
 | `debug-step-over` | `↷` | `\uead6` | Step over |
 | `debug-step-in` | `⤓` | `\uead4` | Step in |
