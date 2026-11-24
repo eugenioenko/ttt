@@ -8,17 +8,18 @@ import (
 )
 
 type TreeNode struct {
-	ID             string      `json:"id"`
-	Label          string      `json:"label"`
-	Icon           string      `json:"icon,omitempty"`
-	IconStyle      term.Style  `json:"-"`
-	LabelIcon      string      `json:"-"`
-	LabelIconStyle term.Style  `json:"-"`
-	Badge          string      `json:"badge,omitempty"`
-	BadgeStyle     term.Style  `json:"-"`
-	Children       []*TreeNode `json:"children,omitempty"`
-	Actions        []Action    `json:"actions,omitempty"`
-	Muted          bool        `json:"-"`
+	ID                string      `json:"id"`
+	Label             string      `json:"label"`
+	Icon              string      `json:"icon,omitempty"`
+	IconStyle         term.Style  `json:"-"`
+	SelectedIconStyle term.Style  `json:"-"`
+	LabelIcon         string      `json:"-"`
+	LabelIconStyle    term.Style  `json:"-"`
+	Badge             string      `json:"badge,omitempty"`
+	BadgeStyle        term.Style  `json:"-"`
+	Children          []*TreeNode `json:"children,omitempty"`
+	Actions           []Action    `json:"actions,omitempty"`
+	Muted             bool        `json:"-"`
 	// Heading rows are never selected or activated; keys skip over them.
 	Heading bool `json:"-"`
 	// LabelStyle overrides the label color; Muted and selection take precedence.
@@ -522,10 +523,10 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 
 	if icon := node.Icon; icon != "" {
 		iconStyle := node.IconStyle
-		if iconStyle == term.StyleDefault {
-			iconStyle = style
-		}
 		if idx == t.selected {
+			iconStyle = node.SelectedIconStyle
+		}
+		if iconStyle == term.StyleDefault {
 			iconStyle = style
 		}
 		x = drawRunesClipped(surface, x, y, maxX, []rune(icon), iconStyle)
