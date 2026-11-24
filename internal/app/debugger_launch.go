@@ -17,6 +17,7 @@ import (
 )
 
 type debugRun struct {
+	attached bool
 	ctx      context.Context
 	cancel   context.CancelFunc
 	session  *dap.Session
@@ -30,6 +31,7 @@ type debugRun struct {
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
 		{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging},
+		{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger},
 		{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging},
 		{ID: "debug.continue", Title: i18n.Text("debug.continue"), Handler: a.DebugContinue},
 		{ID: "debug.stepOver", Title: i18n.Text("debug.stepOver"), Handler: a.DebugStepOver},
@@ -94,7 +96,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 }
 func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &debugRun{ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
+	run := &debugRun{attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.run = run
 	a.ensureDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
@@ -167,7 +169,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 				case <-s.Done():
 				}
 			}
-			s.Close()
+			s.Close(t.Request == "launch")
 		}
 		deliver(func() {
 			if err != nil && ctx.Err() == nil {
@@ -211,6 +213,11 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 }
 func (a *App) StopDebugging() {
 	if r := a.debugger.run; r != nil {
+		r.cancel()
+	}
+}
+func (a *App) DetachDebugger() {
+	if r := a.debugger.run; r != nil && r.attached {
 		r.cancel()
 	}
 }

@@ -49,6 +49,9 @@ func LoadTargets(folder string) ([]Target, error) {
 }
 
 func (t Target) LaunchArguments() (map[string]any, error) {
+	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy") {
+		return t.addressAttachArguments()
+	}
 	if t.Type == "debugpy" && t.Request == "launch" {
 		return t.pythonArguments()
 	}

@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"os/exec"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -32,16 +34,19 @@ type Event struct {
 }
 
 type Session struct {
-	conn        io.Closer
-	codec       *jsonrpc.Codec
-	mu          sync.Mutex
-	seq         int
-	pending     map[int]chan packet
-	done        chan struct{}
-	initialized chan struct{}
-	onEvent     func(Event)
-	terminate   func()
-	closeOnce   sync.Once
+	conn            io.Closer
+	codec           *jsonrpc.Codec
+	mu              sync.Mutex
+	seq             int
+	pending         map[int]chan packet
+	done            chan struct{}
+	initialized     chan struct{}
+	onEvent         func(Event)
+	terminate       func()
+	closeOnce       sync.Once
+	remoteDelve     bool
+	stoppedThread   int
+	breakpointFiles map[string]bool
 }
 
 func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event)) (*Session, error) {
@@ -121,6 +126,19 @@ func (s *Session) read() {
 					close(s.initialized)
 				}
 			}
+			switch p.Event {
+			case "stopped":
+				var body struct{ ThreadID int }
+				if json.Unmarshal(p.Body, &body) == nil {
+					s.mu.Lock()
+					s.stoppedThread = body.ThreadID
+					s.mu.Unlock()
+				}
+			case "continued", "terminated":
+				s.mu.Lock()
+				s.stoppedThread = 0
+				s.mu.Unlock()
+			}
 			if s.onEvent != nil {
 				s.onEvent(Event{p.Event, p.Body})
 			}
@@ -176,6 +194,18 @@ func (s *Session) SetBreakpoints(ctx context.Context, path string, lines []int) 
 	}
 	var out struct{ Breakpoints []Breakpoint }
 	err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": points}, &out)
+	if err == nil {
+		s.mu.Lock()
+		if len(lines) > 0 {
+			if s.breakpointFiles == nil {
+				s.breakpointFiles = make(map[string]bool)
+			}
+			s.breakpointFiles[path] = true
+		} else {
+			delete(s.breakpointFiles, path)
+		}
+		s.mu.Unlock()
+	}
 	return out.Breakpoints, err
 }
 func (s *Session) Start(ctx context.Context, adapter, request string, args map[string]any, configure func() error) error {
@@ -220,13 +250,27 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 	}
 }
 func (s *Session) Done() <-chan struct{} { return s.done }
-func (s *Session) Close() {
+func (s *Session) Close(terminateDebuggee bool) {
 	s.closeOnce.Do(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		finished := make(chan struct{})
 		go func() {
-			_ = s.Call(ctx, "disconnect", map[string]bool{"terminateDebuggee": true}, nil)
+			if s.remoteDelve && !terminateDebuggee {
+				s.mu.Lock()
+				files := slices.Collect(maps.Keys(s.breakpointFiles))
+				s.mu.Unlock()
+				for _, path := range files {
+					_, _ = s.SetBreakpoints(ctx, path, nil)
+				}
+				s.mu.Lock()
+				thread := s.stoppedThread
+				s.mu.Unlock()
+				if thread != 0 {
+					_ = s.Call(ctx, "continue", map[string]int{"threadId": thread}, nil)
+				}
+			}
+			_ = s.Call(ctx, "disconnect", map[string]bool{"terminateDebuggee": terminateDebuggee}, nil)
 			close(finished)
 		}()
 		select {

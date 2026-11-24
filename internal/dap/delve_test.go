@@ -30,7 +30,7 @@ func TestDelveLaunch(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer session.Close()
+	defer session.Close(true)
 	target := Target{Type: "go", Request: "launch", Folder: folder, Arguments: map[string]any{"program": "."}}
 	args, err := target.LaunchArguments()
 	if err != nil {
