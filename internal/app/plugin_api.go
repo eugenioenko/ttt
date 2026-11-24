@@ -957,10 +957,7 @@ func NewPluginSettingsAPI(app *App) *PluginSettingsAPI {
 // Ownership checks must see edits made on disk since the plugin was installed.
 func (s *PluginSettingsAPI) SavedSettings() (plugin.SettingsAPI, error) {
 	settings, err := config.ReadSettingsFile(s.app.settingsFilePath())
-	if os.IsNotExist(err) {
-		return s, nil
-	}
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
 		return nil, err
 	}
 	return &PluginSettingsAPI{app: s.app, saved: &settings}, nil

@@ -274,8 +274,14 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		return err
 	}
 
-	if err := m.callInstallHook(p); err != nil {
+	if err, cleanupErr := m.callInstallHook(p); err != nil {
 		p.Destroy()
+		if cleanupErr != nil {
+			if entry := m.registry.Find(p.Name); entry != nil {
+				entry.Enabled = false
+			}
+			return errors.Join(err, cleanupErr, m.registry.Save())
+		}
 		return errors.Join(fmt.Errorf("on_install: %w", err), m.revertApproval(p, prev))
 	}
 

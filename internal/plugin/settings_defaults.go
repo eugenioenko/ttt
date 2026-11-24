@@ -5,6 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
+	"strings"
 )
 
 func settingDigest(value any) (string, error) {
@@ -25,7 +28,7 @@ func (m *Manager) savedSettings() (SettingsAPI, error) {
 	return m.settingsAPI, nil
 }
 
-func (m *Manager) callInstallHook(p *Plugin) error {
+func (m *Manager) callInstallHook(p *Plugin) (error, error) {
 	added := map[string]string{}
 	p.installDefault = func(key string, value any) error {
 		api, err := m.savedSettings()
@@ -70,13 +73,16 @@ func (m *Manager) callInstallHook(p *Plugin) error {
 	}
 	defer func() { p.installDefault = nil }()
 	if err := p.CallOnInstall(); err != nil {
-		return errors.Join(err, m.removeDefaults(added))
+		return err, m.removeDefaults(added)
 	}
-	return nil
+	return nil, nil
 }
 
 func (m *Manager) removeDefaults(defaults map[string]string) error {
-	for key, written := range defaults {
+	keys := slices.Sorted(maps.Keys(defaults))
+	slices.SortStableFunc(keys, func(a, b string) int { return strings.Count(b, ".") - strings.Count(a, ".") })
+	for _, key := range keys {
+		written := defaults[key]
 		api, err := m.savedSettings()
 		if err != nil {
 			return err
