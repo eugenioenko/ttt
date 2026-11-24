@@ -1,11 +1,14 @@
 package e2e
 
 import (
-	"github.com/gdamore/tcell/v3"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestDebugSaveFailurePreventsSession(t *testing.T) {
@@ -107,5 +110,25 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 		if row(label) != from-1 || row("[⏵]") != controls || row("Variables") != variables {
 			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
 		}
+	}
+}
+
+func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	defer icons.Configure("", nil)
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
+	h.exec("sidebar.debug")
+	h.exec("debug.toggleBreakpoint")
+	for _, mode := range []struct {
+		start string
+		dot   rune
+	}{{"[⏵]", '⬤'}, {"[\uf04b]", '\uf111'}} {
+		h.assertContains(mode.start)
+		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
+		if !ok || mark.Icon != mode.dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(mode.dot)) < 2 {
+			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", mode.dot)
+		}
+		h.exec("options.toggleFontIcons")
 	}
 }

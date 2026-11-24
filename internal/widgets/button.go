@@ -4,6 +4,7 @@ import (
 	"strings"
 	"unicode"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -30,6 +31,7 @@ type ButtonSpan struct {
 }
 
 type ButtonConfig struct {
+	Icon    icons.Name    `json:"-"`
 	Label   string        `json:"label"`
 	Command string        `json:"command"`
 	Style   term.Style    `json:"-"`
@@ -78,6 +80,7 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 }
 
 func (b *ButtonWidget) SetLabel(label string) {
+	b.Config.Icon = ""
 	b.label = label
 	b.spans = nil
 	b.accelIndex = -1
@@ -113,10 +116,14 @@ func (b *ButtonWidget) Width() int {
 }
 
 func (b *ButtonWidget) text() string {
-	if b.Config.Variant == ButtonBracket {
-		return "[" + b.label + "]"
+	label := b.label
+	if b.Config.Icon != "" {
+		label = string(icons.Rune(b.Config.Icon))
 	}
-	return b.label
+	if b.Config.Variant == ButtonBracket {
+		return "[" + label + "]"
+	}
+	return label
 }
 
 func (b *ButtonWidget) style() term.Style {

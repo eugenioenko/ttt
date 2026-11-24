@@ -35,7 +35,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	installBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: i18n.Text("general.install"),
-		Spans: []widgets.ButtonSpan{{Text: string(icons.Rune(icons.PluginInstall))}},
+		Icon:  icons.PluginInstall,
 		Style: term.StyleDefault,
 		OnClick: func() {
 			if a.PluginsPanel != nil && a.PluginsPanel.OnInstall != nil {
@@ -60,7 +60,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	sourceBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: i18n.Text("plugins.source"),
-		Spans: []widgets.ButtonSpan{{Text: string(icons.Rune(icons.PluginSource))}},
+		Icon:  icons.PluginSource,
 		Style: term.StyleDefault,
 		OnClick: func() {
 			OpenURL(repoFolderURL(entry.Repo, entry.Path))

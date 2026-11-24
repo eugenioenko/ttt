@@ -111,7 +111,7 @@ func (a *App) refreshDebugControls() {
 	p.primary.Children = nil
 	p.secondary.Children = nil
 	button := func(row *widgets.HStackWidget, id, label string, icon icons.Name, enabled bool) {
-		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Spans: []widgets.ButtonSpan{{Text: string(icons.Rune(icon))}}, Command: id, Variant: widgets.ButtonBracket, Box: &widgets.BoxModel{}, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
+		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Icon: icon, Command: id, Variant: widgets.ButtonBracket, Box: &widgets.BoxModel{}, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
 		b.Disabled = !enabled
 		row.Children = append(row.Children, b)
 	}

@@ -164,7 +164,7 @@ func (a *App) handlePluginInstallResult(result *pluginInstallResult) {
 
 func (a *App) resetPluginDetailButton(name string) {
 	if state, ok := a.pluginDetailWidgets[name]; ok {
-		state.installBtn.SetSpans([]widgets.ButtonSpan{{Text: string(icons.Rune(icons.PluginInstall))}})
+		state.installBtn.Config.Icon = icons.PluginInstall
 		state.installBtn.Disabled = false
 	}
 }
