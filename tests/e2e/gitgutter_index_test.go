@@ -22,7 +22,7 @@ func writeGutterFile(t *testing.T, path, content string) {
 // gutterFor opens path, computes its git gutter and returns the markers.
 func gutterFor(t *testing.T, h *testHarness, path string) []diff.LineChangeKind {
 	t.Helper()
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
 	h.redraw()

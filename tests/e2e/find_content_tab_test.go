@@ -40,7 +40,7 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 			if err := os.WriteFile(textPath, []byte("cat\ncat\ncat\n"), 0644); err != nil {
 				t.Fatal(err)
 			}
-			h.app.EditorGroup.OpenFile(textPath)
+			h.openFile(textPath)
 			h.app.EditorGroup.CommitActiveTab()
 			h.redraw()
 
@@ -52,7 +52,7 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 
 			contentPath := filepath.Join(h.dir, tc.file)
 			tc.write(t, contentPath)
-			h.app.EditorGroup.OpenFile(contentPath)
+			h.openFile(contentPath)
 			h.redraw()
 
 			if h.app.EditorGroup.IsEditorActive() {

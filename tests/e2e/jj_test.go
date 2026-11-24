@@ -25,7 +25,7 @@ func initializeHarnessJJRepository(t *testing.T, dir string) {
 
 func (h *testHarness) gutterFor(path string) []diff.LineChangeKind {
 	h.t.Helper()
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
 	h.redraw()

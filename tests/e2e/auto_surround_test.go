@@ -31,7 +31,7 @@ func TestAutoSurroundLanguageSettingsAndReload(t *testing.T) {
 		if err := os.WriteFile(path, []byte("word"), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		h.app.EditorGroup.OpenFile(path)
+		h.openFile(path)
 		h.app.FocusEditor()
 		h.redraw()
 		h.pressKey(tcell.KeyHome, tcell.ModCtrl)

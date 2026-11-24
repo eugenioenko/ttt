@@ -17,7 +17,7 @@ func TestAddCursorShortcutsAndTabState(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.redraw()
 	h.pressKey(tcell.KeyDown, 0)
@@ -63,7 +63,7 @@ func TestToggleCursorAltClick(t *testing.T) {
 	if err := os.WriteFile(path, []byte(original), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.redraw()
 

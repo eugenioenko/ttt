@@ -41,9 +41,9 @@ func TestEditorSplitDragAcrossGroups(t *testing.T) {
 			defer h.stop()
 			left := h.app.EditorGroup
 			alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
-			left.OpenFile(alpha)
+			requireNoError(t, left.OpenFile(alpha))
 			left.CommitActiveTab()
-			left.OpenFile(beta)
+			requireNoError(t, left.OpenFile(beta))
 			h.exec(command)
 			right := h.app.EditorGroup
 			h.app.Root.SetFocus(left)
@@ -79,7 +79,7 @@ func TestEditorSplitOpenToSideAndCloseLastView(t *testing.T) {
 	defer h.stop()
 	left := h.app.EditorGroup
 	alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
-	left.OpenFile(alpha)
+	requireNoError(t, left.OpenFile(alpha))
 	h.exec("editor.openToSide")
 	right := h.app.EditorGroup
 	if left.ActiveBuffer() != right.ActiveBuffer() || len(h.app.EditorSplit.Groups()) != 2 {
@@ -258,9 +258,9 @@ func TestEditorTabDragToSplit(t *testing.T) {
 			defer h.stop()
 			orig := h.app.EditorGroup
 			alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
-			orig.OpenFile(alpha)
+			requireNoError(t, orig.OpenFile(alpha))
 			orig.CommitActiveTab()
-			orig.OpenFile(beta)
+			requireNoError(t, orig.OpenFile(beta))
 			orig.SwitchToTabByPath(alpha)
 			h.redraw()
 
@@ -311,10 +311,10 @@ func TestEditorTabDragAcrossGroupsToSplit(t *testing.T) {
 	defer h.stop()
 	left := h.app.EditorGroup
 	alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
-	left.OpenFile(alpha)
+	requireNoError(t, left.OpenFile(alpha))
 	h.exec("editor.split")
 	right := h.app.EditorGroup
-	right.OpenFile(beta)
+	requireNoError(t, right.OpenFile(beta))
 	h.app.Root.SetFocus(left)
 	h.redraw()
 
