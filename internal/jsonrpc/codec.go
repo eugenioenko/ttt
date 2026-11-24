@@ -112,12 +112,18 @@ func (c *Codec) Send(msg any) error {
 }
 
 func (c *Codec) Receive() (Message, error) {
+	var msg Message
+	err := c.ReceiveInto(&msg)
+	return msg, err
+}
+
+func (c *Codec) ReceiveInto(message any) error {
 	contentLen := -1
 	headerBytes := 0
 	for {
 		line, err := c.readHeaderLine(maxHeaderBytes - headerBytes)
 		if err != nil {
-			return Message{}, err
+			return err
 		}
 		headerBytes += len(line)
 		line = strings.TrimRight(line, "\r\n")
@@ -127,26 +133,22 @@ func (c *Codec) Receive() (Message, error) {
 		if val, ok := strings.CutPrefix(line, "Content-Length: "); ok {
 			n, err := strconv.Atoi(val)
 			if err != nil {
-				return Message{}, fmt.Errorf("bad Content-Length: %w", err)
+				return fmt.Errorf("bad Content-Length: %w", err)
 			}
 			if c.maxContentLength > 0 && n > c.maxContentLength {
-				return Message{}, fmt.Errorf("message of %d bytes exceeds the %d byte limit", n, c.maxContentLength)
+				return fmt.Errorf("message of %d bytes exceeds the %d byte limit", n, c.maxContentLength)
 			}
 			contentLen = n
 		}
 	}
 	if contentLen < 0 {
-		return Message{}, fmt.Errorf("missing Content-Length header")
+		return fmt.Errorf("missing Content-Length header")
 	}
 	body := make([]byte, contentLen)
 	if _, err := io.ReadFull(c.reader, body); err != nil {
-		return Message{}, err
+		return err
 	}
-	var msg Message
-	if err := json.Unmarshal(body, &msg); err != nil {
-		return Message{}, err
-	}
-	return msg, nil
+	return json.Unmarshal(body, message)
 }
 
 func (c *Codec) readHeaderLine(remaining int) (string, error) {
