@@ -831,6 +831,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
+		a.updateDebugSource(path, a.EditorGroup.ActiveBuffer())
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.cancelBackgroundPull(path, lang)
 		a.ScheduleDiagnosticPull(false)

@@ -1,7 +1,9 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"testing"
+	"weak"
 
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/workspace"
@@ -28,5 +30,35 @@ func TestDebugBindingUsesRequestedIdentityAndWorkspace(t *testing.T) {
 	a.applyDebugBindings(path, []int{3}, []dap.Breakpoint{bp})
 	if len(a.debugger.points[path]) != 0 {
 		t.Fatal("late reply restored deleted breakpoint")
+	}
+}
+
+func TestDebugSourceRebasesOnceAndRequiresConfirmationOnReplacement(t *testing.T) {
+	a := &App{}
+	path := "/project/a.go"
+	b := &buffer.Buffer{}
+	b.SetText("one\ntwo\nthree")
+	a.toggleBreakpoint(path, 2)
+	a.debugger.sources = map[string]debugSourceVersion{path: {weak.Make(b), b.Version()}}
+	p := a.debugger.points[path][2]
+	b.Splice(0, 0, "zero")
+	a.updateDebugSource(path, b)
+	a.updateDebugSource(path, b)
+	if a.debugger.points[path][3] != p || p.confirm {
+		t.Fatal("split observers did not preserve the requested line")
+	}
+	b.Splice(0, 1)
+	a.updateDebugSource(path, b)
+	if a.debugger.points[path][2] != p {
+		t.Fatal("undo did not restore original line")
+	}
+	b.SetText("replacement")
+	a.updateDebugSource(path, b)
+	if len(a.debugLines(&debugRun{}, path)) != 0 || !p.confirm {
+		t.Fatal("replacement automatically bound ambiguous source")
+	}
+	a.toggleBreakpoint(path, 1)
+	if p.confirm || len(a.debugLines(&debugRun{}, path)) != 1 {
+		t.Fatal("could not confirm new location")
 	}
 }

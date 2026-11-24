@@ -1,4 +1,6 @@
 {
+  "debug.confirmLine": "Toggle to confirm this line",
+  "debug.editedSource": "Source edited during debugging",
   "debug.pause": "Debug: Pause",
   "debug.toggleBreakpoint": "Toggle Breakpoint",
   "debug.pickProcess": "Select a Process to Debug",

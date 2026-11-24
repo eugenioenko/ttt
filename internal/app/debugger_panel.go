@@ -91,7 +91,11 @@ func (a *App) refreshDebugPanel() {
 				}
 				label += fmt.Sprintf(" %c %s:%d", icons.Rune(icons.ArrowRight), filepath.Base(dest), b.Line)
 			}
-			if b.Message != "" {
+			if a.debugger.points[path][line].confirm {
+				label += "  " + i18n.Text("debug.confirmLine")
+			} else if r := a.debugger.run; r != nil && r.edited[path] {
+				label += "  " + i18n.Text("debug.editedSource")
+			} else if b.Message != "" {
 				label += "  " + b.Message
 			}
 			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: label}

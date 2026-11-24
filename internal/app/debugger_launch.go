@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
-	"slices"
+
 	"strconv"
 	"strings"
 	"sync"
@@ -17,6 +17,7 @@ import (
 )
 
 type debugRun struct {
+	edited     map[string]bool
 	folder     string
 	output     map[string]string
 	attached   bool
@@ -128,7 +129,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 }
 func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &debugRun{folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
+	run := &debugRun{edited: make(map[string]bool), folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
 	a.debugger.run = run
 	a.ensureDebugPanel()
@@ -139,9 +140,9 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		a.wireDebuggerGutter(g)
 	}
 	points := make(map[string][]int)
-	for path, lines := range a.debugger.points {
+	for path := range a.debugger.points {
 		if a.debugOwnsSource(run, path) {
-			points[path] = slices.Sorted(maps.Keys(lines))
+			points[path] = a.debugLines(run, path)
 		}
 	}
 	post := a.tasks.post
