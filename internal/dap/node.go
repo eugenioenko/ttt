@@ -22,6 +22,16 @@ func (t Target) nodeArguments() (map[string]any, error) {
 	}
 	for key, val := range t.Arguments {
 		switch key {
+		case "program", "args", "env", "runtimeArgs", "runtimeExecutable", "console":
+			if t.Request != "launch" {
+				return nil, fmt.Errorf("%s: %s requires Node launch", t.Name, key)
+			}
+		case "port", "address", "localRoot", "remoteRoot":
+			if t.Request != "attach" {
+				return nil, fmt.Errorf("%s: %s requires Node attach", t.Name, key)
+			}
+		}
+		switch key {
 		case "type", "name", "request", "presentation":
 			continue
 		case "processId":
@@ -47,6 +57,29 @@ func (t Target) nodeArguments() (map[string]any, error) {
 		default:
 			return nil, fmt.Errorf("%s: unsupported Node configuration field %q", t.Name, key)
 		}
+	}
+	if port, ok := out["port"]; ok {
+		n, err := pidValue(port)
+		if err != nil || n > 65535 {
+			return nil, fmt.Errorf("%s: invalid inspector port", t.Name)
+		}
+		out["port"] = n
+	}
+	if addr, ok := out["address"]; ok {
+		host, valid := addr.(string)
+		if !valid || host == "" {
+			return nil, fmt.Errorf("%s: invalid inspector address", t.Name)
+		}
+		if out["processId"] != nil && host != "localhost" && host != "127.0.0.1" {
+			return nil, fmt.Errorf("%s: PID attach requires a local inspector", t.Name)
+		}
+	}
+	cwd, ok := out["cwd"].(string)
+	if !ok || cwd == "" {
+		return nil, fmt.Errorf("%s: invalid cwd", t.Name)
+	}
+	if !filepath.IsAbs(cwd) {
+		out["cwd"] = filepath.Join(t.Folder, cwd)
 	}
 	if c, ok := out["console"]; ok && c != "internalConsole" {
 		return nil, fmt.Errorf("%s: only internalConsole is supported", t.Name)
@@ -94,17 +127,8 @@ func openNodeAdapter(ctx context.Context, t Target, args map[string]any, onEvent
 	}
 	if pid, ok := args["processId"].(int); ok {
 		port := 9229
-		if p, ok := args["port"]; ok {
-			var err error
-			port, err = pidValue(p)
-			if err != nil || port > 65535 {
-				s.Close(false)
-				return nil, fmt.Errorf("%s: invalid inspector port", t.Name)
-			}
-		}
-		if addr, ok := args["address"]; ok && addr != "127.0.0.1" && addr != "localhost" {
-			s.Close(false)
-			return nil, fmt.Errorf("%s: PID attach requires a local inspector", t.Name)
+		if p, ok := args["port"].(int); ok {
+			port = p
 		}
 		if err := enableNodeInspector(ctx, pid, port); err != nil {
 			s.Close(false)

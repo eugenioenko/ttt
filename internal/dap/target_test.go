@@ -38,3 +38,24 @@ func TestWorkspaceLaunchSelection(t *testing.T) {
 		t.Fatal("malformed native file fell back silently")
 	}
 }
+
+func TestRejectUnsupportedTargetBeforeStartup(t *testing.T) {
+	for _, tc := range []struct {
+		adapter, request string
+		args             map[string]any
+	}{
+		{"node", "attach", map[string]any{"program": "app.js"}},
+		{"node", "launch", map[string]any{"program": "app.js", "port": 9229}},
+		{"node", "attach", map[string]any{"port": 65536}},
+		{"node", "attach", map[string]any{"processId": 23, "address": "remote"}},
+		{"debugpy", "launch", map[string]any{"program": "${file}"}},
+		{"go", "launch", map[string]any{"program": ".", "preLaunchTask": "compile"}},
+	} {
+		t.Run(tc.adapter+"/"+tc.request, func(t *testing.T) {
+			target := Target{Type: tc.adapter, Request: tc.request, Arguments: tc.args}
+			if _, err := target.LaunchArguments(); err == nil {
+				t.Fatalf("unexpectedly accepted %v", tc.args)
+			}
+		})
+	}
+}
