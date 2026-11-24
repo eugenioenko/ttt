@@ -42,7 +42,7 @@ type debugRun struct {
 
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
-		{ID: "debug.contextualF10", Hidden: true, Handler: a.debugF10},
+		{ID: "debug.stepOverOrMenu", Hidden: true, Handler: a.debugF10},
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
 		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
