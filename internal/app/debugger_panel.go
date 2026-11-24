@@ -119,7 +119,7 @@ func (a *App) refreshDebugControls() {
 	p.controls = state
 	p.toolbar.Children = nil
 	button := func(id, label string, icon icons.Name, enabled bool) {
-		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Icon: icon, Command: id, Variant: widgets.ButtonBracket, Box: &widgets.BoxModel{}, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
+		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Icon: icon, Command: id, Variant: widgets.ButtonFilled, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
 		b.Disabled = !enabled
 		p.toolbar.Children = append(p.toolbar.Children, b)
 	}

@@ -22,7 +22,7 @@ it.skipIf(!process.env.TTT_TEST_DEBUGPY)("uses the selected workspace folder wit
     tui.start("--workspace", workspace, file);
     tui.type("# unsaved");
     tui.exec("Show Debug");
-    tui.waitFor("[Run & Debug]");
+    tui.waitFor(" Run & Debug ");
     tui.press("enter");
     tui.type("right");
     tui.press("enter");

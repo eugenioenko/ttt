@@ -49,8 +49,8 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     const { snapshots } = tui.run(60000);
     expect(readFileSync(file, "utf8")).toMatch(/^\/\/ saved by launch\n/);
     expect(snapshots[stopped]).toContain("main.report  main.go:6");
-    expect(snapshots[stopped]).toMatch(/\[⏵\] \[∎\] +\[↷\] \[⤓\] \[⤒\]/);
-    expect(snapshots[nerd]).toMatch(/\[\ueacf\] \[\uf04d\] +\[\uead6\] \[\uead4\] \[\uead5\]/);
+    expect(snapshots[stopped]).toMatch(/ ⏵   ∎ +↷   ⤓   ⤒ /);
+    expect(snapshots[nerd]).toMatch(/ \ueacf   \uf04d +\uead6   \uead4   \uead5 /);
     expect(snapshots[caller]).toContain("Ln 12, Col 1");
     expect(snapshots[stopped]).toMatch(/⏵ +6 +fmt\.Println/);
     expect(snapshots[caller]).toMatch(/⏵ +6 +fmt\.Println/);
