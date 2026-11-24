@@ -46,7 +46,8 @@ async function checkPID(type, picker) {
     }));
     const line = go ? 7 : node ? 5 : 6;
     tui.start(dir, file);
-    tui.click(37, 3 + line);
+    tui.exec("Show Debug");
+    tui.click(32, 3 + line);
     tui.exec("Start Debugging");
     if (picker) {
       tui.waitFor("Select a Process to Debug");

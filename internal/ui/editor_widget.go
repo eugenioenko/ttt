@@ -94,9 +94,7 @@ type EditorPaneWidget struct {
 	Bookmarks               map[int]Bookmark
 	OnBookmarkChange        func(line int, action string, b Bookmark)
 	OnGutterClick           func(line int) bool
-	DebugMarker             func(line int) rune
-	OnDebugClick            func(line int)
-	debugColumn             int
+	BookmarkOverlay         func(line int) (Bookmark, bool)
 	ReadOnly                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
@@ -160,14 +158,6 @@ func (e *EditorPaneWidget) InvalidateBracketColors() {
 func (e *EditorPaneWidget) Focusable() bool { return true }
 
 func (e *EditorPaneWidget) GutterWidth() int {
-	w := e.baseGutterWidth()
-	if e.DebugMarker != nil && !e.DiffOverlay.isDiff() {
-		w++
-	}
-	return w
-}
-
-func (e *EditorPaneWidget) baseGutterWidth() int {
 	if e.DiffOverlay.diffGutter() {
 		return e.DiffOverlay.gutterWidth()
 	}
@@ -189,7 +179,7 @@ func (e *EditorPaneWidget) baseGutterWidth() int {
 }
 
 func (e *EditorPaneWidget) bookmarkColumn() int {
-	if e.GutterStyle == "extended" {
+	if e.GutterStyle == "extended" && e.LineNumbers {
 		return 1
 	}
 	return 0
@@ -209,6 +199,15 @@ func (e *EditorPaneWidget) SetBookmark(line int, icon rune, style term.Style) {
 	b := Bookmark{Icon: icon, Style: style}
 	e.Bookmarks[line] = b
 	e.fireBookmarkChange(line, "set", b)
+}
+
+func (e *EditorPaneWidget) VisibleBookmark(line int) (Bookmark, bool) {
+	if e.BookmarkOverlay != nil && !e.DiffOverlay.isDiff() {
+		if b, ok := e.BookmarkOverlay(line); ok {
+			return b, true
+		}
+	}
+	return e.GetBookmark(line)
 }
 
 func (e *EditorPaneWidget) GetBookmark(line int) (Bookmark, bool) {

@@ -119,12 +119,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	totalLines := len(e.Buf.Lines)
 	gutterW := e.GutterWidth()
-	baseGutter := e.baseGutterWidth()
-	e.debugColumn = -1
-	if gutterW > baseGutter {
-		e.debugColumn = baseGutter
-	}
-
 	maxLineW := e.computeMaxLineWidth()
 	tabW := e.resolveTabSize()
 
@@ -269,11 +263,11 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				if lineIdx < totalLines {
 					num = lineIdx + 1
 				}
-				e.drawGutterNumber(surface, y, baseGutter, num, term.Cell{Style: gutterStyle})
+				e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
 			}
 			if e.Folds != nil && !e.WordWrap && lineIdx < totalLines && !isWrapContinuation {
 				if fr := e.Folds.FoldAt(lineIdx); fr != nil {
-					chevronCol := baseGutter - 2
+					chevronCol := gutterW - 2
 					collapsedCh, expandedCh := e.FoldChevronCollapsed, e.FoldChevronExpanded
 					if collapsedCh == 0 {
 						collapsedCh = icons.Rune(icons.ChevronRight)
@@ -282,7 +276,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 						expandedCh = icons.Rune(icons.ChevronDown)
 					}
 					if e.GutterStyle == "minimal" {
-						chevronCol = baseGutter - 1
+						chevronCol = gutterW - 1
 					}
 					if e.Folds.IsCollapsed(lineIdx) {
 						surface.SetCell(chevronCol, y, term.Cell{Ch: collapsedCh, Style: gutterStyle})
@@ -310,17 +304,8 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
 				}
 			}
-			if e.debugColumn >= 0 {
-				ch := ' '
-				if lineIdx < totalLines && !isWrapContinuation {
-					if marker := e.DebugMarker(lineIdx); marker != 0 {
-						ch = marker
-					}
-				}
-				surface.SetCell(e.debugColumn, y, term.Cell{Ch: ch, Style: term.StyleActiveLine})
-			}
-			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
-				if b, ok := e.Bookmarks[lineIdx]; ok {
+			if lineIdx < totalLines && !isWrapContinuation {
+				if b, ok := e.VisibleBookmark(lineIdx); ok {
 					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
 				}
 			}

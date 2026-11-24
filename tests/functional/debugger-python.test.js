@@ -23,7 +23,8 @@ it.skipIf(!python)("debugs a module with a dependency from its workspace virtual
       configurations: [{ name: "Example", type: "debugpy", request: "launch", module: "appmod" }],
     }));
     tui.start(dir, file);
-    tui.click(37, 7);
+    tui.exec("Show Debug");
+    tui.click(32, 7);
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();

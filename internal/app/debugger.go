@@ -12,6 +12,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
 
@@ -26,38 +27,30 @@ type debuggerState struct {
 	stoppedLine            int
 }
 
-func (a *App) initDebuggerGutter() {
-	if a.Workspace == nil {
-		return
-	}
-	for _, folder := range a.Workspace.Folders {
-		for _, dir := range []string{".ttt", ".vscode"} {
-			if _, err := os.Stat(filepath.Join(folder.Path, dir, "launch.json")); err == nil {
-				a.wireDebuggerGutter(a.EditorGroup)
-				return
-			}
-		}
-	}
-}
-
 func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
-	g.Editor.OnDebugClick = func(line int) {
-		if !g.IsActiveVirtual() && filepath.IsAbs(g.ActiveFilePath()) {
+	g.OnGutterClick = func(path string, line int) bool {
+		if a.Sidebar.Visible && a.Sidebar.ActivePanel == "debug" && !g.IsActiveVirtual() && g.ActiveDiffWidget() == nil && filepath.IsAbs(path) {
 			a.toggleEditorBreakpoint(g, line+1)
+			return true
 		}
+		if a.PluginManager != nil && a.PluginManager.HasEventListeners("gutter.click") {
+			a.PluginManager.DispatchEvent("gutter.click", path, line+1)
+			return true
+		}
+		return false
 	}
-	g.Editor.DebugMarker = func(line int) rune {
+	g.Editor.BookmarkOverlay = func(line int) (ui.Bookmark, bool) {
 		path := g.ActiveFilePath()
 		if path == a.debugger.stoppedFile && line+1 == a.debugger.stoppedLine {
-			return icons.Rune(icons.ArrowRight)
+			return ui.Bookmark{Icon: icons.Rune(icons.ArrowRight), Style: term.StyleActiveLine}, true
 		}
 		if point, ok := a.debugger.points[path][line+1]; ok {
 			if point.binding.Verified {
-				return icons.Rune(icons.Breakpoint)
+				return ui.Bookmark{Icon: icons.Rune(icons.Breakpoint), Style: term.StyleActiveLine}, true
 			}
-			return icons.Rune(icons.PendingBreakpoint)
+			return ui.Bookmark{Icon: icons.Rune(icons.PendingBreakpoint), Style: term.StyleActiveLine}, true
 		}
-		return 0
+		return ui.Bookmark{}, false
 	}
 }
 
@@ -119,9 +112,6 @@ func (a *App) ToggleDebugBreakpoint() {
 	g := a.EditorGroup
 	if g.ActiveBuffer() == nil || g.IsActiveVirtual() || !filepath.IsAbs(g.ActiveFilePath()) {
 		return
-	}
-	for _, group := range a.editorGroups() {
-		a.wireDebuggerGutter(group)
 	}
 	a.toggleEditorBreakpoint(g, g.Editor.Cursor.Line+1)
 }

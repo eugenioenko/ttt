@@ -76,7 +76,8 @@ async function checkAddressAttach(type, externalAdapter = false) {
       configurations: [{ name: "Attach", type, request: "attach", ...endpoint }],
     }));
     tui.start(dir, file);
-    tui.click(37, 3 + line);
+    tui.exec("Show Debug");
+    tui.click(32, 3 + line);
     tui.exec("Start Debugging");
     tui.waitFor("value = 42");
     tui.exec("Debug: Step Over");

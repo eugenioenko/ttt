@@ -2520,9 +2520,13 @@ events.on("gutter.click", function(path, line)
 end)
 ```
 
-While at least one plugin listens for `gutter.click`, a click in the bookmark
-column goes to the plugin instead of toggling a fold. Without a listener the
-click behaves as it always has.
+When the Debug sidebar is selected and visible, clicking the bookmark column
+in a source file toggles a breakpoint. On a shared line the breakpoint is drawn
+over the bookmark. Plugins can still read and update the underlying bookmark,
+and removing the breakpoint reveals its current icon.
+
+Outside that interaction, a click goes to plugins listening for `gutter.click`.
+With no listener the editor handles the click, including toggling a fold.
 
 ## Editor Context Menu
 

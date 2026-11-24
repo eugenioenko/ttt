@@ -50,11 +50,15 @@ func TestDebugBreakpointSharedAcrossSplits(t *testing.T) {
 	h.exec("editor.split")
 	right := h.app.EditorGroup
 	requireNoError(t, right.OpenFile(path))
-	if left == right || left.Editor.DebugMarker(0) == 0 || left.Editor.DebugMarker(0) != right.Editor.DebugMarker(0) {
+	l, lok := left.Editor.VisibleBookmark(0)
+	r, rok := right.Editor.VisibleBookmark(0)
+	if left == right || !lok || !rok || l != r {
 		t.Fatal("split did not show the shared breakpoint")
 	}
 	h.exec("debug.toggleBreakpoint")
-	if right.Editor.DebugMarker(0) != 0 || left.Editor.DebugMarker(0) != 0 {
+	_, lok = left.Editor.VisibleBookmark(0)
+	_, rok = right.Editor.VisibleBookmark(0)
+	if lok || rok {
 		t.Fatal("removal from split left a stale gutter marker")
 	}
 }

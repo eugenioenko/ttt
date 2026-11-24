@@ -94,42 +94,40 @@ func TestGutterClickFallsThroughWhenUnhandled(t *testing.T) {
 	}
 }
 
-func TestDebugGutterHitFollowsRenderedMarker(t *testing.T) {
+func TestBookmarkOverlaySharesColumnAndPreservesUnderlyingBookmark(t *testing.T) {
 	for _, style := range []string{"compact", "extended", "minimal"} {
 		e := newTestEditor()
 		e.LineNumbers = true
 		e.GutterStyle = style
 		rect := Rect{W: 20, H: 5}
 		e.SetRect(rect)
-		e.DebugMarker = func(line int) rune {
-			if line == 1 {
-				return '*'
-			}
-			return 0
+		width := e.GutterWidth()
+		e.SetBookmark(1, 'B', term.StyleDefault)
+		active := true
+		e.BookmarkOverlay = func(line int) (Bookmark, bool) {
+			return Bookmark{Icon: '*', Style: term.StyleActiveLine}, line == 1 && active
 		}
-		hits := 0
-		e.OnDebugClick = func(line int) {
+		e.OnGutterClick = func(line int) bool {
 			if line != 1 {
-				t.Fatalf("unexpected breakpoint on %d", line)
+				t.Fatal(line)
 			}
-			hits++
+			active = false
+			return true
 		}
 		grid := makeGrid(20, 5)
-		e.Render(NewRenderSurface(grid, rect))
-		x := -1
-		for col, c := range grid[1] {
-			if c.Ch == '*' {
-				x = col
-				break
-			}
+		surface := NewRenderSurface(grid, rect)
+		e.Render(surface)
+		x := e.bookmarkColumn()
+		if e.GutterWidth() != width || grid[1][x].Ch != '*' {
+			t.Fatalf("%s: missing overlay or changed width", style)
 		}
-		if x < 0 || x == e.bookmarkColumn() {
-			t.Fatalf("%s marker column %d", style, x)
+		if b, ok := e.GetBookmark(1); !ok || b.Icon != 'B' {
+			t.Fatal("overlay replaced stored bookmark")
 		}
 		gutterClick(e, x, 1)
-		gutterClick(e, x, 4)
-		if hits != 1 {
-			t.Fatalf("%s debug hits %d", style, hits)
+		e.Render(surface)
+		if grid[1][x].Ch != 'B' {
+			t.Fatalf("%s: underlying bookmark did not reappear", style)
 		}
 	}
 }

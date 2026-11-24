@@ -25,7 +25,8 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     tui.start(dir, file);
     tui.type("// saved by launch");
     tui.press("enter");
-    tui.click(37, 9);
+    tui.exec("Show Debug");
+    tui.click(32, 9);
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();

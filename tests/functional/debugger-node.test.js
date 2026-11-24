@@ -21,7 +21,8 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
         program: "${workspaceFolder}/dist/app.js", outFiles: ["${workspaceFolder}/dist/**/*.js"] }],
     }));
     tui.start(dir, file);
-    tui.click(37, 6);
+    tui.exec("Show Debug");
+    tui.click(32, 6);
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();

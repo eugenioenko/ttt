@@ -149,9 +149,6 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 	a.refreshDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()
-	for _, g := range a.editorGroups() {
-		a.wireDebuggerGutter(g)
-	}
 	points := make(map[string][]int)
 	for path := range a.debugger.points {
 		if a.debugOwnsSource(run, path) {
