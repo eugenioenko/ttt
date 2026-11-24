@@ -13,8 +13,8 @@ func TestUpperCase(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "upper.txt")
-	os.WriteFile(f, []byte("Hello World\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("Hello World\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -32,8 +32,8 @@ func TestLowerCase(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "lower.txt")
-	os.WriteFile(f, []byte("Hello World\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("Hello World\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -51,8 +51,8 @@ func TestTitleCase(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "title.txt")
-	os.WriteFile(f, []byte("hello world\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello world\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -70,8 +70,8 @@ func TestCaseTransformNoSelection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "nosel.txt")
-	os.WriteFile(f, []byte("Hello World\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("Hello World\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Run transforms without selection - should be no-op
@@ -91,8 +91,8 @@ func TestTitleCaseApostrophe(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "apostrophe.txt")
-	os.WriteFile(f, []byte("don't stop\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("don't stop\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -110,8 +110,8 @@ func TestTitleCaseHyphen(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "hyphen.txt")
-	os.WriteFile(f, []byte("self-aware\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("self-aware\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -129,8 +129,8 @@ func TestUpperCaseMultiLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "multiupper.txt")
-	os.WriteFile(f, []byte("hello\nworld\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\nworld\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -150,8 +150,8 @@ func TestUpperCaseMultiLineUndo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "undo.txt")
-	os.WriteFile(f, []byte("hello\nworld\nthird\nfourth\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\nworld\nthird\nfourth\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	ed := h.app.EditorGroup.Editor

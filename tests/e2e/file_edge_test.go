@@ -19,7 +19,7 @@ func openFileEdgeFixture(t *testing.T, h *testHarness, name, content string) {
 	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("editor.focus")
 	h.redraw()
 }
@@ -195,7 +195,7 @@ func TestCtrlEndInEditableDiff(t *testing.T) {
 		for _, l := range ls {
 			content += l + "\n"
 		}
-		os.WriteFile(path, []byte(content), 0644)
+		requireNoError(t, os.WriteFile(path, []byte(content), 0644))
 	}
 	write(lines)
 	initializeHarnessRepository(t, h.dir)

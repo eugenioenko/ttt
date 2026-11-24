@@ -16,7 +16,7 @@ func openFullwidth(t *testing.T, h *testHarness, name, content string) {
 	if err := os.WriteFile(f, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 }
 

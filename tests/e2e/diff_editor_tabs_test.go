@@ -132,7 +132,7 @@ func TestDiffFindBarIsNotRefreshedByEditorTabChanges(t *testing.T) {
 	if err := os.WriteFile(path, []byte("other\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if findBar.Current != 1 {

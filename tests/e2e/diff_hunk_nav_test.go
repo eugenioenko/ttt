@@ -20,8 +20,8 @@ func openHunkFile(t *testing.T, h *testHarness) {
 		lines = append(lines, "line "+string(rune('0'+i/10))+string(rune('0'+i%10)))
 	}
 	f := filepath.Join(h.dir, "hunks.txt")
-	os.WriteFile(f, []byte(strings.Join(lines, "\n")+"\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(strings.Join(lines, "\n")+"\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Two hunks: a run at lines 5-6 (0-based 4-5) and a run at line 15

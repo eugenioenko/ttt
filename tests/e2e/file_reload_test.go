@@ -24,7 +24,7 @@ func TestExternalChangeReloadsCleanBuffer(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if !strings.Contains(editorText(h), "original") {
@@ -52,7 +52,7 @@ func TestExternalChangeKeepsDirtyBuffer(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
 
@@ -84,7 +84,7 @@ func TestExternalChangeClampsCursor(t *testing.T) {
 	if err := os.WriteFile(path, []byte("line1\nline2\nline3\nline4\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
 
@@ -113,7 +113,7 @@ func TestExternalDeletionWarnsAndPreservesBuffer(t *testing.T) {
 			if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 				t.Fatal(err)
 			}
-			h.app.EditorGroup.OpenFile(path)
+			h.openFile(path)
 			h.app.Root.SetFocus(h.app.EditorGroup)
 			if name == "dirty" {
 				h.pressRune('Z')
@@ -181,7 +181,7 @@ func TestExternalChangePermissionErrorIsNotDeletion(t *testing.T) {
 	if err := os.WriteFile(path, []byte("original\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.pressRune('Z')
 	buf := h.app.EditorGroup.ActiveBuffer()

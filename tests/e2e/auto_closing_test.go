@@ -15,7 +15,7 @@ func TestAutoClosingSettingsLiveApplyAndReload(t *testing.T) {
 	if err := os.WriteFile(path, nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.redraw()
 	h.pressRune('(')
