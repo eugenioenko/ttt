@@ -116,7 +116,10 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 		if strings.Contains(entry, "=") {
 			cmd.Env = append(cmd.Env, entry)
 		} else {
-			cmd.Env = slices.DeleteFunc(cmd.Env, func(s string) bool { return strings.HasPrefix(s, entry+"=") })
+			cmd.Env = slices.DeleteFunc(cmd.Env, func(s string) bool {
+				name, _, _ := strings.Cut(s, "=")
+				return name == entry || runtime.GOOS == "windows" && strings.EqualFold(name, entry)
+			})
 		}
 	}
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")

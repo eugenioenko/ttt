@@ -2,6 +2,7 @@ package dap
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os/exec"
@@ -33,6 +34,9 @@ func ReverseProcess(ctx context.Context, socket, folder string, command func(str
 	var launchErr error
 	go func() {
 		launchErr = cmd.Wait()
+		if handoff && errors.Is(launchErr, exec.ErrWaitDelay) {
+			launchErr = nil
+		}
 		close(exited)
 		if launchErr != nil || !handoff {
 			_ = l.Close()

@@ -414,9 +414,12 @@ func (s *Session) startChild(p packet) {
 	if err != nil {
 		response["message"] = err.Error()
 		s.mu.Lock()
-		idle := s.child == nil && !s.closing
+		report := s.child == nil && !s.closing && !errors.Is(err, errChildActive) && s.options.OnChildFailure != nil
+		if report {
+			s.closing = true
+		}
 		s.mu.Unlock()
-		if idle && !errors.Is(err, errChildActive) && s.options.OnChildFailure != nil {
+		if report {
 			s.options.OnChildFailure(err)
 		}
 	}
