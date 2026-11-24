@@ -25,6 +25,10 @@ const (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv(fakeSyncFailureEnv) != "" {
+		runFakeSyncFailureServer()
+		os.Exit(0)
+	}
 	if mode := os.Getenv(fakePullServerEnv); mode != "" {
 		runFakePullServer(mode == "interfile")
 		os.Exit(0)
