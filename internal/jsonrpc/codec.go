@@ -131,12 +131,15 @@ func (c *Codec) ReceiveInto(message any) error {
 			break
 		}
 		if val, ok := strings.CutPrefix(line, "Content-Length: "); ok {
-			n, err := strconv.Atoi(val)
+			n, err := strconv.Atoi(strings.TrimSpace(val))
 			if err != nil {
 				return fmt.Errorf("bad Content-Length: %w", err)
 			}
 			if c.maxContentLength > 0 && n > c.maxContentLength {
 				return fmt.Errorf("message of %d bytes exceeds the %d byte limit", n, c.maxContentLength)
+			}
+			if n < 0 || (contentLen >= 0 && contentLen != n) {
+				return fmt.Errorf("invalid or conflicting Content-Length: %d", n)
 			}
 			contentLen = n
 		}
