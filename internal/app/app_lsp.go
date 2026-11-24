@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -1226,11 +1227,13 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 		if err != nil {
 			return
 		}
-		client.DidOpen(FileURI(path), langID, text)
+		if err := client.DidOpen(FileURI(path), langID, text); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didOpen %s: %v", path, err))
+		}
 	}()
 }
 
-// The returned channel closes once the didChange notification has been sent,
+// The returned channel closes once the didChange send attempt finishes,
 // so callers that must not race ahead of it (e.g. a signature-help request
 // for the same keystroke) can wait on it.
 func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{} {
@@ -1268,7 +1271,9 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 		if err != nil {
 			return
 		}
-		client.DidChange(FileURI(path), text, version)
+		if err := client.DidChange(FileURI(path), text, version); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didChange %s: %v", path, err))
+		}
 	}()
 	return done
 }
@@ -1294,7 +1299,9 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 		if err != nil {
 			return
 		}
-		client.DidSave(FileURI(path), text)
+		if err := client.DidSave(FileURI(path), text); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didSave %s: %v", path, err))
+		}
 	}()
 }
 
@@ -1315,6 +1322,8 @@ func (a *App) NotifyLSPClose(path, lang string) {
 		if err != nil {
 			return
 		}
-		client.DidClose(FileURI(path))
+		if err := client.DidClose(FileURI(path)); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didClose %s: %v", path, err))
+		}
 	}()
 }

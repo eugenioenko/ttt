@@ -196,8 +196,8 @@ type App struct {
 	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
 
-	// lspSent holds, per document, a channel closed once its latest didOpen or
-	// didChange was sent. Guarded by DocVersionsMu.
+	// lspSent holds, per document, a channel closed once its latest queued
+	// notification send attempt finishes. Guarded by DocVersionsMu.
 	lspSent map[string]<-chan struct{}
 	// lspEpochs counts restarts per server. Written on the UI goroutine under
 	// DocVersionsMu, so other goroutines must hold the lock to read it.
