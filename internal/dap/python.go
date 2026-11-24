@@ -69,6 +69,9 @@ func (t Target) pythonArguments() (map[string]any, error) {
 }
 
 func OpenAdapter(ctx context.Context, t Target, args map[string]any, onEvent func(Event)) (*Session, error) {
+	if t.Type == "node" || t.Type == "pwa-node" {
+		return openNodeAdapter(ctx, t, onEvent)
+	}
 	if t.Request == "attach" {
 		return connectAdapter(ctx, t, onEvent)
 	}

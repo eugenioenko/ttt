@@ -18,6 +18,7 @@ import (
 )
 
 type packet struct {
+	Arguments  json.RawMessage
 	Type       string
 	Seq        int
 	Command    string
@@ -34,6 +35,10 @@ type Event struct {
 }
 
 type Session struct {
+	jsAddr          string
+	child           *Session
+	desired         map[string][]int
+	closing         bool
 	conn            io.Closer
 	codec           *jsonrpc.Codec
 	mu              sync.Mutex
@@ -50,8 +55,11 @@ type Session struct {
 }
 
 func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event)) (*Session, error) {
+	return startListeningAdapter(ctx, binary, []string{"dap", "--listen=127.0.0.1:0"}, folder, "DAP server listening at: ", onEvent)
+}
+func startListeningAdapter(ctx context.Context, binary string, args []string, folder, prefix string, onEvent func(Event)) (*Session, error) {
 	procCtx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(procCtx, binary, "dap", "--listen=127.0.0.1:0")
+	cmd := exec.CommandContext(procCtx, binary, args...)
 	cmd.Dir = folder
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
@@ -67,7 +75,7 @@ func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event))
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			if addr, ok := strings.CutPrefix(scanner.Text(), "DAP server listening at: "); ok {
+			if addr, ok := strings.CutPrefix(scanner.Text(), prefix); ok {
 				select {
 				case address <- addr:
 				default:
@@ -86,7 +94,7 @@ func StartDelve(ctx context.Context, binary, folder string, onEvent func(Event))
 		return nil, ctx.Err()
 	case <-exited:
 		cancel()
-		return nil, fmt.Errorf("Delve exited before listening: %v", cmd.ProcessState)
+		return nil, fmt.Errorf("%s exited before listening: %v", binary, cmd.ProcessState)
 	}
 	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
 	if err != nil {
@@ -143,6 +151,10 @@ func (s *Session) read() {
 				s.onEvent(Event{p.Event, p.Body})
 			}
 		case "request":
+			if p.Command == "startDebugging" {
+				go s.startChild(p)
+				continue
+			}
 			if err := s.codec.Send(map[string]any{"type": "response", "seq": s.nextSeq(), "command": p.Command, "request_seq": p.Seq, "success": false, "message": "unsupported request"}); err != nil {
 				return
 			}
@@ -151,6 +163,15 @@ func (s *Session) read() {
 }
 func (s *Session) nextSeq() int { s.mu.Lock(); defer s.mu.Unlock(); s.seq++; return s.seq }
 func (s *Session) Call(ctx context.Context, command string, args any, out any) error {
+	switch command {
+	case "stackTrace", "scopes", "threads", "variables", "pause", "continue", "next", "stepIn", "stepOut":
+		s.mu.Lock()
+		child := s.child
+		s.mu.Unlock()
+		if child != nil {
+			return child.Call(ctx, command, args, out)
+		}
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -188,6 +209,16 @@ type Breakpoint struct {
 }
 
 func (s *Session) SetBreakpoints(ctx context.Context, path string, lines []int) ([]Breakpoint, error) {
+	s.mu.Lock()
+	if s.desired == nil {
+		s.desired = make(map[string][]int)
+	}
+	s.desired[path] = slices.Clone(lines)
+	child := s.child
+	s.mu.Unlock()
+	if child != nil {
+		return child.SetBreakpoints(ctx, path, lines)
+	}
 	points := make([]map[string]int, 0, len(lines))
 	for _, line := range lines {
 		points = append(points, map[string]int{"line": line})
@@ -212,7 +243,7 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	var caps struct{ SupportsConfigurationDoneRequest bool }
-	if err := s.Call(ctx, "initialize", map[string]any{"adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err := s.Call(ctx, "initialize", map[string]any{"supportsStartDebuggingRequest": adapter == "pwa-node" || adapter == "node", "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launched := make(chan error, 1)
@@ -256,6 +287,13 @@ func (s *Session) Close(terminateDebuggee bool) {
 		defer cancel()
 		finished := make(chan struct{})
 		go func() {
+			s.mu.Lock()
+			s.closing = true
+			child := s.child
+			s.mu.Unlock()
+			if child != nil {
+				child.Close(terminateDebuggee)
+			}
 			if s.remoteDelve && !terminateDebuggee {
 				s.mu.Lock()
 				files := slices.Collect(maps.Keys(s.breakpointFiles))

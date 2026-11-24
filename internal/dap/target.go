@@ -49,6 +49,9 @@ func LoadTargets(folder string) ([]Target, error) {
 }
 
 func (t Target) LaunchArguments() (map[string]any, error) {
+	if t.Type == "node" || t.Type == "pwa-node" {
+		return t.nodeArguments()
+	}
 	if t.Request == "attach" && (t.Type == "go" || t.Type == "debugpy") {
 		return t.addressAttachArguments()
 	}

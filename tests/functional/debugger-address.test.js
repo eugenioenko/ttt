@@ -21,12 +21,12 @@ async function waitFor(read, child) {
   throw Error("timed out waiting for target");
 }
 
-async function checkAddressAttach(type) {
+async function checkAddressAttach(type, externalAdapter = false) {
   const dir = mkdtempSync(join(tmpdir(), "ttt-address-"));
-  let child;
+  let child, server;
   try {
     const heartbeat = join(dir, "heartbeat");
-    const file = join(dir, type === "go" ? "main.go" : "example.py");
+    const file = join(dir, type === "go" ? "main.go" : type === "node" ? "app.js" : "example.py");
     let ready, line;
     if (type === "go") {
       writeFileSync(file, [
@@ -41,6 +41,17 @@ async function checkAddressAttach(type) {
       child.stdout.on("data", chunk => { log += chunk; });
       ready = () => log.match(/listening at: 127\.0\.0\.1:(\d+)/)?.[1];
       line = 6;
+    } else if (type === "node") {
+      writeFileSync(file, [
+        'const fs = require("node:fs");', 'let i = 0;', 'setInterval(() => {',
+        '  const value = 40 + 2;', '  fs.writeFileSync("heartbeat", String(i + value));',
+        '  i++;', '}, 25);',
+      ].join("\n"));
+      child = spawn(process.execPath, ["--inspect=127.0.0.1:0", file], { cwd: dir });
+      let log = "";
+      child.stderr.on("data", chunk => { log += chunk; });
+      ready = () => log.match(/Debugger listening on ws:\/\/127\.0\.0\.1:(\d+)/)?.[1];
+      line = 5;
     } else {
       writeFileSync(file, [
         'import debugpy, pathlib, time', 'port = debugpy.listen(("127.0.0.1", 0))[1]',
@@ -53,7 +64,13 @@ async function checkAddressAttach(type) {
       line = 8;
     }
     const port = Number(await waitFor(ready, child));
-    const endpoint = type === "go" ? { mode: "remote", host: "127.0.0.1", port } : { connect: { host: "127.0.0.1", port } };
+    const endpoint = type === "go" ? { mode: "remote", host: "127.0.0.1", port } : type === "node" ? { address: "127.0.0.1", port } : { connect: { host: "127.0.0.1", port } };
+    if (externalAdapter) {
+      server = spawn(process.execPath, [process.env.TTT_JS_DEBUG_SERVER, "0", "127.0.0.1"]);
+      let log = "";
+      server.stdout.on("data", chunk => { log += chunk; });
+      endpoint.debugServer = Number(await waitFor(() => log.match(/listening at 127\.0\.0\.1:(\d+)/)?.[1], server));
+    }
     mkdirSync(join(dir, ".ttt"));
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
       configurations: [{ name: "Attach", type, request: "attach", ...endpoint }],
@@ -63,11 +80,12 @@ async function checkAddressAttach(type) {
     tui.exec("Start Debugging");
     tui.waitFor("value = 42");
     tui.exec("Debug: Step Over");
-    tui.waitFor((type === "go" ? "main.go:" : "example.py:") + (line + 1));
+    tui.waitFor((type === "go" ? "main.go:" : type === "node" ? "app.js:" : "example.py:") + (line + 1));
     tui.exec("Detach Debugger");
     tui.waitFor("Debug session ended");
     tui.run(40000);
     const pulse = () => { try { return readFileSync(heartbeat, "utf8"); } catch { return ""; } };
+    if (server) expect(server.exitCode).toBeNull();
     const first = Number(await waitFor(pulse, child));
     expect(await waitFor(() => Number(pulse()) > first, child)).toBe(true);
   } finally {
@@ -76,8 +94,12 @@ async function checkAddressAttach(type) {
       child.kill("SIGINT");
       await closed;
     }
+    if (server && server.exitCode === null) { const closed = once(server, "exit"); server.kill(); await closed; }
     rmSync(dir, { recursive: true, force: true });
   }
 }
 it.skipIf(!hasDelve)("attaches to headless Delve, steps and detaches with the program running", () => checkAddressAttach("go"), 60000);
 it.skipIf(!python)("attaches to a debugpy listener, steps and detaches with the program running", () => checkAddressAttach("debugpy"), 60000);
+
+it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("attaches to a Node inspector port and leaves the service running", () => checkAddressAttach("node"), 60000);
+it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("uses separate addresses for an external js-debug server and the Node inspector", () => checkAddressAttach("node", true), 60000);

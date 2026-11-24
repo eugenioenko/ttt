@@ -191,6 +191,23 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 }
 func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 	switch event.Name {
+	case "breakpoint":
+		var b struct {
+			Reason     string
+			Breakpoint struct {
+				Verified bool
+				Line     int
+				Source   struct{ Path string }
+			}
+		}
+		if json.Unmarshal(event.Body, &b) == nil {
+			point := b.Breakpoint
+			if lines := a.debugger.points[point.Source.Path]; lines != nil {
+				if _, ok := lines[point.Line]; ok {
+					lines[point.Line] = b.Reason != "removed" && point.Verified
+				}
+			}
+		}
 	case "stopped":
 		var b struct{ ThreadID *int }
 		if json.Unmarshal(event.Body, &b) == nil {
