@@ -25,7 +25,7 @@ async function checkPID(type, picker) {
       ' for i:=0;;i++ {', '  value := 40+2', '  os.WriteFile("heartbeat", []byte(strconv.Itoa(i+value)), 0600)',
       '  time.Sleep(25*time.Millisecond)', ' }', '}',
     ] : node ? [
-      'const fs = require("node:fs");', 'let i = 0;', 'setInterval(() => {',
+      'const fs = require("node:fs");', 'fs.writeFileSync("port", String(process.debugPort)); let i = 0;', 'setInterval(() => {',
       '  const value = 40 + 2;', '  fs.writeFileSync("heartbeat", String(i + value));',
       '  i++;', '}, 25);',
     ] : [
@@ -36,13 +36,13 @@ async function checkPID(type, picker) {
     writeFileSync(file, lines.join("\n"));
     const exe = go ? join(dir, "go-pid-fixture") : node ? process.execPath : python;
     if (go) execFileSync("go", ["build", "-gcflags=all=-N -l", "-o", exe, file]);
-    child = spawn(exe, go ? [] : [file], { cwd: dir });
+    child = spawn(exe, go ? [] : node ? ["--inspect=127.0.0.1:0", file] : [file], { cwd: dir });
     const pulse = () => { try {return Number(readFileSync(join(dir,"heartbeat"),"utf8"));} catch {return 0;} };
     for(let i=0; i<200 && !pulse(); i++) await delay(25);
     expect(pulse()).toBeGreaterThan(0);
     mkdirSync(join(dir, ".ttt"));
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
-      configurations: [{ name: "Attach", type, request: "attach", processId: picker ? "${command:pickProcess}" : child.pid, ...(type === "debugpy" ? {python} : {}) }],
+      configurations: [{ name: "Attach", type, request: "attach", processId: picker ? "${command:pickProcess}" : child.pid, ...(node ? {port:Number(readFileSync(join(dir,"port"),"utf8"))} : {}), ...(type === "debugpy" ? {python} : {}) }],
     }));
     const line = go ? 7 : node ? 5 : 7;
     tui.start(dir, file);

@@ -3,6 +3,8 @@ package delve
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/dap"
@@ -44,7 +46,7 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request != "launch" {
 		return nil, fmt.Errorf("%s: unsupported %s %s configuration", t.Name, t.Type, t.Request)
 	}
-	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry", "console")
+	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry", "console", "output")
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +82,27 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 		}
 		return dap.Connect(ctx, addr, onEvent, dap.SessionOptions{ResumeBeforeDetach: true})
 	}
-	if t.Arguments["console"] == "externalTerminal" {
-		return openExternal(ctx, t, onEvent)
+	dir, err := os.MkdirTemp("", "ttt-delve-")
+	if err != nil {
+		return nil, err
 	}
-	return dap.ListenProcess(ctx, "dlv", []string{"dap", "--listen=127.0.0.1:0"}, t.Folder, "DAP server listening at: ", onEvent, dap.SessionOptions{})
+	if t.Request == "launch" && args["output"] == nil && (args["mode"] == "debug" || args["mode"] == "test") {
+		args["output"] = filepath.Join(dir, "debuggee")
+	}
+	session, err := dap.ReverseProcess(ctx, filepath.Join(dir, "adapter.sock"), t.Folder, func(address string) (*exec.Cmd, bool, error) {
+		dlv, err := exec.LookPath("dlv")
+		if err != nil {
+			return nil, false, err
+		}
+		if t.Arguments["console"] == "externalTerminal" {
+			return externalCommand(t.Folder, dlv, address)
+		}
+		return exec.Command(dlv, "dap", "--client-addr", address), false, nil
+	}, onEvent)
+	if err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, err
+	}
+	session.OnCleanup(func() { _ = os.RemoveAll(dir) })
+	return session, nil
 }

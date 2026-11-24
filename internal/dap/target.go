@@ -40,9 +40,10 @@ func ReadLaunchFile(folder string) (string, []Target, error) {
 			return path, nil, fmt.Errorf("%s: %w", path, err)
 		}
 		for key := range file {
-			if key != "version" && key != "$schema" && key != "configurations" {
-				return path, nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
+			if dir == ".vscode" || key == "version" || key == "$schema" || key == "configurations" {
+				continue
 			}
+			return path, nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
 		}
 		var configurations []map[string]any
 		if err = json.Unmarshal(file["configurations"], &configurations); err != nil || configurations == nil {
@@ -96,7 +97,10 @@ func CreateLaunchFile(folder, source string) (string, error) {
 		return "", err
 	}
 	_, err = f.Write(append(data, '\n'))
-	return path, errors.Join(err, f.Close())
+	if err = errors.Join(err, f.Close()); err != nil {
+		return "", errors.Join(err, os.Remove(path))
+	}
+	return path, nil
 }
 
 func Expand(value any, folder string) (any, error) {

@@ -9,6 +9,7 @@ import (
 	"maps"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -48,38 +49,38 @@ func (output adapterStderr) Write(data []byte) (int, error) {
 }
 
 type Session struct {
-	options         SessionOptions
-	peerAddress     string
-	child           *Session
-	desired         map[string][]int
-	closing         bool
-	conn            io.Closer
-	codec           *jsonrpc.Codec
-	mu              sync.Mutex
-	seq             int
-	pending         map[int]chan packet
-	done            chan struct{}
-	initialized     chan struct{}
-	onEvent         func(Event)
-	terminate       func()
-	closeOnce       sync.Once
-	stoppedThread   int
-	breakpointFiles map[string]bool
+	options           SessionOptions
+	peerAddress       net.Addr
+	child             *Session
+	desired           map[string][]int
+	closing           bool
+	conn              io.Closer
+	codec             *jsonrpc.Codec
+	mu                sync.Mutex
+	seq               int
+	pending           map[int]chan packet
+	done              chan struct{}
+	initialized       chan struct{}
+	onEvent           func(Event)
+	terminate         func()
+	closeOnce         sync.Once
+	stoppedThread     *int
+	stopped           bool
+	supportsTerminate bool
+	breakpointFiles   map[string]bool
 }
 
 func ListenProcess(ctx context.Context, binary string, args []string, folder, prefix string, onEvent func(Event), options SessionOptions) (*Session, error) {
-	procCtx, cancel := context.WithCancel(context.Background())
-	cmd := exec.CommandContext(procCtx, binary, args...)
+	cmd := exec.Command(binary, args...)
+	isolateAdapter(cmd)
 	cmd.Dir = folder
 	cmd.Stderr = adapterStderr(onEvent)
 	cmd.WaitDelay = time.Second
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		cancel()
 		return nil, err
 	}
 	if err = cmd.Start(); err != nil {
-		cancel()
 		return nil, err
 	}
 	address := make(chan string, 1)
@@ -97,7 +98,7 @@ func ListenProcess(ctx context.Context, binary string, args []string, folder, pr
 		_ = cmd.Wait()
 		close(exited)
 	}()
-	kill := func() { cancel(); _ = stdout.Close(); <-exited }
+	kill := func() { killAdapter(cmd); _ = stdout.Close(); <-exited }
 	var addr string
 	select {
 	case addr = <-address:
@@ -105,21 +106,30 @@ func ListenProcess(ctx context.Context, binary string, args []string, folder, pr
 		kill()
 		return nil, ctx.Err()
 	case <-exited:
-		cancel()
 		return nil, fmt.Errorf("%s exited before listening: %v", binary, cmd.ProcessState)
 	}
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	network := "tcp"
+	if filepath.IsAbs(addr) {
+		network = "unix"
+	}
+	conn, err := (&net.Dialer{}).DialContext(ctx, network, addr)
 	if err != nil {
 		kill()
 		return nil, err
 	}
-	return SocketSession(conn, kill, onEvent, options), nil
+	return SocketSession(conn, func() {
+		select {
+		case <-exited:
+		case <-time.After(time.Second):
+			kill()
+		}
+	}, onEvent, options), nil
 }
 
 func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event)) *Session {
-	return makeSession(r, w, conn, kill, onEvent, "", SessionOptions{})
+	return makeSession(r, w, conn, kill, onEvent, nil, SessionOptions{})
 }
-func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), addr string, options SessionOptions) *Session {
+func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), addr net.Addr, options SessionOptions) *Session {
 	s := &Session{options: options, peerAddress: addr, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
@@ -152,15 +162,17 @@ func (s *Session) read() {
 			}
 			switch p.Event {
 			case "stopped":
-				var body struct{ ThreadID int }
+				var body struct{ ThreadID *int }
 				if json.Unmarshal(p.Body, &body) == nil {
 					s.mu.Lock()
+					s.stopped = true
 					s.stoppedThread = body.ThreadID
 					s.mu.Unlock()
 				}
 			case "continued", "terminated":
 				s.mu.Lock()
-				s.stoppedThread = 0
+				s.stopped = false
+				s.stoppedThread = nil
 				s.mu.Unlock()
 			}
 			if s.onEvent != nil {
@@ -180,7 +192,8 @@ func (s *Session) read() {
 func (s *Session) nextSeq() int { s.mu.Lock(); defer s.mu.Unlock(); s.seq++; return s.seq }
 func (s *Session) Call(ctx context.Context, command string, args any, out any) error {
 	switch command {
-	case "stackTrace", "scopes", "threads", "variables", "pause", "continue", "next", "stepIn", "stepOut":
+	case "initialize", "launch", "attach", "configurationDone", "disconnect", "terminate":
+	default:
 		s.mu.Lock()
 		child := s.child
 		s.mu.Unlock()
@@ -188,6 +201,9 @@ func (s *Session) Call(ctx context.Context, command string, args any, out any) e
 			return child.Call(ctx, command, args, out)
 		}
 	}
+	return s.call(ctx, command, args, out)
+}
+func (s *Session) call(ctx context.Context, command string, args, out any) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -250,7 +266,7 @@ func (s *Session) SetBreakpoints(ctx context.Context, path string, lines []int) 
 		points = append(points, map[string]int{"line": line})
 	}
 	var out struct{ Breakpoints []Breakpoint }
-	err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": points}, &out)
+	err := s.call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": points}, &out)
 	if err == nil {
 		s.mu.Lock()
 		if len(lines) > 0 {
@@ -268,10 +284,19 @@ func (s *Session) SetBreakpoints(ctx context.Context, path string, lines []int) 
 func (s *Session) Start(ctx context.Context, adapter, request string, args map[string]any, configure func() error) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	var caps struct{ SupportsConfigurationDoneRequest bool }
+	var caps struct {
+		SupportsConfigurationDoneRequest, SupportsTerminateRequest bool
+		ExceptionBreakpointFilters                                 []struct {
+			Filter  string
+			Default bool
+		}
+	}
 	if err := s.Call(ctx, "initialize", map[string]any{"supportsStartDebuggingRequest": s.options.ChildTarget != nil, "adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
+	s.mu.Lock()
+	s.supportsTerminate = caps.SupportsTerminateRequest
+	s.mu.Unlock()
 	launched := make(chan error, 1)
 	go func() { launched <- s.Call(ctx, request, args, nil) }()
 	for {
@@ -288,6 +313,17 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 		case <-s.initialized:
 			if err := configure(); err != nil {
 				return err
+			}
+			if len(caps.ExceptionBreakpointFilters) > 0 {
+				filters := []string{}
+				for _, f := range caps.ExceptionBreakpointFilters {
+					if f.Default {
+						filters = append(filters, f.Filter)
+					}
+				}
+				if err := s.call(ctx, "setExceptionBreakpoints", map[string]any{"filters": filters}, nil); err != nil {
+					return err
+				}
 			}
 			if caps.SupportsConfigurationDoneRequest {
 				if err := s.Call(ctx, "configurationDone", struct{}{}, nil); err != nil {
@@ -315,6 +351,7 @@ func (s *Session) Close(terminateDebuggee bool) {
 		go func() {
 			s.mu.Lock()
 			s.closing = true
+			supportsTerminate := s.supportsTerminate
 			child := s.child
 			s.mu.Unlock()
 			if child != nil {
@@ -328,11 +365,22 @@ func (s *Session) Close(terminateDebuggee bool) {
 					_, _ = s.SetBreakpoints(ctx, path, nil)
 				}
 				s.mu.Lock()
-				thread := s.stoppedThread
+				stopped, thread := s.stopped, s.stoppedThread
 				s.mu.Unlock()
-				if thread != 0 {
-					_ = s.Call(ctx, "continue", map[string]int{"threadId": thread}, nil)
+				if stopped && thread == nil {
+					var reply struct{ Threads []struct{ ID int } }
+					if s.call(ctx, "threads", struct{}{}, &reply) == nil && len(reply.Threads) > 0 {
+						thread = &reply.Threads[0].ID
+					}
 				}
+				if stopped && thread != nil {
+					_ = s.Call(ctx, "continue", map[string]int{"threadId": *thread}, nil)
+				}
+			}
+			if terminateDebuggee && supportsTerminate {
+				termCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
+				_ = s.call(termCtx, "terminate", struct{}{}, nil)
+				cancel()
 			}
 			_ = s.Call(ctx, "disconnect", map[string]bool{"terminateDebuggee": terminateDebuggee}, nil)
 			close(finished)
@@ -352,7 +400,7 @@ type SessionOptions struct {
 }
 
 func SocketSession(conn net.Conn, cleanup func(), onEvent func(Event), options SessionOptions) *Session {
-	return makeSession(conn, conn, conn, cleanup, onEvent, conn.RemoteAddr().String(), options)
+	return makeSession(conn, conn, conn, cleanup, onEvent, conn.RemoteAddr(), options)
 }
 
 func Connect(ctx context.Context, addr string, onEvent func(Event), options SessionOptions) (*Session, error) {
@@ -378,7 +426,7 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 	addr := s.peerAddress
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	conn, err := (&net.Dialer{}).DialContext(ctx, "tcp", addr)
+	conn, err := (&net.Dialer{}).DialContext(ctx, addr.Network(), addr.String())
 	if err != nil {
 		return err
 	}
@@ -394,19 +442,33 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 	s.mu.Unlock()
 	err = child.Start(ctx, target.Type, target.Request, target.Arguments, func() error {
 		for path, lines := range points {
-			if _, err := child.SetBreakpoints(ctx, path, lines); err != nil {
-				return err
+			if _, err := child.SetBreakpoints(ctx, path, lines); err != nil && s.onEvent != nil {
+				body, _ := json.Marshal(map[string]string{"category": "stderr", "output": path + ": " + err.Error() + "\n"})
+				s.onEvent(Event{"output", body})
 			}
 		}
 		return nil
 	})
 	if err != nil {
 		_ = conn.Close()
+	}
+	go func() {
+		<-child.Done()
 		s.mu.Lock()
+		active := s.child == child && !s.closing
 		if s.child == child {
 			s.child = nil
 		}
 		s.mu.Unlock()
-	}
+		if active && err == nil && s.onEvent != nil {
+			s.onEvent(Event{Name: "terminated"})
+		}
+	}()
 	return err
+}
+
+// OnCleanup registers resource cleanup before the session is handed to its caller.
+func (s *Session) OnCleanup(clean func()) {
+	prev := s.terminate
+	s.terminate = func() { prev(); clean() }
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/eugenioenko/ttt/internal/dap"
 )
@@ -120,10 +121,25 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 		if entry == "" {
 			return nil, fmt.Errorf("set TTT_JS_DEBUG_SERVER to the standalone dapDebugServer.js path")
 		}
+		addr := "0"
+		var dir string
 		var err error
-		s, err = dap.ListenProcess(ctx, "node", []string{entry, "0", "127.0.0.1"}, t.Folder, "Debug server listening at ", onEvent, options)
+		if runtime.GOOS != "windows" {
+			dir, err = os.MkdirTemp("", "ttt-jsdebug-")
+			if err != nil {
+				return nil, err
+			}
+			addr = filepath.Join(dir, "debug.sock")
+		}
+		s, err = dap.ListenProcess(ctx, "node", []string{entry, addr, "127.0.0.1"}, t.Folder, "Debug server listening at ", onEvent, options)
 		if err != nil {
+			if dir != "" {
+				_ = os.RemoveAll(dir)
+			}
 			return nil, err
+		}
+		if dir != "" {
+			s.OnCleanup(func() { _ = os.RemoveAll(dir) })
 		}
 	}
 	if pid, ok := args["processId"].(int); ok {
@@ -131,13 +147,13 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 		if p, ok := args["port"].(int); ok {
 			port = p
 		}
-		if err := enableNodeInspector(ctx, pid, port); err != nil {
+		ws, err := inspectorWebsocket(ctx, pid, port)
+		if err != nil {
 			s.Close(false)
 			return nil, err
 		}
 		delete(args, "processId")
-		args["address"] = "127.0.0.1"
-		args["port"] = port
+		args["websocketAddress"] = ws
 	}
 	return s, nil
 }

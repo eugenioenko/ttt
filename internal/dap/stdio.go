@@ -11,6 +11,7 @@ func StdioProcess(ctx context.Context, binary string, args []string, folder stri
 		return nil, err
 	}
 	cmd := exec.Command(binary, args...)
+	isolateAdapter(cmd)
 	cmd.Dir = folder
 	cmd.Stderr = adapterStderr(onEvent)
 	cmd.WaitDelay = time.Second
@@ -28,6 +29,16 @@ func StdioProcess(ctx context.Context, binary string, args []string, folder stri
 		_ = stdout.Close()
 		return nil, err
 	}
-	cleanup := func() { _ = cmd.Process.Kill(); _ = cmd.Wait(); _ = stdout.Close() }
+	cleanup := func() {
+		exited := make(chan struct{})
+		go func() { _ = cmd.Wait(); close(exited) }()
+		select {
+		case <-exited:
+		case <-time.After(time.Second):
+			killAdapter(cmd)
+			<-exited
+		}
+		_ = stdout.Close()
+	}
 	return newSession(stdout, stdin, stdin, cleanup, onEvent), nil
 }

@@ -2,84 +2,91 @@ package jsdebug
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
+	"io"
+	"net"
+	"net/http"
+	"net/url"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/eugenioenko/ttt/internal/dap"
 )
 
-// Standalone js-debug accepts an inspector port. VS Code resolves a processId
-// in its extension host before handing the configuration to the adapter.
-func enableNodeInspector(ctx context.Context, pid, port int) error {
-	id := strconv.Itoa(pid)
-	var name string
-	if runtime.GOOS == "linux" {
-		path, err := os.Readlink("/proc/" + id + "/exe")
-		if err != nil {
-			return err
-		}
-		name = filepath.Base(path)
-	} else {
-		list, err := dap.Processes(ctx)
-		if err != nil {
-			return err
-		}
-		for _, p := range list {
-			if p.PID == pid {
-				name = filepath.Base(p.Name)
-				break
-			}
-		}
-	}
-	if name != "node" && name != "nodejs" && !strings.EqualFold(name, "node.exe") {
-		return fmt.Errorf("process %d is not a Node executable", pid)
-	}
+func inspectorWebsocket(ctx context.Context, pid, port int) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	owns := func() (bool, error) {
-		if runtime.GOOS == "windows" {
-			b, err := exec.CommandContext(ctx, "netstat", "-ano", "-p", "tcp").Output()
-			if err != nil {
-				return false, err
-			}
-			for line := range strings.SplitSeq(string(b), "\n") {
-				f := strings.Fields(line)
-				if len(f) == 5 && f[4] == id && strings.HasSuffix(f[1], ":"+strconv.Itoa(port)) && f[3] == "LISTENING" {
-					return true, nil
-				}
-			}
-			return false, nil
-		}
-		b, err := exec.CommandContext(ctx, "lsof", "-nP", "-a", "-p", id, "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-Fp").Output()
-		if e, ok := err.(*exec.ExitError); ok && e.ExitCode() == 1 {
-			return false, nil
-		}
-		return slices.Contains(strings.Fields(string(b)), "p"+id), err
-	}
-	if ok, err := owns(); ok || err != nil {
-		return err
-	}
-	cmd := exec.CommandContext(ctx, "node", "-e", `process._debugProcess(Number(process.argv[1]))`, id)
-	if msg, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("enable Node inspector: %w: %s", err, msg)
-	}
-	tick := time.NewTicker(60 * time.Millisecond)
-	defer tick.Stop()
-	for {
-		if ok, err := owns(); ok || err != nil {
+	host := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	verify := func() error {
+		ok, err := ownsInspectorListener(ctx, pid, port, host)
+		if err != nil {
 			return err
 		}
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("process %d did not open inspector port %d: %w", pid, port, ctx.Err())
-		case <-tick.C:
+		if !ok {
+			return fmt.Errorf("process %d needs an active Node inspector on %s; start the target with --inspect=%s", pid, host, host)
+		}
+		return nil
+	}
+	if err := verify(); err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://"+host+"/json/list", nil)
+	if err != nil {
+		return "", err
+	}
+	transport := &http.Transport{DisableKeepAlives: true}
+	client := http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	response, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer response.Body.Close()
+	var targets []struct{ ID, Type, WebSocketDebuggerURL string }
+	if response.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("inspector discovery: %s", response.Status)
+	}
+	if err = json.NewDecoder(io.LimitReader(response.Body, 1<<20)).Decode(&targets); err != nil {
+		return "", err
+	}
+	if err = verify(); err != nil {
+		return "", err
+	}
+	for _, target := range targets {
+		u, err := url.Parse(target.WebSocketDebuggerURL)
+		if err == nil && target.Type == "node" && target.ID != "" && u.Scheme == "ws" && u.Host == host && u.User == nil && u.Path == "/"+target.ID {
+			return u.String(), nil
 		}
 	}
+	return "", fmt.Errorf("no matching Node inspector target on %s", host)
+}
+
+func ownsInspectorListener(ctx context.Context, pid, port int, host string) (bool, error) {
+	id := strconv.Itoa(pid)
+	if runtime.GOOS == "windows" {
+		out, err := exec.CommandContext(ctx, "netstat", "-ano", "-p", "tcp").Output()
+		if err != nil {
+			return false, err
+		}
+		for line := range strings.SplitSeq(string(out), "\n") {
+			f := strings.Fields(line)
+			if len(f) == 5 && f[0] == "TCP" && f[1] == host && f[3] == "LISTENING" && f[4] == id {
+				return true, nil
+			}
+		}
+		return false, nil
+	}
+	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-a", "-p", id, "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-Fpn").Output()
+	var exit *exec.ExitError
+	if errors.As(err, &exit) && exit.ExitCode() == 1 {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	fields := strings.Fields(string(out))
+	return slices.Contains(fields, "p"+id) && slices.Contains(fields, "n"+host), nil
 }

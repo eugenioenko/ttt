@@ -20,7 +20,7 @@ func TestWorkspaceLaunchSelection(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	write(".vscode", `{"configurations":[{"name":"fallback","type":"go","request":"launch","program":"cmd/server"}]}`)
+	write(".vscode", `{"compounds":[],"inputs":[],"configurations":[{"name":"fallback","type":"go","request":"launch","program":"cmd/server"}]}`)
 	targets, err := dap.LoadTargets(dir)
 	if err != nil || len(targets) != 1 || targets[0].Name != "fallback" {
 		t.Fatalf("fallback: %v, %v", targets, err)
@@ -54,6 +54,7 @@ func TestRejectUnsupportedTargetBeforeStartup(t *testing.T) {
 		adapter, request string
 		args             map[string]any
 	}{
+		{"node", "launch", map[string]any{"program": "${input:entry}"}},
 		{"node", "attach", map[string]any{"program": "app.js"}},
 		{"node", "launch", map[string]any{"program": "app.js", "port": 9229}},
 		{"node", "attach", map[string]any{"port": 65536}},

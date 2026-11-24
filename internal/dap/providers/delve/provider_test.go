@@ -29,15 +29,15 @@ func TestDelveLaunch(t *testing.T) {
 	defer cancel()
 	events := make(chan dap.Event, 256)
 	target := dap.Target{Type: "go", Request: "launch", Folder: folder, Arguments: map[string]any{"program": "."}}
-	session, err := (Provider{}).Open(ctx, target, nil, func(e dap.Event) { events <- e })
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer session.Close(true)
 	args, err := (Provider{}).Arguments(target)
 	if err != nil {
 		t.Fatal(err)
 	}
+	session, err := (Provider{}).Open(ctx, target, args, func(e dap.Event) { events <- e })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer session.Close(true)
 	err = session.Start(ctx, "go", "launch", args, func() error {
 		points, err := session.SetBreakpoints(ctx, path, []int{5})
 		if err == nil && (len(points) != 1 || !points[0].Verified) {
