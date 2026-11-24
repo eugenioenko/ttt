@@ -48,6 +48,10 @@ func (a *App) CheckForUpdates() {
 	if a.Root.HasModalOverlay() {
 		return
 	}
+	if a.updateStartupTask != nil {
+		a.releaseTask(a.updateStartupTask)
+		a.updateStartupTask = nil
+	}
 	s := &updateDialogState{dialog: widgets.NewDialogWidget(76), service: a.Updates}
 	if s.service == nil {
 		s.service = update.Service{}

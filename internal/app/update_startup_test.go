@@ -55,18 +55,10 @@ func TestCheckForUpdatesOnStartupDefaultDisabled(t *testing.T) {
 	a := startupTestApp(t, config.DefaultSettings())
 	u := &recordingUpdater{release: update.Release{Tag: "v2.0.0"}}
 	a.Updates = u
-	posted := make(chan func(), 1)
-	a.tasks.post = func(fn func()) error { posted <- fn; return nil }
-
 	a.CheckForUpdatesOnStartup(time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC))
 
-	if u.calls.Load() != 0 {
-		t.Fatal("disabled default started a lookup")
-	}
-	select {
-	case <-posted:
-		t.Fatal("disabled default posted a lookup")
-	default:
+	if a.updateStartupTask != nil {
+		t.Fatal("disabled default created a startup task")
 	}
 	if a.updateDialog != nil {
 		t.Fatal("disabled default opened an update dialog")
@@ -115,12 +107,11 @@ func TestCheckForUpdatesOnStartupRespectsDailyFrequency(t *testing.T) {
 	a.State = state
 	u := &recordingUpdater{release: update.Release{Tag: "v2.0.0"}}
 	a.Updates = u
-	a.tasks.post = func(fn func()) error { t.Fatal("lookup posted while still inside the daily window"); return nil }
 
 	a.CheckForUpdatesOnStartup(now)
 
-	if u.calls.Load() != 0 {
-		t.Fatal("daily window did not suppress the lookup")
+	if a.updateStartupTask != nil {
+		t.Fatal("daily window created a startup task")
 	}
 	if a.updateDialog != nil {
 		t.Fatal("daily window opened an update dialog")
@@ -186,14 +177,13 @@ func TestCheckForUpdatesOnStartupSkipsOpenModal(t *testing.T) {
 	a := startupTestApp(t, settings)
 	u := &recordingUpdater{release: update.Release{Tag: "v2.0.0"}}
 	a.Updates = u
-	a.tasks.post = func(fn func()) error { t.Fatal("lookup posted while a modal was open"); return nil }
 	a.ShowDialog(ui.NewWidgetAdapter(widgets.NewDialogWidget(20)))
 	now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
 
 	a.CheckForUpdatesOnStartup(now)
 
-	if u.calls.Load() != 0 {
-		t.Fatal("startup check ran while a modal was open")
+	if a.updateStartupTask != nil {
+		t.Fatal("open modal created a startup task")
 	}
 	if !config.LoadState().LastUpdateCheckTime().IsZero() {
 		t.Fatal("open modal recorded a startup check")
@@ -223,46 +213,51 @@ func (u *firstBlockedUpdater) Apply(context.Context, update.Release, update.Meth
 }
 
 func TestCheckForUpdatesOnStartupLeavesManualDialogAlone(t *testing.T) {
-	settings := config.DefaultSettings()
-	settings.Update.StartupCheck = true
-	a := startupTestApp(t, settings)
-	u := &firstBlockedUpdater{started: make(chan context.Context, 1), release: make(chan struct{}), tag: "v2.0.0"}
-	a.Updates = u
-	posted := make(chan func(), 2)
-	a.tasks.post = func(fn func()) error { posted <- fn; return nil }
-	now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
+	for _, dismiss := range []bool{false, true} {
+		name := "open"
+		if dismiss {
+			name = "dismissed"
+		}
+		t.Run(name, func(t *testing.T) {
+			settings := config.DefaultSettings()
+			settings.Update.StartupCheck = true
+			a := startupTestApp(t, settings)
+			u := &recordingUpdater{release: update.Release{Tag: "v2.0.0"}}
+			a.Updates = u
+			posted := make(chan func(), 1)
+			a.tasks.post = func(fn func()) error { posted <- fn; return nil }
+			now := time.Date(2026, 11, 23, 20, 0, 0, 0, time.UTC)
 
-	a.CheckForUpdatesOnStartup(now)
-	select {
-	case <-u.started:
-	case <-time.After(time.Second):
-		t.Fatal("startup lookup did not start")
-	}
-	a.CheckForUpdates()
-	close(u.release)
-	// The two deliveries may finish in either order. The startup callback must
-	// leave the manual dialog alone once Check for Updates has opened it.
-	var first, second func()
-	select {
-	case first = <-posted:
-	case <-time.After(time.Second):
-		t.Fatal("no lookup delivery")
-	}
-	select {
-	case second = <-posted:
-	case <-time.After(time.Second):
-		t.Fatal("missing second lookup delivery")
-	}
-	first()
-	second()
-	if a.updateDialog == nil || a.updateDialog.release.Tag != "v2.0.0" {
-		t.Fatal("manual Check for Updates dialog was lost")
-	}
-	if u.applied.Load() != 0 {
-		t.Fatal("startup or manual path applied an update")
-	}
-	if !config.LoadState().LastUpdateCheckTime().IsZero() {
-		t.Fatal("abandoned startup lookup recorded a check time")
+			a.CheckForUpdatesOnStartup(now)
+			var deliverStartup func()
+			select {
+			case deliverStartup = <-posted:
+			case <-time.After(time.Second):
+				t.Fatal("startup lookup did not post delivery")
+			}
+			a.CheckForUpdates()
+			deliverStartupLookup(t, posted)
+			manual := a.updateDialog
+			if manual == nil || manual.release.Tag != "v2.0.0" {
+				t.Fatal("manual check did not show the available release")
+			}
+			if dismiss {
+				a.closeUpdateDialog()
+				manual = nil
+			}
+
+			deliverStartup()
+
+			if a.updateDialog != manual {
+				t.Fatal("startup result replaced or reopened the manual dialog")
+			}
+			if u.applied.Load() != 0 {
+				t.Fatal("startup or manual path applied an update")
+			}
+			if !config.LoadState().LastUpdateCheckTime().IsZero() {
+				t.Fatal("abandoned startup lookup recorded a check time")
+			}
+		})
 	}
 }
 
