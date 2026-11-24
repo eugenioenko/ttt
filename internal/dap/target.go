@@ -49,6 +49,9 @@ func LoadTargets(folder string) ([]Target, error) {
 }
 
 func (t Target) LaunchArguments() (map[string]any, error) {
+	if t.Type == "debugpy" && t.Request == "launch" {
+		return t.pythonArguments()
+	}
 	if t.Type != "go" || t.Request != "launch" {
 		return nil, fmt.Errorf("%s: unsupported %s %s configuration", t.Name, t.Type, t.Request)
 	}

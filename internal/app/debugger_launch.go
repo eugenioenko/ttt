@@ -134,7 +134,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		defer close(run.closed)
 		startup, endStartup := context.WithTimeout(ctx, 90*time.Second)
 		defer endStartup()
-		s, err := dap.StartDelve(startup, "dlv", t.Folder, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
+		s, err := dap.OpenAdapter(startup, t, args, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
 		if err == nil {
 			deliver(func() { run.session = s })
 			err = s.Start(startup, t.Type, t.Request, args, func() error {

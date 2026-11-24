@@ -8,7 +8,7 @@ Install Delve and put `dlv` on the PATH used by ttt. Open a workspace with the n
 
 At a stop, use the Debug sidebar to inspect Variables, activate a Call Stack frame to reveal its source, and use the **Debug: Step Over**, **Debug: Step In**, **Debug: Step Out**, **Debug: Continue**, or **Stop Debugging** palette commands. Program output appears in Output under `debug:<target name>`. Breakpoints survive stopping and launching again within the open workspace.
 
-This milestone implements Go launch. The attach workflows, Node.js and Python providers described below remain planned. The real-editor regression test in `tests/functional/debugger.test.js` runs when Delve is on PATH.
+Python launch also supports named configurations with type `debugpy`, request `launch`, and either `module` or `program`. ttt starts the adapter over stdio with the configured `python` interpreter, the workspace’s .venv interpreter, or Python from PATH. Install debugpy in that environment. Output uses internalConsole. The Python regression in `tests/functional/debugger-python.test.js` runs with TTT_TEST_DEBUGPY set to a Python executable containing debugpy. Attach and Node.js remain planned. The real-editor regression test in `tests/functional/debugger.test.js` runs when Delve is on PATH.
 
 ## The first debugging session
 
