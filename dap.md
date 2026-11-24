@@ -2,6 +2,14 @@
 
 Design draft for implementation in ~/Documents/ttt, based on main at 99db0be6. The first release includes configured launch and attach, mandatory saving, a Debug sidebar, clickable gutter breakpoints, and program output. Proposed defaults and remaining questions are called out below.
 
+## Implemented milestone — Go launch
+
+Install Delve and put `dlv` on the PATH used by ttt. Open a workspace with the named Go launch configuration shown below. Click the breakpoint column immediately to the left of the source text, then run **Start Debugging** from the command palette. Choose a target if the workspace contains several configurations. ttt saves modified file-backed tabs in the target folder before launch.
+
+At a stop, use the Debug sidebar to inspect Variables, activate a Call Stack frame to reveal its source, and use the **Debug: Step Over**, **Debug: Step In**, **Debug: Step Out**, **Debug: Continue**, or **Stop Debugging** palette commands. Program output appears in Output under `debug:<target name>`. Breakpoints survive stopping and launching again within the open workspace.
+
+This milestone implements Go launch. The attach workflows, Node.js and Python providers described below remain planned. The real-editor regression test in `tests/functional/debugger.test.js` runs when Delve is on PATH.
+
 ## The first debugging session
 
 A developer opens a Go workspace, sets a breakpoint in a saved file, and chooses **Start Debugging**. If the workspace has one launch target, the command names and launches it. If there are several, the developer picks one. At a stop, the editor reveals the executing line, keeps keyboard focus, and shows the call stack and locals. Selecting another frame opens its source and shows its locals. Step Over updates both views. Continue clears the execution marker. After the program exits, the developer can change a breakpoint and run the same target again.
