@@ -140,6 +140,11 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 	ctx, cancel := context.WithCancel(context.Background())
 	run := &debugRun{edited: make(map[string]bool), folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
+	for path := range a.debugger.points {
+		if a.debugOwnsSource(run, path) {
+			a.checkDebugSource(path)
+		}
+	}
 	a.debugger.run = run
 	a.ensureDebugPanel()
 	a.refreshDebugPanel()

@@ -19,6 +19,7 @@ type debuggerState struct {
 	lastFolder, lastTarget string
 	panel                  debugSidebar
 	run                    *debugRun
+	closedSources          map[string]os.FileInfo
 	sources                map[string]debugSourceVersion
 	points                 map[string]map[int]*debugBreakpoint
 	stoppedFile            string
@@ -193,6 +194,10 @@ func (a *App) toggleEditorBreakpoint(g *ui.EditorGroupWidget, line int) {
 		return
 	}
 	a.updateDebugSource(path, buf)
+	delete(a.debugger.closedSources, path)
+	if r := a.debugger.run; r != nil && buf.Dirty && a.debugOwnsSource(r, path) {
+		r.edited[path] = true
+	}
 	a.toggleBreakpoint(path, line)
 	if a.debugger.sources == nil {
 		a.debugger.sources = make(map[string]debugSourceVersion)
@@ -260,4 +265,28 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 		a.syncDebugBreakpoints(path)
 	}
 	a.refreshDebugPanel()
+}
+
+func (a *App) rememberClosedDebugSource(path string) {
+	if len(a.debugger.points[path]) == 0 {
+		return
+	}
+	if a.debugger.closedSources == nil {
+		a.debugger.closedSources = make(map[string]os.FileInfo)
+	}
+	info, _ := os.Stat(path)
+	a.debugger.closedSources[path] = info
+}
+func (a *App) checkDebugSource(path string) {
+	info, err := os.Stat(path)
+	last, closed := a.debugger.closedSources[path]
+	if err != nil || !info.Mode().IsRegular() || closed && (last == nil || !os.SameFile(last, info) || last.Size() != info.Size() || !last.ModTime().Equal(info.ModTime())) {
+		for _, p := range a.debugger.points[path] {
+			p.confirm = true
+		}
+	}
+	if b := a.editorBufferForPath(path); b != nil {
+		a.updateDebugSource(path, b)
+		delete(a.debugger.closedSources, path)
+	}
 }

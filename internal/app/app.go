@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
@@ -812,6 +813,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		}
 	}
 	a.EditorGroup.OnFileClose = func(path, lang string) {
+		a.rememberClosedDebugSource(path)
 		a.NotifyLSPClose(path, lang)
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("file.close", path)
@@ -831,6 +833,9 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
+		if r := a.debugger.run; r != nil && filepath.IsAbs(path) && a.debugOwnsSource(r, path) {
+			r.edited[path] = true
+		}
 		a.updateDebugSource(path, a.EditorGroup.ActiveBuffer())
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.cancelBackgroundPull(path, lang)
