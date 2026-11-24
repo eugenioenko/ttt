@@ -9,6 +9,7 @@ import (
 )
 
 type debuggerState struct {
+	run         *debugRun
 	points      map[string]map[int]bool
 	stoppedFile string
 	stoppedLine int

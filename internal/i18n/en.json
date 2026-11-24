@@ -1,4 +1,11 @@
 {
+  "debug.start": "Start Debugging",
+  "debug.stop": "Stop Debugging",
+  "debug.continue": "Debug: Continue",
+  "debug.stepOver": "Debug: Step Over",
+  "debug.stepIn": "Debug: Step In",
+  "debug.stepOut": "Debug: Step Out",
+  "debug.noTargets": "Define a debug configuration in .ttt/launch.json.",
   "command.changeTabBarStyle": "Change Tab Bar Style",
   "markdown.columnHint": "Column limit (1 or greater)",
   "markdown.customWidth": "Custom…",
