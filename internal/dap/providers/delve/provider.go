@@ -13,14 +13,6 @@ import (
 
 type Provider struct{ dap.Adapter }
 
-func (Provider) FileLaunchArguments(path string) map[string]any {
-	args := map[string]any{"program": filepath.Dir(path)}
-	if strings.HasSuffix(path, "_test.go") {
-		args["mode"] = "test"
-	}
-	return args
-}
-
 func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request == "attach" {
 		if raw, ok := t.Arguments["processId"]; ok {

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/dap/providers"
 	"github.com/eugenioenko/ttt/internal/plugin"
 )
 
@@ -45,6 +47,16 @@ func TestDebuggerPluginPackages(t *testing.T) {
 				if _, ok := settings.Get(key); !ok {
 					t.Fatalf("missing installed %s", key)
 				}
+				if scenario == "unchanged" {
+					source := map[string]string{"go": "main.go", "node": "main.js", "debugpy": "main.py", "gdb": "main.c", "lldb": "main.c"}
+					checkPluginFileRecipe(t, a, dir, adapter, source[adapter])
+					if adapter == "go" {
+						checkPluginFileRecipe(t, a, dir, adapter, "main_test.go")
+					}
+					if adapter == "node" {
+						checkPluginFileRecipe(t, a, dir, "pwa-node", "main.ts")
+					}
+				}
 				switch scenario {
 				case "edited-on-disk":
 					saved, err := config.ReadSettingsFile(a.settingsFile)
@@ -77,5 +89,31 @@ func TestDebuggerPluginPackages(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func checkPluginFileRecipe(t *testing.T, a *App, dir, adapter, filename string) {
+	t.Helper()
+	file := filepath.Join(dir, "src", filename)
+	target, ok := dap.Adapter(a.Settings.Debug.Adapters[adapter]).FileTarget(dir, file, adapter)
+	if adapter == "gdb" || adapter == "lldb" {
+		if ok {
+			t.Fatal("unexpected source launch recipe for a native executable debugger")
+		}
+		return
+	}
+	if !ok {
+		t.Fatalf("missing installed recipe for %s", adapter)
+	}
+	provider, err := providers.For(target, a.Settings.Debug.Adapters)
+	requireNoError(t, err)
+	args, err := provider.Arguments(target)
+	requireNoError(t, err)
+	want := file
+	if adapter == "go" {
+		want = filepath.Dir(file)
+	}
+	if args["program"] != want || (args["mode"] == "test") != (filename == "main_test.go") {
+		t.Fatalf("%s %s: unexpected launch arguments %+v", adapter, filename, args)
 	}
 }

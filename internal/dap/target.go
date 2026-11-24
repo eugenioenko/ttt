@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -17,6 +19,7 @@ type Target struct {
 	Type      string
 	Request   string
 	Folder    string
+	file      string
 	Arguments map[string]any
 }
 
@@ -51,23 +54,42 @@ func ReadLaunchFile(folder string) (string, []Target, error) {
 			if name == "" || adapter == "" || request == "" {
 				return path, nil, fmt.Errorf("%s: configuration %d requires name, type and request", path, i+1)
 			}
-			targets = append(targets, Target{name, adapter, request, folder, args})
+			targets = append(targets, Target{Name: name, Type: adapter, Request: request, Folder: folder, Arguments: args})
 		}
 		return path, targets, nil
 	}
 	return "", nil, nil
 }
 
-func CreateLaunchFile(folder, source, adapter, provider string) (string, error) {
+func (a Adapter) FileTarget(folder, file, name string) (Target, bool) {
+	if a.FileLaunch == nil {
+		return Target{}, false
+	}
+	args := a.FileLaunch
+	for _, override := range a.FileLaunchOverrides {
+		if match, _ := path.Match(override.Pattern, filepath.Base(file)); match {
+			args = maps.Clone(args)
+			maps.Copy(args, override.Arguments)
+			break
+		}
+	}
+	return Target{Name: filepath.Base(file), Folder: folder, Type: name, Request: "launch", file: file, Arguments: args}, true
+}
+
+func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string, error) {
 	path := filepath.Join(folder, ".ttt", "launch.json")
-	configs := []map[string]string{}
-	if program, err := filepath.Rel(folder, source); source != "" && err == nil && filepath.IsLocal(program) {
-		if provider == "delve" {
-			program = filepath.Dir(program)
+	configs := []map[string]any{}
+	if program, err := filepath.Rel(folder, source); source != "" && adapter != "" && err == nil && filepath.IsLocal(program) {
+		config := map[string]any{"program": filepath.ToSlash(program)}
+		if t, ok := settings.FileTarget("${workspaceFolder}", filepath.ToSlash(program), adapter); ok {
+			expanded, err := t.expand(t.Arguments, true)
+			if err != nil {
+				return "", err
+			}
+			config = expanded.(map[string]any)
 		}
-		if adapter != "" {
-			configs = append(configs, map[string]string{"name": filepath.Base(source), "type": adapter, "request": "launch", "program": filepath.ToSlash(program)})
-		}
+		config["name"], config["type"], config["request"] = filepath.Base(source), adapter, "launch"
+		configs = append(configs, config)
 	}
 	data, err := json.MarshalIndent(map[string]any{"version": "0.2.0", "configurations": configs}, "", "  ")
 	if err != nil {
@@ -90,13 +112,18 @@ func CreateLaunchFile(folder, source, adapter, provider string) (string, error) 
 	return path, nil
 }
 
-func Expand(value any, folder string) (any, error) {
-	return expand(value, folder, false)
+func (t Target) Expand(value any) (any, error) {
+	return t.expand(value, false)
 }
-func expand(value any, folder string, pass bool) (any, error) {
+func (t Target) expand(value any, pass bool) (any, error) {
 	switch v := value.(type) {
 	case string:
-		s := strings.ReplaceAll(v, "${workspaceFolder}", folder)
+		var s string
+		if t.file == "" {
+			s = strings.ReplaceAll(v, "${workspaceFolder}", t.Folder)
+		} else {
+			s = strings.NewReplacer("${file}", t.file, "${fileDirname}", filepath.Dir(t.file), "${workspaceFolder}", t.Folder).Replace(v)
+		}
 		if strings.Contains(s, "${input:") || (!pass && strings.Contains(s, "${")) {
 			return nil, fmt.Errorf("unsupported substitution in %q", v)
 		}
@@ -104,7 +131,7 @@ func expand(value any, folder string, pass bool) (any, error) {
 	case []any:
 		dst := make([]any, len(v))
 		for i, item := range v {
-			x, err := expand(item, folder, pass)
+			x, err := t.expand(item, pass)
 			if err != nil {
 				return nil, err
 			}
@@ -114,7 +141,7 @@ func expand(value any, folder string, pass bool) (any, error) {
 	case map[string]any:
 		dst := make(map[string]any, len(v))
 		for k, item := range v {
-			x, err := expand(item, folder, pass)
+			x, err := t.expand(item, pass)
 			if err != nil {
 				return nil, err
 			}
@@ -133,7 +160,7 @@ func (t Target) Fields(defaults map[string]any, allowed ...string) (map[string]a
 		if !slices.Contains(allowed, key) {
 			return nil, fmt.Errorf("%s: unsupported %s %s field %q", t.Name, t.Type, t.Request, key)
 		}
-		x, err := Expand(v, t.Folder)
+		x, err := t.Expand(v)
 		if err != nil {
 			return nil, err
 		}
@@ -149,7 +176,7 @@ func (a Adapter) Arguments(t Target) (map[string]any, error) {
 	if _, ok := t.Arguments["preLaunchTask"]; ok {
 		return nil, fmt.Errorf("preLaunchTask is unsupported")
 	}
-	out, err := expand(t.Arguments, t.Folder, true)
+	out, err := t.expand(t.Arguments, true)
 	if err != nil {
 		return nil, err
 	}

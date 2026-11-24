@@ -380,7 +380,22 @@ The default `provider` is `generic`, including for familiar type names. Set it e
 
 Adapters connected over stdio or a session-owned private socket can request an integrated terminal. TCP connections and adapter-selected socket paths cannot start local terminal commands. Socket adapters can request a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
 
-**Debug File** launches the saved active file using a configured js-debug, debugpy or Delve provider. It works with or without a launch configuration. Delve launches the containing package and uses test mode for `_test.go` files. Node runs the selected file using the installed runtime. TypeScript projects that require a build or loader can specify those launch arguments in a saved target.
+An adapter can supply a `fileLaunch` object with the DAP launch arguments for **Debug File**. This works with the generic provider and with language-specific providers. For example, a Node adapter can set:
+
+```json
+"fileLaunch": { "program": "${file}", "cwd": "${workspaceFolder}" }
+```
+
+ttt expands `${file}`, `${fileDirname}`, and `${workspaceFolder}` in string values throughout the recipe, including arrays and nested objects. The workspace folder is the root containing the active file, or the file’s directory when it is outside the workspace. Adapters without a recipe can still run saved targets.
+
+For filename-specific arguments, add `fileLaunchOverrides`. The first `pattern` matching the file’s basename supplies top-level arguments that override the base recipe. For example, the Delve plugin uses:
+
+```json
+"fileLaunch": { "program": "${fileDirname}" },
+"fileLaunchOverrides": [
+  { "pattern": "*_test.go", "arguments": { "mode": "test" } }
+]
+```
 
 The other toolbar button is **Configure** when there are no saved targets. It opens or creates the launch file. With saved targets it becomes **Run & Debug**, which starts the only target or lets you pick among several.
 

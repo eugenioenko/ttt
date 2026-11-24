@@ -6,7 +6,6 @@ import (
 	"slices"
 
 	"github.com/eugenioenko/ttt/internal/dap"
-	"github.com/eugenioenko/ttt/internal/dap/providers"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -59,17 +58,9 @@ func (a *App) currentFileDebugTarget() (dap.Target, bool) {
 		if !slices.Contains(entry.Languages, language) {
 			continue
 		}
-		target := dap.Target{Type: name, Request: "launch", Folder: folder, Name: filepath.Base(path)}
-		provider, err := providers.For(target, a.Settings.Debug.Adapters)
-		if err != nil {
-			continue
+		if target, ok := dap.Adapter(entry).FileTarget(folder, path, name); ok {
+			return target, true
 		}
-		launcher, ok := provider.(interface{ FileLaunchArguments(string) map[string]any })
-		if !ok {
-			continue
-		}
-		target.Arguments = launcher.FileLaunchArguments(path)
-		return target, true
 	}
 	return dap.Target{}, false
 }
@@ -137,7 +128,7 @@ func (a *App) createDebugConfiguration(folder string) {
 			break
 		}
 	}
-	path, err := dap.CreateLaunchFile(folder, source, adapter, a.Settings.Debug.Adapters[adapter].Provider)
+	path, err := dap.CreateLaunchFile(folder, source, adapter, dap.Adapter(a.Settings.Debug.Adapters[adapter]))
 	if err != nil {
 		a.StatusError(err.Error())
 		return

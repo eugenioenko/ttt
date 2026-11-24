@@ -211,7 +211,7 @@ func TestDebugFileButtonPromptsBeforeLaunchingDirtySource(t *testing.T) {
 	defer h.stop()
 	path := filepath.Join(h.dir, "test.js")
 	requireNoError(t, os.WriteFile(path, []byte("console.log(1)"), 0600))
-	h.app.Settings.Debug.Adapters["node"] = debugadapter.Config{Provider: "jsdebug", Languages: []string{"javascript"}}
+	h.app.Settings.Debug.Adapters["node"] = debugadapter.Config{FileLaunch: map[string]any{"program": "${file}"}, Languages: []string{"javascript"}}
 	h.openFile(path)
 	h.pressRune(' ')
 	h.exec("sidebar.debug")
