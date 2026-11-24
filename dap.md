@@ -12,7 +12,7 @@ Python launch also supports named configurations with type `debugpy`, request `l
 
 ## Real-editor verification
 
-The Linux real-adapter run covers the following nine combinations. Each row uses the compiled editor, a source breakpoint, a known local and a step. The attach tests read a heartbeat written by the target after Detach, which proves that the independent program resumes execution. TypeScript coverage additionally checks that the cursor moves in the original source file.
+The Linux real-adapter run covers the following nine combinations. Each row uses the compiled editor, a source breakpoint, a known local and a step. The attach tests read a heartbeat written by the target after Detach, which proves that the independent program resumes execution. TypeScript coverage additionally checks stepping in the original source file and selecting the caller at its TypeScript call site.
 
 | Adapter | Named launch | Picked and configured PID | Listening endpoint |
 | --- | --- | --- | --- |
@@ -118,12 +118,13 @@ Expose start, continue, pause, stop, stepping and toggle-breakpoint commands thr
 
 LLVM’s lldb-dap is a candidate for a small native C fixture. Compile with debug symbols, rewrite the recorded source directory at build time, then configure LLDB source mapping back to the workspace. Check that a breakpoint binds and the frame opens the existing editor buffer. Strip the symbols in a second build and verify that a frame without source can still be selected and execution resumed. Keep this check optional until C/C++ support is explicitly in scope. [LLDB DAP documentation](https://lldb.llvm.org/use/lldbdap.html)
 
-## Decisions still pending
+## Release decisions
 
-- **Configuration compatibility.** Set the supported substitutions and adapter-specific fields against real project files. Decide when to present project-supplied executable settings or launch arguments for review.
-- **Saving and source identity.** Confirm save scope for multi-folder workspaces, treatment of untitled source, and how to flag an attached binary built from older code.
-- **Output and input.** Verify Delve's actual launch output destination. Decide whether programs requiring terminal input belong in v1.
-- **Interaction and persistence.** Choose default shortcuts around F10, narrow-sidebar and gutter layout, and whether breakpoints survive editor restarts.
+- **Adapter packaging.** Delve, js-debug, and debugpy run as external processes. Their integration ships with ttt in the DAP service. A provider needs to validate and resolve configuration within a workspace, discover or start an adapter, and distinguish owned processes from external endpoints. Delve needs remote detach handling, debugpy needs interpreter selection, and js-debug needs inspector resolution plus a second DAP session. An executable and argument template alone cannot cover all three. Keep transport framing, request correlation, breakpoint intent, inspection, and editor controls shared. A public plugin API for adding providers remains a future extension.
+- **Configuration.** Explicitly starting a named configuration authorizes its configured program, interpreter, and arguments. Merely opening a folder never starts an adapter. The user selects the standalone js-debug script through TTT_JS_DEBUG_SERVER. The supported interpolation is `${workspaceFolder}`, plus `${command:pickProcess}` in a processId field. Browser targets, pre-launch tasks and interactive terminals are outside this release.
+- **Source identity.** Save file-backed buffers owned by the selected folder using normal save checks. An untitled buffer has no source path. A breakpoint belongs to its requested path, including across Save As. Reopening a replacement buffer or overwriting a breakpoint's source line requires confirming its location. An edit during a session clears the affected binding. For attach, the user is responsible for matching local source to the independently built program.
+- **Interaction.** Use palette commands and sidebar actions. F10 retains its existing menu binding. The dedicated one-column gutter uses distinct pending, verified and executing glyphs. The Breakpoints list retains intent for the current editor lifetime and displays relocation and the adapter's explanation. The selected stack frame controls navigation and variables independently of the execution marker.
+- **Output and shutdown.** Delve uses remote output mode. Node and Python launches use the internal console. DAP output and managed-adapter stderr go to Output. A program attached after startup can still write to its original terminal. Real-editor lifecycle tests exercise Pause followed by Stop and Pause followed by editor quit for each adapter, checking disappearance of the launched PID. The failure tests cover stalled attach cancellation, a refused connection on retry, and an independent target responding after PID attach startup fails.
 
 ## Design references
 
