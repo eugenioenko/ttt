@@ -64,6 +64,7 @@ type TerminalSpec struct {
 }
 
 type App struct {
+	debugger        debuggerState
 	language        languageState
 	Root            *ui.Root
 	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
@@ -846,6 +847,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
 		}
 	}
+	a.initDebuggerGutter()
 	a.EditorGroup.OnGutterClick = func(path string, line int) bool {
 		if a.PluginManager == nil || !a.PluginManager.HasEventListeners("gutter.click") {
 			return false

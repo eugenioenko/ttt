@@ -94,6 +94,9 @@ type EditorPaneWidget struct {
 	Bookmarks               map[int]Bookmark
 	OnBookmarkChange        func(line int, action string, b Bookmark)
 	OnGutterClick           func(line int) bool
+	DebugMarker             func(line int) rune
+	OnDebugClick            func(line int)
+	debugColumn             int
 	ReadOnly                bool
 	bracketColorCache       bracketColorMap
 	bracketColorDirty       bool
@@ -157,6 +160,14 @@ func (e *EditorPaneWidget) InvalidateBracketColors() {
 func (e *EditorPaneWidget) Focusable() bool { return true }
 
 func (e *EditorPaneWidget) GutterWidth() int {
+	w := e.baseGutterWidth()
+	if e.DebugMarker != nil && !e.DiffOverlay.isDiff() {
+		w++
+	}
+	return w
+}
+
+func (e *EditorPaneWidget) baseGutterWidth() int {
 	if e.DiffOverlay.diffGutter() {
 		return e.DiffOverlay.gutterWidth()
 	}

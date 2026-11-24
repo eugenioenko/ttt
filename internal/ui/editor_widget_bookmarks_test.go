@@ -93,3 +93,43 @@ func TestGutterClickFallsThroughWhenUnhandled(t *testing.T) {
 		t.Fatal("unhandled gutter click left a selection")
 	}
 }
+
+func TestDebugGutterHitFollowsRenderedMarker(t *testing.T) {
+	for _, style := range []string{"compact", "extended", "minimal"} {
+		e := newTestEditor()
+		e.LineNumbers = true
+		e.GutterStyle = style
+		rect := Rect{W: 20, H: 5}
+		e.SetRect(rect)
+		e.DebugMarker = func(line int) rune {
+			if line == 1 {
+				return '*'
+			}
+			return 0
+		}
+		hits := 0
+		e.OnDebugClick = func(line int) {
+			if line != 1 {
+				t.Fatalf("unexpected breakpoint on %d", line)
+			}
+			hits++
+		}
+		grid := makeGrid(20, 5)
+		e.Render(NewRenderSurface(grid, rect))
+		x := -1
+		for col, c := range grid[1] {
+			if c.Ch == '*' {
+				x = col
+				break
+			}
+		}
+		if x < 0 || x == e.bookmarkColumn() {
+			t.Fatalf("%s marker column %d", style, x)
+		}
+		gutterClick(e, x, 1)
+		gutterClick(e, x, 4)
+		if hits != 1 {
+			t.Fatalf("%s debug hits %d", style, hits)
+		}
+	}
+}
