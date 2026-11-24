@@ -66,11 +66,11 @@ func TestGutterClickOnBookmarkColumn(t *testing.T) {
 			return true
 		}
 
-		if got := gutterClick(e, e.bookmarkColumn(), 1); got != EventConsumed {
+		if got := gutterClick(e, bookmarkColumn, 1); got != EventConsumed {
 			t.Fatalf("%s: bookmark column click = %v, want consumed", style, got)
 		}
-		gutterClick(e, e.bookmarkColumn()+1, 2)
-		gutterClick(e, e.bookmarkColumn(), 5)
+		gutterClick(e, bookmarkColumn+1, 2)
+		gutterClick(e, bookmarkColumn, 5)
 
 		if len(clicked) != 1 || clicked[0] != 1 {
 			t.Fatalf("%s: clicked lines = %v, want [1]", style, clicked)
@@ -117,7 +117,7 @@ func TestBookmarkOverlaySharesColumnAndPreservesUnderlyingBookmark(t *testing.T)
 		grid := makeGrid(20, 5)
 		surface := NewRenderSurface(grid, rect)
 		e.Render(surface)
-		x := e.bookmarkColumn()
+		x := bookmarkColumn
 		if e.GutterWidth() != width || grid[1][x].Ch != '*' {
 			t.Fatalf("%s: missing overlay or changed width", style)
 		}

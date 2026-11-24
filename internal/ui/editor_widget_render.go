@@ -306,7 +306,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 			}
 			if lineIdx < totalLines && !isWrapContinuation {
 				if b, ok := e.VisibleBookmark(lineIdx); ok {
-					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
+					surface.SetCell(bookmarkColumn, y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
 				}
 			}
 		}
