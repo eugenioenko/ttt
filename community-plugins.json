@@ -135,6 +135,16 @@
     "tags": ["pdf", "viewer", "search", "documents"]
   },
   {
+    "name": "plist-viewer",
+    "displayName": "PLIST Viewer",
+    "author": "danielmrdev",
+    "description": "Open macOS/iOS binary property lists as an interactive two-column tree",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "plist-viewer",
+    "version": "0.1.0",
+    "tags": ["plist", "macos", "ios", "viewer", "tree", "binary"]
+  },
+  {
     "name": "port-finder",
     "displayName": "Port Finder",
     "author": "eugenioenko",
