@@ -373,7 +373,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k right", Command: "focus.editorRight"},
 		{Key: "ctrl+k up", Command: "focus.editorUp"},
 		{Key: "ctrl+k down", Command: "focus.editorDown"},
-		{Key: "f10", Command: "debug.stepOverOrMenu"},
+		{Key: "f10", Command: "debug.stepOver"},
 		{Key: "f11", Command: "debug.stepIn"},
 		{Key: "shift+f11", Command: "debug.stepOut"},
 		{Key: "alt+f", Command: "menu.file"},

@@ -42,7 +42,6 @@ type debugRun struct {
 
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
-		{ID: "debug.stepOverOrMenu", Hidden: true, Handler: a.debugF10},
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
 		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
@@ -475,12 +474,4 @@ func (a *App) debugControl(cmd string) {
 			}
 		})
 	}()
-}
-
-func (a *App) debugF10() {
-	if a.debugger.run == nil {
-		a.Reg.Execute("menu.file")
-		return
-	}
-	a.DebugStepOver()
 }

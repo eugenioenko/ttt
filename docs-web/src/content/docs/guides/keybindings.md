@@ -160,7 +160,7 @@ Panel taller and Panel shorter remain available in the command palette and can b
 
 | Shortcut | Action |
 |----------|--------|
-| F10 | Step Over while debugging, otherwise open the menu |
+| F10 | Step Over |
 | F11 | Step Into |
 | Shift+F11 | Step Out |
 
