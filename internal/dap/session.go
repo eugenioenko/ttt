@@ -3,6 +3,7 @@ package dap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -355,6 +356,7 @@ func (s *Session) Close(terminateDebuggee bool) {
 }
 
 type SessionOptions struct {
+	OnChildFailure     func(error)
 	AdapterType        string
 	openChild          func(context.Context) (*Session, error)
 	RunInTerminal      func(TerminalRequest) (int, error)
@@ -382,11 +384,20 @@ func Connect(ctx context.Context, addr string, onEvent func(Event), options Sess
 	}
 	return SocketSession(conn, func() {}, onEvent, options), nil
 }
+
+var errChildActive = errors.New("debug target already active or closing")
+
 func (s *Session) startChild(p packet) {
 	err := s.attachChild(p.Arguments)
 	response := map[string]any{"type": "response", "seq": s.nextSeq(), "command": p.Command, "request_seq": p.Seq, "success": err == nil}
 	if err != nil {
 		response["message"] = err.Error()
+		s.mu.Lock()
+		idle := s.child == nil && !s.closing
+		s.mu.Unlock()
+		if idle && !errors.Is(err, errChildActive) && s.options.OnChildFailure != nil {
+			s.options.OnChildFailure(err)
+		}
 	}
 	_ = s.codec.Send(response)
 }
@@ -412,7 +423,7 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 	if s.child != nil || s.closing {
 		s.mu.Unlock()
 		child.Close(false)
-		return fmt.Errorf("debug target already active or closing")
+		return errChildActive
 	}
 	points := maps.Clone(s.desired)
 	s.child = child
@@ -428,6 +439,10 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 	})
 	if err != nil {
 		child.Close(false)
+		s.mu.Lock()
+		s.child = nil
+		s.mu.Unlock()
+		return err
 	}
 	go func() {
 		<-child.Done()
@@ -438,7 +453,7 @@ func (s *Session) attachChild(raw json.RawMessage) error {
 			s.child = nil
 		}
 		s.mu.Unlock()
-		if active && err == nil && s.onEvent != nil {
+		if active && s.onEvent != nil {
 			s.onEvent(Event{Name: "terminated"})
 		}
 	}()

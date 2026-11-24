@@ -21,6 +21,10 @@ func ReverseProcess(ctx context.Context, socket, folder string, command func(str
 	if cmd.Dir == "" {
 		cmd.Dir = folder
 	}
+	if cmd.Stderr == nil {
+		cmd.Stderr = adapterStderr(onEvent)
+	}
+	cmd.WaitDelay = time.Second
 	isolateAdapter(cmd)
 	if err = cmd.Start(); err != nil {
 		return nil, err

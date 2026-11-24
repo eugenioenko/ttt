@@ -223,6 +223,15 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 	}
 
 	options := dap.SessionOptions{AdapterType: t.Type}
+	options.OnChildFailure = func(err error) {
+		deliver(func() {
+			if run.ctx.Err() == nil {
+				run.failed = true
+				a.StatusError(t.Name + ": " + err.Error())
+				run.cancel()
+			}
+		})
+	}
 	options.RunInTerminal = func(req dap.TerminalRequest) (int, error) {
 		type result struct {
 			pid int

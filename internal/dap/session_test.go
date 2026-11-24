@@ -74,11 +74,13 @@ func TestAdapterStopsReadingOrExits(t *testing.T) {
 	for _, blockedWrite := range []bool{false, true} {
 		client, peer := net.Pipe()
 		s := newSession(client, client, client, func() {}, nil)
-		timeout := 3 * time.Second
+		var ctx context.Context
+		var cancel context.CancelFunc
 		if blockedWrite {
-			timeout = 100 * time.Millisecond
+			ctx, cancel = context.WithTimeout(context.Background(), 100*time.Millisecond)
+		} else {
+			ctx, cancel = context.WithCancel(context.Background())
 		}
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		t.Cleanup(cancel)
 		t.Cleanup(func() { _ = client.Close(); _ = peer.Close() })
 		if err := peer.SetDeadline(time.Now().Add(time.Second)); err != nil {
