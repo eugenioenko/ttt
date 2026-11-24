@@ -67,7 +67,7 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 	}
 	b.spans = append([]ButtonSpan(nil), config.Spans...)
 	idx := strings.IndexByte(config.Label, '&')
-	if idx >= 0 && idx < len(config.Label)-1 {
+	if idx >= 0 && idx < len(config.Label)-1 && config.Label[idx+1] != ' ' {
 		runes := []rune(config.Label)
 		runeIdx := len([]rune(config.Label[:idx]))
 		b.label = string(runes[:runeIdx]) + string(runes[runeIdx+1:])

@@ -19,6 +19,7 @@
   "debug.stack": "Call Stack",
   "debug.variables": "Variables",
   "debug.breakpoints": "Breakpoints",
+  "debug.runAndDebug": "Run & Debug",
   "debug.start": "Start Debugging",
   "debug.stop": "Stop Debugging",
   "debug.continue": "Debug: Continue",

@@ -33,7 +33,7 @@ type debugSidebar struct {
 	threads                  []debugThread
 	threadNodes              map[*widgets.TreeNode]int
 	variables, stack, points *widgets.TreeWidget
-	primary, secondary       *widgets.HStackWidget
+	toolbar                  *widgets.HStackWidget
 	adapter                  *ui.WidgetAdapter
 	controls                 debugControlState
 	frames                   []debugFrame
@@ -72,16 +72,14 @@ func (a *App) ensureDebugPanel() {
 	p.variables = section("vars", i18n.Text("debug.variables"))
 	p.stack = section("stack", i18n.Text("debug.stack"))
 	p.points = section("points", i18n.Text("debug.breakpoints"))
-	p.primary = widgets.NewHStackWidget()
-	p.secondary = widgets.NewHStackWidget()
-	for _, row := range []*widgets.HStackWidget{p.primary, p.secondary} {
-		row.FixedHeight = 1
-		row.Gap = 1
-	}
+	p.toolbar = widgets.NewHStackWidget()
+	p.toolbar.FixedHeight = 1
+	p.toolbar.Gap = 1
+	p.toolbar.Align = "center"
 	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
 	sections := debugSectionSplit(inspection, p.points, 0.25, 5)
 	a.refreshDebugControls()
-	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.primary, p.secondary, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
+	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
 	a.refreshDebugPanel()
 }
@@ -104,33 +102,33 @@ func (a *App) refreshDebugControls() {
 	if r := a.debugger.run; r != nil {
 		state = debugControlState{active: true, paused: r.thread != nil, ready: r.ready, attached: r.attached}
 	}
-	if p.controls == state && len(p.primary.Children) > 0 {
+	if p.controls == state && len(p.toolbar.Children) > 0 {
 		return
 	}
 	p.controls = state
-	p.primary.Children = nil
-	p.secondary.Children = nil
-	button := func(row *widgets.HStackWidget, id, label string, icon icons.Name, enabled bool) {
+	p.toolbar.Children = nil
+	button := func(id, label string, icon icons.Name, enabled bool) {
 		b := widgets.NewButtonWidget(widgets.ButtonConfig{Label: label, Icon: icon, Command: id, Variant: widgets.ButtonBracket, Box: &widgets.BoxModel{}, OnCommand: func(cmd string) { a.Reg.Execute(cmd) }})
 		b.Disabled = !enabled
-		row.Children = append(row.Children, b)
+		p.toolbar.Children = append(p.toolbar.Children, b)
 	}
 	if !state.active {
-		button(p.primary, "debug.start", i18n.Text("debug.start"), icons.DebugStart, true)
+		button("debug.start", i18n.Text("debug.runAndDebug"), "", true)
 	} else {
 		if state.paused {
-			button(p.primary, "debug.continue", i18n.Text("debug.continueButton"), icons.DebugContinue, state.ready)
+			button("debug.continue", i18n.Text("debug.continueButton"), icons.DebugContinue, state.ready)
 		} else {
-			button(p.primary, "debug.pause", i18n.Text("debug.pauseButton"), icons.DebugPause, state.ready)
+			button("debug.pause", i18n.Text("debug.pauseButton"), icons.DebugPause, state.ready)
 		}
 		if state.attached {
-			button(p.primary, "debug.detach", i18n.Text("debug.detachButton"), icons.DebugDetach, true)
+			button("debug.detach", i18n.Text("debug.detachButton"), icons.DebugDetach, true)
 		} else {
-			button(p.primary, "debug.stop", i18n.Text("debug.stopButton"), icons.DebugStop, true)
+			button("debug.stop", i18n.Text("debug.stopButton"), icons.DebugStop, true)
 		}
-		button(p.secondary, "debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
-		button(p.secondary, "debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)
-		button(p.secondary, "debug.stepOut", i18n.Text("debug.stepOutButton"), icons.DebugStepOut, state.ready && state.paused)
+		p.toolbar.Children = append(p.toolbar.Children, widgets.NewBoxWidget(widgets.BoxModel{}))
+		button("debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
+		button("debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)
+		button("debug.stepOut", i18n.Text("debug.stepOutButton"), icons.DebugStepOut, state.ready && state.paused)
 	}
 	if p.adapter != nil {
 		p.adapter.RebuildFocus()

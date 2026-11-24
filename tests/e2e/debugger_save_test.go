@@ -73,7 +73,7 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Debug missing from sidebar on startup")
 	}
 	h.exec("sidebar.debug")
-	h.assertContains("[⏵]")
+	h.assertContains("[Run & Debug]")
 	h.assertContains("Breakpoints")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	if lines := h.app.Output.Lines; len(lines) == 0 || !strings.Contains(lines[len(lines)-1].Message, ".ttt/launch.json") {
@@ -96,7 +96,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 		t.Fatalf("missing %s", label)
 		return -1
 	}
-	controls, variables := row("[⏵]"), row("Variables")
+	controls, variables := row("[Run & Debug]"), row("Variables")
 	for _, label := range []string{"Call Stack", "Breakpoints"} {
 		from := row(label) - 1
 		for _, event := range []struct {
@@ -107,7 +107,7 @@ func TestDebugSidebarSectionDividers(t *testing.T) {
 			h.redraw()
 		}
 		h.exec("debug.toggleBreakpoint")
-		if row(label) != from-1 || row("[⏵]") != controls || row("Variables") != variables {
+		if row(label) != from-1 || row("[Run & Debug]") != controls || row("Variables") != variables {
 			t.Fatalf("dragging divider above %s moved toolbar or failed to resize section", label)
 		}
 	}
@@ -120,14 +120,11 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
-	for _, mode := range []struct {
-		start string
-		dot   rune
-	}{{"[⏵]", '∙'}, {"[\uf04b]", '\uf111'}} {
-		h.assertContains(mode.start)
+	for _, dot := range []rune{'∙', '\uf111'} {
+		h.assertContains("[Run & Debug]")
 		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
-		if !ok || mark.Icon != mode.dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(mode.dot)) < 2 {
-			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", mode.dot)
+		if !ok || mark.Icon != dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(dot)) < 2 {
+			t.Fatalf("expected a red %c in the gutter and the matching breakpoint list icon", dot)
 		}
 		h.exec("options.toggleFontIcons")
 	}
