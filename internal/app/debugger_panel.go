@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -77,7 +78,23 @@ func (a *App) refreshDebugPanel() {
 	p.breakNodes = make(map[*widgets.TreeNode]debugLocation)
 	for _, path := range slices.Sorted(maps.Keys(a.debugger.points)) {
 		for _, line := range slices.Sorted(maps.Keys(a.debugger.points[path])) {
-			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: fmt.Sprintf("%s:%d", filepath.Base(path), line)}
+			b := a.debugger.points[path][line].binding
+			marker := icons.PendingBreakpoint
+			if b.Verified {
+				marker = icons.Breakpoint
+			}
+			label := fmt.Sprintf("%c %s:%d", icons.Rune(marker), filepath.Base(path), line)
+			if b.Line > 0 && (b.Line != line || b.Source.Path != "" && b.Source.Path != path) {
+				dest := path
+				if b.Source.Path != "" {
+					dest = b.Source.Path
+				}
+				label += fmt.Sprintf(" %c %s:%d", icons.Rune(icons.ArrowRight), filepath.Base(dest), b.Line)
+			}
+			if b.Message != "" {
+				label += "  " + b.Message
+			}
+			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: label}
 			points.Children = append(points.Children, n)
 			p.breakNodes[n] = debugLocation{path, line}
 		}

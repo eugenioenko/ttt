@@ -212,6 +212,8 @@ func (s *Session) Call(ctx context.Context, command string, args any, out any) e
 }
 
 type Breakpoint struct {
+	ID       *int
+	Source   struct{ Path string }
 	Verified bool
 	Line     int
 	Message  string

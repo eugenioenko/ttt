@@ -17,6 +17,7 @@ import (
 )
 
 type debugRun struct {
+	folder     string
 	output     map[string]string
 	attached   bool
 	ctx        context.Context
@@ -127,7 +128,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 }
 func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &debugRun{attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
+	run := &debugRun{folder: t.Folder, attached: t.Request == "attach", ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
 	a.debugger.run = run
 	a.ensureDebugPanel()
@@ -139,7 +140,9 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	}
 	points := make(map[string][]int)
 	for path, lines := range a.debugger.points {
-		points[path] = slices.Sorted(maps.Keys(lines))
+		if a.debugOwnsSource(run, path) {
+			points[path] = slices.Sorted(maps.Keys(lines))
+		}
 	}
 	post := a.tasks.post
 	// PostEvent can deliver concurrent posts out of order when the terminal queue fills.
@@ -179,12 +182,8 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 						return err
 					}
 					deliver(func() {
-						for i, bp := range bps {
-							if i < len(lines) {
-								if _, ok := a.debugger.points[path][lines[i]]; ok {
-									a.debugger.points[path][lines[i]] = bp.Verified
-								}
-							}
+						if run.revision[path] == 0 {
+							a.applyDebugBindings(path, lines, bps)
 						}
 					})
 				}
@@ -215,12 +214,12 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			if err == nil {
 				a.StatusNotify(i18n.Text("debug.finished"))
 			}
-			a.clearDebugInspection()
 			for _, lines := range a.debugger.points {
-				for line := range lines {
-					lines[line] = false
+				for _, p := range lines {
+					p.binding = dap.Breakpoint{}
 				}
 			}
+			a.clearDebugInspection()
 		})
 	}()
 }
@@ -229,19 +228,10 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 	case "breakpoint":
 		var b struct {
 			Reason     string
-			Breakpoint struct {
-				Verified bool
-				Line     int
-				Source   struct{ Path string }
-			}
+			Breakpoint dap.Breakpoint
 		}
 		if json.Unmarshal(event.Body, &b) == nil {
-			point := b.Breakpoint
-			if lines := a.debugger.points[point.Source.Path]; lines != nil {
-				if _, ok := lines[point.Line]; ok {
-					lines[point.Line] = b.Reason != "removed" && point.Verified
-				}
-			}
+			a.debugBindingEvent(run, b.Breakpoint, b.Reason)
 		}
 	case "stopped":
 		var b struct{ ThreadID *int }
