@@ -44,10 +44,18 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request != "launch" {
 		return nil, fmt.Errorf("%s: unsupported %s %s configuration", t.Name, t.Type, t.Request)
 	}
-	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry")
+	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry", "console")
 	if err != nil {
 		return nil, err
 	}
+	switch out["console"] {
+	case nil, "internalConsole":
+	case "externalTerminal":
+		out["outputMode"] = "local"
+	default:
+		return nil, fmt.Errorf("%s: unsupported Go console %v", t.Name, out["console"])
+	}
+	delete(out, "console")
 	program, _ := out["program"].(string)
 	if program == "" {
 		return nil, fmt.Errorf("%s: missing program", t.Name)
@@ -71,6 +79,9 @@ func (Provider) Open(ctx context.Context, t dap.Target, args map[string]any, onE
 			return nil, err
 		}
 		return dap.Connect(ctx, addr, onEvent, dap.SessionOptions{ResumeBeforeDetach: true})
+	}
+	if t.Arguments["console"] == "externalTerminal" {
+		return openExternal(ctx, t, onEvent)
 	}
 	return dap.ListenProcess(ctx, "dlv", []string{"dap", "--listen=127.0.0.1:0"}, t.Folder, "DAP server listening at: ", onEvent, dap.SessionOptions{})
 }

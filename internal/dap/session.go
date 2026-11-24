@@ -113,7 +113,7 @@ func ListenProcess(ctx context.Context, binary string, args []string, folder, pr
 		kill()
 		return nil, err
 	}
-	return newSocketSession(conn, kill, onEvent, options), nil
+	return SocketSession(conn, kill, onEvent, options), nil
 }
 
 func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event)) *Session {
@@ -351,7 +351,7 @@ type SessionOptions struct {
 	ResumeBeforeDetach bool
 }
 
-func newSocketSession(conn net.Conn, cleanup func(), onEvent func(Event), options SessionOptions) *Session {
+func SocketSession(conn net.Conn, cleanup func(), onEvent func(Event), options SessionOptions) *Session {
 	return makeSession(conn, conn, conn, cleanup, onEvent, conn.RemoteAddr().String(), options)
 }
 
@@ -360,7 +360,7 @@ func Connect(ctx context.Context, addr string, onEvent func(Event), options Sess
 	if err != nil {
 		return nil, err
 	}
-	return newSocketSession(conn, func() {}, onEvent, options), nil
+	return SocketSession(conn, func() {}, onEvent, options), nil
 }
 func (s *Session) startChild(p packet) {
 	err := s.attachChild(p.Arguments)
