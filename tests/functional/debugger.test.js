@@ -52,10 +52,10 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     expect(snapshots[stopped]).toMatch(/ ↷   ⤓   ⤒ +⏵   ∎ /);
     expect(snapshots[nerd]).toMatch(/ \uead6   \uead4   \uead5 +\ueacf   \uf04d /);
     expect(snapshots[caller]).toContain("Ln 12, Col 1");
-    expect(snapshots[stopped]).toMatch(/► +6 +fmt\.Println/);
-    expect(snapshots[caller]).toMatch(/► +6 +fmt\.Println/);
+    expect(snapshots[stopped]).toMatch(/▶ +6 +fmt\.Println/);
+    expect(snapshots[caller]).toMatch(/▶ +6 +fmt\.Println/);
     expect(snapshots[stepped]).toMatch(/⦁ +6 +fmt\.Println/);
-    expect(snapshots[stepped]).toMatch(/► +7 +local\+\+/);
+    expect(snapshots[stepped]).toMatch(/▶ +7 +local\+\+/);
     expect(snapshots[output]).toContain("[debug:Example] done 43");
   } finally {
     rmSync(dir, { recursive: true, force: true });
