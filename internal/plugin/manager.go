@@ -757,9 +757,8 @@ func (u *PluginUpdate) fetchFromSubdir() error {
 		return fmt.Errorf("prepare language source: %w", err)
 	}
 
-	os.RemoveAll(u.dir)
-	if err := copyDir(srcDir, u.dir); err != nil {
-		return fmt.Errorf("copy plugin: %w", err)
+	if err := replacePluginDirectory(srcDir, u.dir); err != nil {
+		return err
 	}
 	u.manifest = manifest
 	return nil
@@ -784,19 +783,12 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 
-	// Grant before destroying the old plugin: a reduction that cannot be
-	// persisted must leave the running plugin alone.
-	granted, err := m.grant(regEntry, u.manifest.Permissions)
+	// Persist the version and grants together before destroying the running plugin.
+	granted, err := m.grantVersion(regEntry, u.manifest.Permissions, u.manifest.Version)
 	if err != nil {
 		return nil, false, err
 	}
 	if idx < 0 {
-		previousVersion := regEntry.Version
-		regEntry.Version = u.manifest.Version
-		if err := m.registry.Save(); err != nil {
-			regEntry.Version = previousVersion
-			return nil, false, err
-		}
 		return &Plugin{Name: u.name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, false, nil
 	}
 
@@ -818,8 +810,6 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		return nil, false, err
 	}
 	m.collectRegistrations(p)
-	regEntry.Version = u.manifest.Version
-	m.registry.Save()
 	return p, false, nil
 }
 
@@ -900,18 +890,21 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 // otherwise a retry would see the reduced grant already applied and skip the
 // save, leaving the dropped permission in the registry forever.
 func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) (PermissionSet, error) {
+	return m.grantVersion(entry, declared, entry.Version)
+}
+
+func (m *Manager) grantVersion(entry *RegistryEntry, declared PermissionSet, version string) (PermissionSet, error) {
 	granted := IntersectPermissions(entry.Permissions, declared)
 	paths := execPathsFor(entry.ExecPaths, granted.SystemExec)
-	if entry.SystemApproval {
-		granted.SystemExec = slices.Concat(granted.SystemExec, paths)
-		return granted, nil
-	}
-	if !reflect.DeepEqual(granted, entry.Permissions) || len(paths) != len(entry.ExecPaths) {
-		previous, previousPaths := entry.Permissions, entry.ExecPaths
+	previous := *entry
+	entry.Version = version
+	if !entry.SystemApproval {
 		entry.Permissions, entry.ExecPaths = granted, paths
+	}
+	if !reflect.DeepEqual(*entry, previous) {
 		if err := m.registry.Save(); err != nil {
-			entry.Permissions, entry.ExecPaths = previous, previousPaths
-			return PermissionSet{}, fmt.Errorf("persist reduced permissions for %q: %w", entry.Name, err)
+			*entry = previous
+			return PermissionSet{}, fmt.Errorf("persist plugin state for %q: %w", entry.Name, err)
 		}
 	}
 	granted.SystemExec = slices.Concat(granted.SystemExec, paths)
