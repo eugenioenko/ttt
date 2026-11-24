@@ -259,7 +259,7 @@ func (t *TcellScreen) SetPointerShapesEnabled(enabled bool) {
 		// restore the default pointer once before suppressing subsequent writes.
 		if t.pointerShape != "" && t.pointerShape != "default" {
 			if tty, ok := t.scr.Tty(); ok {
-				fmt.Fprintf(tty, "\x1b]22;default\x1b\\")
+				_, _ = fmt.Fprintf(tty, "\x1b]22;default\x1b\\")
 			}
 		}
 		// Reset cached pointerShape so that re-enabling will not be suppressed
@@ -279,6 +279,7 @@ func (t *TcellScreen) SetPointerShapesEnabled(enabled bool) {
 // Fini closes the queue, and a send on a closed channel panics even inside a
 // select with a default case. Async posters (PTY output, LSP, file watcher)
 // can race shutdown, so both send paths recover and drop the event instead.
+// The error result is always nil; it is retained for event-poster interfaces.
 func (t *TcellScreen) PostEvent(ev tcell.Event) error {
 	defer func() { _ = recover() }()
 	q := t.scr.EventQ()

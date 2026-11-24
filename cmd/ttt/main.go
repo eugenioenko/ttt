@@ -288,7 +288,7 @@ Docs: https://tttedit.dev
 
 	logFile := initLogger(cfg.Settings.DebugMode)
 	if logFile != nil {
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
@@ -378,7 +378,7 @@ Docs: https://tttedit.dev
 		pluginManager.SetLogFactory(func(pluginName string) func(string, string) {
 			return func(level, message string) {
 				editor.LogOutput(level, pluginName, message)
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 		})
 		// Before LoadAll, so ttt.version() is available during plugin init.
@@ -404,10 +404,10 @@ Docs: https://tttedit.dev
 
 		for _, p := range pluginManager.Plugins() {
 			p.RequestRedraw = func() {
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 			p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
-				screen.PostEvent(tcell.NewEventInterrupt(result))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 			})
 		}
 		editor.RegisterStartupPluginCommands()
@@ -418,7 +418,7 @@ Docs: https://tttedit.dev
 
 		go func() {
 			entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-			screen.PostEvent(tcell.NewEventInterrupt(&app.RemoteRegistryResult{Entries: entries, Err: err}))
+			_ = screen.PostEvent(tcell.NewEventInterrupt(&app.RemoteRegistryResult{Entries: entries, Err: err}))
 		}()
 
 		if len(pendingApprovals) > 0 {

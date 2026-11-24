@@ -470,7 +470,7 @@ func (s *SearchWidget) streamFiles(ctx context.Context, gen uint64, groups *[]Se
 	}
 
 	if readErr != nil {
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
 	if ctx.Err() != nil {

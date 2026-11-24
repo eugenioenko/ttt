@@ -221,10 +221,10 @@ func (a *App) openEditorDocuments() []ui.OpenDocument {
 
 func (a *App) wireEditorAutoScroll(group *ui.EditorGroupWidget) {
 	group.TabBar.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
 	}
 	group.Editor.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
 	}
 }
 

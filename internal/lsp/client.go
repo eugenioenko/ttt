@@ -638,10 +638,10 @@ func (c *Client) Shutdown() error {
 
 func (c *Client) Close() {
 	c.closing.Store(true)
-	c.cmd.Process.Kill()
+	_ = c.cmd.Process.Kill()
 	c.wait()
 }
 
 func (c *Client) wait() {
-	c.waitOnce.Do(func() { c.cmd.Wait() })
+	c.waitOnce.Do(func() { _ = c.cmd.Wait() })
 }

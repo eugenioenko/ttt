@@ -680,19 +680,19 @@ func (s *PluginSystemAPI) Spawn(binary string, args []string, opts plugin.SpawnO
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		stdin.Close()
-		stdout.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
-		stderr.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		return nil, err
 	}
 	return &pluginSpawnedProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
@@ -762,7 +762,7 @@ func (n *PluginNetworkAPI) Get(url string, headers map[string]string) (int, stri
 	if err != nil {
 		return 0, "", nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return resp.StatusCode, "", nil, err
@@ -789,7 +789,7 @@ func (n *PluginNetworkAPI) Post(url string, headers map[string]string, body stri
 	if err != nil {
 		return 0, "", nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return resp.StatusCode, "", nil, err

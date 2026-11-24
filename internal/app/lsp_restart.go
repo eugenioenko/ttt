@@ -45,7 +45,7 @@ func (a *App) RestartLSPServer() {
 	a.StatusNotify(i18n.Format("status.restarting", i18n.Args{"serverKey": serverKey}))
 	go func() {
 		a.LspManager.Stop(serverKey)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
 	}()
 }
 
@@ -95,7 +95,7 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 			}
 		}
 		close(sent)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
 	}()
 }
 

@@ -103,7 +103,7 @@ func ListThemes() []string {
 			}
 		}
 		pluginDir := filepath.Join(themesDir, "plugins")
-		filepath.WalkDir(pluginDir, func(path string, entry fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(pluginDir, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 				return nil
 			}
@@ -162,6 +162,7 @@ func themeNameFromFile(filename string) string {
 	return ""
 }
 
+// ConfigFilePath attempts to create the parent; callers must still handle write errors.
 func ConfigFilePath(filename string) string {
 	paths := configPaths()
 	for _, dir := range paths {
@@ -171,12 +172,12 @@ func ConfigFilePath(filename string) string {
 		}
 	}
 	if OverrideConfigDir != "" {
-		os.MkdirAll(OverrideConfigDir, 0755)
+		_ = os.MkdirAll(OverrideConfigDir, 0755)
 		return filepath.Join(OverrideConfigDir, filename)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		dir := filepath.Join(home, ".config", "ttt")
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 		return filepath.Join(dir, filename)
 	}
 	return filepath.Join(".config", filename)

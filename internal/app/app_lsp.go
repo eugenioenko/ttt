@@ -398,7 +398,7 @@ func (a *App) RequestFormatting(path, lang string) {
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
 				Path: path, Version: version, Buffer: buf, Edits: edits,
 			}))
 		}
@@ -433,7 +433,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
 				Path: path, Version: version, Buffer: buf, Edits: edits,
 			}))
 		}
@@ -522,7 +522,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 			return
 		}
 		if edit := pickCodeActionEdit(actions); edit != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: edit}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: edit}))
 		}
 	}()
 }
@@ -589,7 +589,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 			return
 		}
 		if edit != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&RenameResult{Edit: edit}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RenameResult{Edit: edit}))
 		}
 	}()
 }
@@ -631,7 +631,7 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 		}
 	}
 
-	a.EditorGroup.OpenFile(currentPath)
+	_ = a.EditorGroup.OpenFile(currentPath)
 	return len(files), allApplied
 }
 
@@ -700,19 +700,19 @@ func (a *App) RequestInteractiveCodeActions() {
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
 		actions, err := client.CodeActionWithDiagnostics(FileURI(path), r, nil, diagnostics)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 			Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers,
 			Actions: applicableCodeActions(actions),
 		}))
@@ -859,7 +859,7 @@ func (a *App) executeCodeActionCommand(server, path string, command lsp.Command,
 		if err == nil {
 			err = client.ExecuteCommand(command.Command, command.Arguments)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionCommandResult{Err: err, Notify: notify}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionCommandResult{Err: err, Notify: notify}))
 	}()
 }
 
@@ -885,9 +885,9 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 			return
 		}
 		if len(locs) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{Locations: locs}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{Locations: locs}))
 		} else {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{}))
 		}
 	}()
 }
@@ -1165,7 +1165,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 			return
 		}
 		if len(locs) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: locs}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: locs}))
 		}
 	}()
 }
@@ -1206,7 +1206,7 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 					a.persistSettings()
 				}
 				time.AfterFunc(10*time.Second, func() {
-					a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+					_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 				})
 			}
 			return

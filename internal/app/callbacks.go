@@ -585,7 +585,7 @@ func (a *App) fetchPRFileContent(dv *ui.DiffEditorWidget, owner, repo, baseSHA, 
 		} else if fetchErr == nil {
 			fetchErr = err
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&DiffContentResult{
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&DiffContentResult{
 			Widget:   dv,
 			TabName:  tabName,
 			OldLines: oldLines,
@@ -864,7 +864,7 @@ func registerWidgetCallbacks(app *App) {
 		app.EditorGroup.ClearSearch()
 	}
 	app.Search.PostBatch = func(batch *ui.SearchBatch) {
-		app.Screen.PostEvent(tcell.NewEventInterrupt(batch))
+		_ = app.Screen.PostEvent(tcell.NewEventInterrupt(batch))
 	}
 	app.Search.DiffSources = app.DiffSearchSources
 	app.Search.OnOpenMatch = app.NavigateToSearchMatch

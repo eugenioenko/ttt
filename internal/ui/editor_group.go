@@ -648,7 +648,7 @@ func sniffFileKind(path string) (fileKind, []byte) {
 	if err != nil {
 		return fileKindText, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var head [512]byte
 	n, _ := f.Read(head[:])
 	sample := head[:n]

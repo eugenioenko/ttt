@@ -74,7 +74,7 @@ func xdgUserDirs(home string) []Place {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	raw := map[string]string{}
 	scanner := bufio.NewScanner(f)
@@ -112,7 +112,7 @@ func gtkBookmarks() []Place {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var out []Place
 	scanner := bufio.NewScanner(f)
