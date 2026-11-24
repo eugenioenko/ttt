@@ -126,6 +126,10 @@ func (a *App) refreshDebugControls() {
 		p.toolbar.Children = append(p.toolbar.Children, widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.launchOrAttach"), Style: term.StyleMuted}))
 		button("debug.start", i18n.Text("debug.runAndDebug"), "", true)
 	} else {
+		button("debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
+		button("debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)
+		button("debug.stepOut", i18n.Text("debug.stepOutButton"), icons.DebugStepOut, state.ready && state.paused)
+		p.toolbar.Children = append(p.toolbar.Children, widgets.NewBoxWidget(widgets.BoxModel{}))
 		if state.paused {
 			button("debug.continue", i18n.Text("debug.continueButton"), icons.DebugContinue, state.ready)
 		} else {
@@ -136,10 +140,7 @@ func (a *App) refreshDebugControls() {
 		} else {
 			button("debug.stop", i18n.Text("debug.stopButton"), icons.DebugStop, true)
 		}
-		p.toolbar.Children = append(p.toolbar.Children, widgets.NewBoxWidget(widgets.BoxModel{}))
-		button("debug.stepOver", i18n.Text("debug.stepOverButton"), icons.DebugStepOver, state.ready && state.paused)
-		button("debug.stepIn", i18n.Text("debug.stepInButton"), icons.DebugStepIn, state.ready && state.paused)
-		button("debug.stepOut", i18n.Text("debug.stepOutButton"), icons.DebugStepOut, state.ready && state.paused)
+
 	}
 	if p.adapter != nil {
 		p.adapter.RebuildFocus()
