@@ -1133,7 +1133,7 @@ func makeRegistryUnwritable(t *testing.T, path string) {
 	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
 	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err == nil {
-		probe.Close()
+		_ = probe.Close()
 		t.Skip("this filesystem still allows writing a read-only file")
 	}
 }
@@ -1439,7 +1439,7 @@ func TestRevertApprovalReportsAFailedSave(t *testing.T) {
 	if err := os.Chmod(regDir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(regDir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(regDir, 0o700) })
 
 	err := m.revertApproval(&Plugin{Name: "p", Dir: dir, Manifest: Manifest{Name: "p"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "undo approval") {

@@ -104,7 +104,7 @@ func TestLanguageOnlyManifestAndPathIsolation(t *testing.T) {
 		}
 	}
 	outside := filepath.Join(t.TempDir(), "messages.json")
-	os.WriteFile(outside, []byte(`{}`), 0644)
+	requireNoError(t, os.WriteFile(outside, []byte(`{}`), 0644))
 	if err := os.Symlink(outside, filepath.Join(dir, "outside.json")); err != nil {
 		t.Skip(err)
 	}

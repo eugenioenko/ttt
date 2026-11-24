@@ -70,7 +70,9 @@ func TestManagerCachesStartupFailureUntilRestart(t *testing.T) {
 		t.Errorf("failed startup attempted %d times, want once", got)
 	}
 	m.Stop("plaintext")
-	m.ClientForLanguage("plaintext", t.TempDir())
+	if _, err := m.ClientForLanguage("plaintext", t.TempDir()); err == nil {
+		t.Fatal("failing server unexpectedly started")
+	}
 	if got := starts.Load(); got != 2 {
 		t.Errorf("explicit restart made %d total attempts, want two", got)
 	}

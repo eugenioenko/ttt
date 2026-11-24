@@ -54,7 +54,7 @@ func TestKeyboardModifierSettings(t *testing.T) {
 
 func TestSettingsPartialJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s))
 
 	if s.Editor.TabSize != 2 {
 		t.Fatalf("expected TabSize 2, got %d", s.Editor.TabSize)
@@ -66,7 +66,7 @@ func TestSettingsPartialJSON(t *testing.T) {
 
 func TestSettingsEmptyJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{}`), &s))
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)

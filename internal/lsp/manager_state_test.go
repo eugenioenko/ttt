@@ -83,7 +83,9 @@ func TestManagerStateChangeNotifies(t *testing.T) {
 	changes := make(chan struct{}, 16)
 	m.OnStateChange = func() { changes <- struct{}{} }
 
-	m.ClientForLanguage("plaintext", dir)
+	if _, err := m.ClientForLanguage("plaintext", dir); err == nil {
+		t.Fatal("failing server unexpectedly started")
+	}
 
 	// At least starting and failed.
 	if len(changes) < 2 {
