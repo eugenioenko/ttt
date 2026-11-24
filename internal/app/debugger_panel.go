@@ -62,7 +62,7 @@ func (a *App) ensureDebugPanel() {
 			a.inspectDebugFrame(f)
 		}
 		if b, ok := p.breakNodes[n]; ok {
-			a.navigateToLocation(b.path, b.line-1, 0)
+			a.revealDebugLocation(b.path, b.line)
 		}
 	}})
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), ui.NewWidgetAdapter(p.tree))
@@ -231,7 +231,7 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 	p.scopes = nil
 	p.references = make(map[*widgets.TreeNode]int)
 	if f.Source.Path != "" && f.Line > 0 {
-		a.navigateToLocation(f.Source.Path, f.Line-1, 0)
+		a.revealDebugLocation(f.Source.Path, f.Line)
 	}
 	a.refreshDebugPanel()
 	debugQuery(a, r, "scopes", map[string]int{"frameId": f.ID}, func(result struct {
@@ -273,4 +273,22 @@ func (a *App) expandDebugNode(n *widgets.TreeNode) {
 		}
 		p.tree.SetItems(p.tree.Config.Items)
 	})
+}
+
+func (a *App) revealDebugLocation(path string, line int) {
+	if a.EditorGroup.ActiveFilePath() != path {
+		for _, g := range a.editorGroups() {
+			if g.BufferForPath(path) != nil {
+				a.activateEditorGroup(g)
+				g.SwitchToTabByPath(path)
+				break
+			}
+		}
+	}
+	if a.EditorGroup.ActiveFilePath() != path {
+		a.navigateToLocation(path, line-1, 0)
+		return
+	}
+	a.EditorGroup.GoToLine(line)
+	a.Root.SetFocus(a.EditorGroup)
 }
