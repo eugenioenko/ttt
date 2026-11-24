@@ -41,6 +41,76 @@
     "tags": ["desktop", "launcher", "linux", "integration"]
   },
   {
+    "name": "dap-codelldb",
+    "displayName": "CodeLLDB Debug Adapter",
+    "author": "eugenioenko",
+    "description": "Configure CodeLLDB for C, C++, and Rust debugging",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "dap-codelldb",
+    "version": "0.1.0",
+    "tags": [
+      "debugger",
+      "dap",
+      "lldb"
+    ]
+  },
+  {
+    "name": "dap-gdb",
+    "displayName": "GDB Debug Adapter",
+    "author": "eugenioenko",
+    "description": "Configure GDB for C and C++ debugging",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "dap-gdb",
+    "version": "0.1.0",
+    "tags": [
+      "debugger",
+      "dap",
+      "gdb"
+    ]
+  },
+  {
+    "name": "dap-go",
+    "displayName": "Delve Debug Adapter",
+    "author": "eugenioenko",
+    "description": "Configure Delve for Go debugging",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "dap-go",
+    "version": "0.1.0",
+    "tags": [
+      "debugger",
+      "dap",
+      "go"
+    ]
+  },
+  {
+    "name": "dap-js-debug",
+    "displayName": "JavaScript Debugger",
+    "author": "eugenioenko",
+    "description": "Configure JavaScript Debugger for JavaScript and TypeScript debugging",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "dap-js-debug",
+    "version": "0.1.0",
+    "tags": [
+      "debugger",
+      "dap",
+      "node"
+    ]
+  },
+  {
+    "name": "dap-debugpy",
+    "displayName": "Python Debugger",
+    "author": "eugenioenko",
+    "description": "Configure Python Debugger for Python debugging",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "dap-debugpy",
+    "version": "0.1.0",
+    "tags": [
+      "debugger",
+      "dap",
+      "debugpy"
+    ]
+  },
+  {
     "name": "docker-manager",
     "featured": true,
     "displayName": "Docker Manager",
