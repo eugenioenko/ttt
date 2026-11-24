@@ -571,7 +571,7 @@ func TestPluginFilesystemAPIFor_ScopedPaths(t *testing.T) {
 	workspace := filepath.Join(base, "ws")
 	pluginDir := filepath.Join(base, "plugin")
 	palette := filepath.Join(home, ".local", "state", "omarchy")
-	for _, d := range []string{palette, filepath.Join(cfg, "themes"), workspace, pluginDir} {
+	for _, d := range []string{palette, cfg, workspace, pluginDir} {
 		if err := os.MkdirAll(d, 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -600,6 +600,11 @@ func TestPluginFilesystemAPIFor_ScopedPaths(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(cfg, "themes", "omarchy.json")); err != nil {
 		t.Errorf("{config} did not expand to the config dir: %v", err)
 	}
+	requireNoError(t, fs.WriteFile("{config}/themes/nested/cache/theme.json", `{"nested":true}`))
+	data, err := os.ReadFile(filepath.Join(cfg, "themes", "nested", "cache", "theme.json"))
+	if err != nil || string(data) != `{"nested":true}` {
+		t.Errorf("nested theme = %q, %v", data, err)
+	}
 	if err := fs.WriteFile(filepath.Join(palette, "colors.toml"), "x"); err == nil {
 		t.Error("a read-only path was writable")
 	}
@@ -608,6 +613,44 @@ func TestPluginFilesystemAPIFor_ScopedPaths(t *testing.T) {
 	}
 	if err := fs.WriteFile(filepath.Join(pluginDir, "cache.json"), "{}"); err != nil {
 		t.Errorf("the plugin dir must stay writable: %v", err)
+	}
+}
+
+func TestPluginFilesystemAPI_ParentCreationOutsideGrant(t *testing.T) {
+	base := t.TempDir()
+	ungranted := filepath.Join(base, "ungranted")
+	allowed := filepath.Join(ungranted, "allowed")
+	api := NewPluginFilesystemAPI(allowed)
+	if err := api.WriteFile(filepath.Join(allowed, "theme.json"), "{}"); err == nil {
+		t.Fatal("write created a parent above the granted directory")
+	}
+	if _, err := os.Lstat(ungranted); !os.IsNotExist(err) {
+		t.Fatalf("ungranted parent should not exist: %v", err)
+	}
+}
+
+func TestPluginFilesystemAPI_ParentCreationThroughSymlinks(t *testing.T) {
+	base := t.TempDir()
+	configDir := filepath.Join(base, "config")
+	outside := filepath.Join(base, "outside")
+	requireNoError(t, os.Mkdir(configDir, 0755))
+	requireNoError(t, os.Mkdir(outside, 0755))
+	alias := filepath.Join(base, "config-link")
+	if err := os.Symlink(configDir, alias); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	themes := filepath.Join(alias, "themes")
+	api := NewPluginFilesystemAPI(themes)
+	requireNoError(t, api.WriteFile(filepath.Join(themes, "initial", "theme.json"), "{}"))
+
+	escape := filepath.Join(themes, "escape")
+	requireNoError(t, os.Symlink(outside, escape))
+	if err := api.WriteFile(filepath.Join(escape, "missing", "theme.json"), "{}"); err == nil {
+		t.Fatal("write through a symlink created directories outside the grant")
+	}
+	if _, err := os.Lstat(filepath.Join(outside, "missing")); !os.IsNotExist(err) {
+		t.Fatalf("outside directory should not exist: %v", err)
 	}
 }
 

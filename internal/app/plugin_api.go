@@ -406,7 +406,15 @@ func newFsRoots(dirs []string, all bool) fsRoots {
 		resolved = append(resolved, abs)
 		// check resolves symlinks in the requested path, so a root under a symlink (macOS /tmp and
 		// /var) must also be allowed in resolved form, or the workspace denies its own files.
-		if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
+		real, err := filepath.EvalSymlinks(abs)
+		if os.IsNotExist(err) {
+			if _, absent := os.Lstat(abs); os.IsNotExist(absent) {
+				if parent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs)); parentErr == nil {
+					real, err = filepath.Join(parent, filepath.Base(abs)), nil
+				}
+			}
+		}
+		if err == nil && real != abs {
 			resolved = append(resolved, real)
 		}
 	}
@@ -432,12 +440,23 @@ func (r fsRoots) check(path string) error {
 		clean = filepath.Join(resolved, filepath.Base(clean))
 	}
 
-	for _, root := range r.dirs {
-		if clean == root || strings.HasPrefix(clean, root+string(filepath.Separator)) {
-			return nil
-		}
+	if r.contains(clean) {
+		return nil
 	}
 	return fmt.Errorf("access denied: path %q is outside allowed directories", path)
+}
+
+func (r fsRoots) contains(path string) bool {
+	if r.all {
+		return true
+	}
+	for _, root := range r.dirs {
+		rel, err := filepath.Rel(root, path)
+		if err == nil && filepath.IsLocal(rel) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
@@ -454,16 +473,90 @@ func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
 
 func (f *PluginFilesystemAPI) WriteFile(path, content string) error {
 	path = f.vars.Expand(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 	if err := f.write.check(path); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	data := []byte(content)
+	if err := os.WriteFile(abs, data, 0644); os.IsNotExist(err) {
+		if err := f.write.writeWithParents(abs, data, err); err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
 	if f.onWrite != nil {
 		f.onWrite(path)
 	}
 	return nil
+}
+
+func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) error {
+	dir, name := filepath.Split(path)
+	dir = filepath.Clean(dir)
+	missing := ""
+	for {
+		if _, err := os.Lstat(dir); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return writeErr
+		}
+		missing = filepath.Join(filepath.Base(dir), missing)
+		dir = parent
+	}
+	if missing == "" {
+		return writeErr
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	first, rest, _ := strings.Cut(missing, string(filepath.Separator))
+	if !r.contains(filepath.Join(real, first)) {
+		return fmt.Errorf("access denied: missing parents of %q are outside allowed directories", path)
+	}
+
+	root, err := os.OpenRoot(real)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if !r.contains(real) {
+		// The first missing component is the grant itself, not its parent.
+		if err := root.Mkdir(first, 0755); err != nil {
+			return err
+		}
+		created, err := root.Lstat(first)
+		if err != nil {
+			return err
+		}
+		granted, err := root.OpenRoot(first)
+		if err != nil {
+			return err
+		}
+		defer granted.Close()
+		opened, err := granted.Stat(".")
+		if err != nil {
+			return err
+		}
+		if !created.IsDir() || !os.SameFile(created, opened) {
+			return fmt.Errorf("access denied: write root for %q changed", path)
+		}
+		root, missing = granted, rest
+	}
+	if missing != "" {
+		if err := root.MkdirAll(missing, 0755); err != nil {
+			return err
+		}
+	}
+	return root.WriteFile(filepath.Join(missing, name), data, 0644)
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
