@@ -2,21 +2,15 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Launch ttt (headless)",
+      "name": "Launch ttt",
       "type": "go",
       "request": "launch",
       "program": "${workspaceFolder}/cmd/ttt",
-      "args": ["--size", "120x40", "--exec", "wait-for main.go; quit", "cmd/ttt/main.go"],
+      "console": "externalTerminal",
+      "args": ["--new-window", "."],
       "env": {
         "TTT_CONFIG_DIR": "${workspaceFolder}/.config/ttt-debug"
       }
-    },
-    {
-      "name": "Attach to running ttt",
-      "type": "go",
-      "request": "attach",
-      "mode": "local",
-      "processId": "${command:pickProcess}"
     }
   ]
 }
