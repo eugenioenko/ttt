@@ -85,7 +85,7 @@ func startListeningAdapter(ctx context.Context, binary string, args []string, fo
 		_ = cmd.Wait()
 		close(exited)
 	}()
-	kill := func() { cancel(); <-exited }
+	kill := func() { cancel(); _ = stdout.Close(); <-exited }
 	var addr string
 	select {
 	case addr = <-address:
@@ -122,6 +122,7 @@ func (s *Session) read() {
 		case "response":
 			s.mu.Lock()
 			reply := s.pending[p.RequestSeq]
+			delete(s.pending, p.RequestSeq)
 			s.mu.Unlock()
 			if reply != nil {
 				reply <- p
@@ -181,9 +182,17 @@ func (s *Session) Call(ctx context.Context, command string, args any, out any) e
 	s.pending[id] = reply
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); delete(s.pending, id); s.mu.Unlock() }()
-	if err := s.codec.Send(map[string]any{"type": "request", "seq": id, "command": command, "arguments": args}); err != nil {
+	// A partial frame cannot be retried. Closing the stream interrupts a blocked
+	// write when an adapter stops reading, including during editor shutdown.
+	stop := context.AfterFunc(ctx, func() { _ = s.conn.Close() })
+	err := s.codec.Send(map[string]any{"type": "request", "seq": id, "command": command, "arguments": args})
+	if !stop() {
+		return ctx.Err()
+	}
+	if err != nil {
 		return err
 	}
+
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
