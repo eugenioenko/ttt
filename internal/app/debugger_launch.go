@@ -17,19 +17,21 @@ import (
 )
 
 type debugRun struct {
-	edited     map[string]bool
-	folder     string
-	output     map[string]string
-	attached   bool
-	ctx        context.Context
-	cancel     context.CancelFunc
-	session    *dap.Session
-	thread     *int
-	lastThread int
-	closed     chan struct{}
-	ready      bool
-	sending    map[string]bool
-	revision   map[string]int
+	stopGeneration    uint64
+	allThreadsStopped bool
+	edited            map[string]bool
+	folder            string
+	output            map[string]string
+	attached          bool
+	ctx               context.Context
+	cancel            context.CancelFunc
+	session           *dap.Session
+	thread            *int
+	lastThread        int
+	closed            chan struct{}
+	ready             bool
+	sending           map[string]bool
+	revision          map[string]int
 }
 
 func registerDebuggerCommands(a *App) {
@@ -235,15 +237,26 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 			a.debugBindingEvent(run, b.Breakpoint, b.Reason)
 		}
 	case "stopped":
-		var b struct{ ThreadID *int }
+		var b struct {
+			ThreadID          *int
+			AllThreadsStopped bool
+		}
 		if json.Unmarshal(event.Body, &b) == nil {
+			run.stopGeneration++
+			run.allThreadsStopped = b.AllThreadsStopped
 			run.thread = b.ThreadID
 			if run.thread != nil {
 				run.lastThread = *run.thread
 			}
 			a.debugStopped(run)
 		}
+	case "exited":
+		var b struct{ ExitCode *int }
+		if json.Unmarshal(event.Body, &b) == nil && b.ExitCode != nil {
+			a.LogOutput("info", "debug:"+name, i18n.Format("debug.exitCode", i18n.Args{"code": strconv.Itoa(*b.ExitCode)}))
+		}
 	case "continued":
+		run.stopGeneration++
 		run.thread = nil
 		a.clearDebugInspection()
 	case "output":
@@ -307,6 +320,7 @@ func (a *App) debugControl(cmd string) {
 	if r == nil || r.session == nil || !r.ready || (cmd == "pause") != (r.thread == nil) {
 		return
 	}
+	generation := r.stopGeneration
 	tid := r.lastThread
 	if r.thread != nil {
 		tid = *r.thread
@@ -315,12 +329,29 @@ func (a *App) debugControl(cmd string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)
 		defer cancel()
-		if err := r.session.Call(ctx, cmd, map[string]int{"threadId": tid}, nil); err != nil {
-			_ = post(func() {
-				if a.debugger.run == r {
-					a.StatusError(err.Error())
-				}
-			})
+		var err error
+		if cmd == "pause" {
+			var threads struct{ Threads []debugThread }
+			if err = r.session.Call(ctx, "threads", struct{}{}, &threads); err == nil && len(threads.Threads) > 0 {
+				tid = threads.Threads[0].ID
+			}
 		}
+		if err == nil {
+			err = r.session.Call(ctx, cmd, map[string]int{"threadId": tid}, nil)
+		}
+		_ = post(func() {
+			if a.debugger.run != r || r.ctx.Err() != nil || r.stopGeneration != generation {
+				return
+			}
+			if err != nil {
+				a.StatusError(err.Error())
+				return
+			}
+			if cmd != "pause" {
+				r.thread = nil
+				r.stopGeneration++
+				a.clearDebugInspection()
+			}
+		})
 	}()
 }

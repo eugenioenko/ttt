@@ -25,14 +25,20 @@ type debugVariable struct {
 	Name, Value        string
 	VariablesReference int
 }
+type debugThread struct {
+	ID   int
+	Name string
+}
 type debugSidebar struct {
-	tree       *widgets.TreeWidget
-	frames     []debugFrame
-	scopes     []*widgets.TreeNode
-	references map[*widgets.TreeNode]int
-	frameNodes map[*widgets.TreeNode]debugFrame
-	breakNodes map[*widgets.TreeNode]debugLocation
-	epoch      uint64
+	threads     []debugThread
+	threadNodes map[*widgets.TreeNode]int
+	tree        *widgets.TreeWidget
+	frames      []debugFrame
+	scopes      []*widgets.TreeNode
+	references  map[*widgets.TreeNode]int
+	frameNodes  map[*widgets.TreeNode]debugFrame
+	breakNodes  map[*widgets.TreeNode]debugLocation
+	epoch       uint64
 }
 type debugLocation struct {
 	path string
@@ -69,9 +75,24 @@ func (a *App) refreshDebugPanel() {
 	}
 	stack := &widgets.TreeNode{ID: "stack", Label: i18n.Text("debug.stack"), Expanded: true}
 	p.frameNodes = make(map[*widgets.TreeNode]debugFrame)
+	p.threadNodes = make(map[*widgets.TreeNode]int)
+	frameParent := stack
+	if r := a.debugger.run; r != nil && r.thread != nil {
+		for _, t := range p.threads {
+			selected := t.ID == *r.thread
+			n := &widgets.TreeNode{ID: fmt.Sprintf("thread:%d", t.ID), Label: t.Name, Expandable: true, Expanded: selected}
+			p.threadNodes[n] = t.ID
+			if selected {
+				frameParent = n
+				stack.Children = append([]*widgets.TreeNode{n}, stack.Children...)
+			} else {
+				stack.Children = append(stack.Children, n)
+			}
+		}
+	}
 	for _, f := range p.frames {
 		node := &widgets.TreeNode{ID: fmt.Sprintf("frame:%d", f.ID), Label: f.Name + "  " + filepath.Base(f.Source.Path) + ":" + strconv.Itoa(f.Line)}
-		stack.Children = append(stack.Children, node)
+		frameParent.Children = append(frameParent.Children, node)
 		p.frameNodes[node] = f
 	}
 	points := &widgets.TreeNode{ID: "points", Label: i18n.Text("debug.breakpoints"), Expanded: true}
@@ -131,6 +152,7 @@ func (a *App) refreshDebugPanel() {
 func (a *App) clearDebugInspection() {
 	p := &a.debugger.panel
 	p.epoch++
+	p.threads = nil
 	p.frames = nil
 	p.scopes = nil
 	p.references = nil
@@ -161,22 +183,39 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 }
 func (a *App) debugStopped(r *debugRun) {
 	a.clearDebugInspection()
-	if r.thread == nil {
-		debugQuery(a, r, "threads", struct{}{}, func(result struct{ Threads []struct{ ID int } }) {
-			if len(result.Threads) > 0 {
-				r.thread = &result.Threads[0].ID
-				a.debugStopped(r)
+	debugQuery(a, r, "threads", struct{}{}, func(result struct{ Threads []debugThread }) {
+		if r.thread == nil && len(result.Threads) > 0 {
+			r.thread = &result.Threads[0].ID
+		}
+		if r.thread == nil {
+			return
+		}
+		for _, t := range result.Threads {
+			if t.ID == *r.thread || r.allThreadsStopped {
+				a.debugger.panel.threads = append(a.debugger.panel.threads, t)
 			}
-		})
-		return
-	}
+		}
+		a.loadDebugStack(r, *r.thread, true)
+	})
+}
+func (a *App) loadDebugStack(r *debugRun, tid int, executing bool) {
+	p := &a.debugger.panel
+	p.epoch++
+	r.thread = &tid
+	r.lastThread = tid
+	p.frames = nil
+	p.scopes = nil
+	p.references = nil
+	a.refreshDebugPanel()
 	debugQuery(a, r, "stackTrace", map[string]int{"threadId": *r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
 		p := &a.debugger.panel
 		p.frames = result.StackFrames
 		if len(p.frames) > 0 {
 			f := p.frames[0]
-			a.debugger.stoppedFile = f.Source.Path
-			a.debugger.stoppedLine = f.Line
+			if executing {
+				a.debugger.stoppedFile = f.Source.Path
+				a.debugger.stoppedLine = f.Line
+			}
 			a.inspectDebugFrame(f)
 		}
 		a.refreshDebugPanel()
@@ -215,6 +254,12 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 }
 func (a *App) expandDebugNode(n *widgets.TreeNode) {
 	p := &a.debugger.panel
+	if tid, ok := p.threadNodes[n]; ok {
+		if r := a.debugger.run; r != nil && r.thread != nil && *r.thread != tid {
+			a.loadDebugStack(r, tid, false)
+		}
+		return
+	}
 	ref := p.references[n]
 	if ref == 0 || len(n.Children) > 0 || a.debugger.run == nil {
 		return

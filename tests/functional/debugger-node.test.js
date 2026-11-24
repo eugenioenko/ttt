@@ -28,6 +28,10 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.exec("Debug: Step Over");
     tui.waitFor("app.ts:4");
     const stepped = tui.snapshot();
+    tui.waitFor("this = undefined");
+    tui.click(9, 13);
+    tui.waitFor("Ln 6, Col 1");
+    const caller = tui.snapshot();
     tui.exec("Debug: Continue");
     tui.panel("output");
     tui.waitFor("Debug session ended");
@@ -35,6 +39,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     const { snapshots } = tui.run(60000);
     expect(snapshots[stopped]).toContain("app.ts:3");
     expect(snapshots[stepped]).toContain("Ln 4, Col 1");
+    expect(snapshots[caller]).toContain("app.ts");
     expect(snapshots[output]).toContain("[debug:TS] TS_DONE 43");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 70000);

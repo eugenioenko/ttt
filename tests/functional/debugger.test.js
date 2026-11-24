@@ -29,7 +29,7 @@ it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
-    tui.click(9, 10);
+    tui.click(9, 11);
     tui.waitFor("caller = 41");
     const caller = tui.snapshot();
     tui.exec("Debug: Step Over");
