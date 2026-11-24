@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/filewrite"
 )
@@ -501,6 +502,41 @@ func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
 }
 
 const (
+	UpdateCheckEveryLaunch = "everyLaunch"
+	UpdateCheckDaily       = "daily"
+)
+
+var UpdateCheckIntervals = []string{UpdateCheckEveryLaunch, UpdateCheckDaily}
+
+// UpdateSettings controls opt-in application update checks.
+type UpdateSettings struct {
+	// StartupCheck runs a check when ttt starts. The default is off.
+	StartupCheck bool `json:"startupCheck,omitempty"`
+	// StartupCheckInterval is "everyLaunch" or "daily". Empty means daily.
+	StartupCheckInterval string `json:"startupCheckInterval,omitempty"`
+}
+
+func (u UpdateSettings) Interval() string {
+	if u.StartupCheckInterval == "" {
+		return UpdateCheckDaily
+	}
+	return u.StartupCheckInterval
+}
+
+func (u UpdateSettings) StartupCheckDue(last, now time.Time) bool {
+	if !u.StartupCheck {
+		return false
+	}
+	if last.IsZero() {
+		return true
+	}
+	if u.Interval() == UpdateCheckEveryLaunch {
+		return true
+	}
+	return !now.Before(last.Add(24 * time.Hour))
+}
+
+const (
 	ModifierControl      = "control"
 	ModifierControlSuper = "control+super"
 	ModifierSuper        = "super"
@@ -544,6 +580,7 @@ type Settings struct {
 	// means its default, so the zero value and "unset" mean the same thing.
 	Plugins      PluginSettings    `json:"plugins,omitzero"`
 	Welcome      WelcomeSettings   `json:"welcome,omitzero"`
+	Update       UpdateSettings    `json:"update,omitzero"`
 	Formatters   map[string]string `json:"formatters,omitempty"`
 	Applications []Application     `json:"applications,omitempty"`
 	// Extra holds top-level keys that are not part of the core schema — chiefly
@@ -558,7 +595,7 @@ type Settings struct {
 var knownSettingsKeys = map[string]bool{
 	"links": true, "version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true, "keyboard": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "update": true, "applications": true, "keyboard": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -707,6 +744,9 @@ func normalizeSettings(s *Settings) {
 	}
 	if !slices.Contains(ScrollbarGlyphModes, s.Appearance.ScrollbarGlyphs) {
 		s.Appearance.ScrollbarGlyphs = ScrollbarGlyphsBlocks
+	}
+	if s.Update.StartupCheckInterval != "" && !slices.Contains(UpdateCheckIntervals, s.Update.StartupCheckInterval) {
+		s.Update.StartupCheckInterval = UpdateCheckDaily
 	}
 }
 
