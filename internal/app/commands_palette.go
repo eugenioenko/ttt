@@ -293,8 +293,11 @@ func registerPaletteCommands(app *App) {
 		Keywords: []string{"preferences", "settings", "hotkeys", "keymap"},
 		Handler: func() {
 			path := config.ConfigFilePath("keybindings.json")
-			config.EnsureConfigFile(path, "{}\n")
-			app.EditorGroup.OpenFile(path)
+			if err := config.EnsureConfigFile(path, "{}\n"); err != nil {
+				app.StatusError(err.Error())
+				return
+			}
+			_ = app.EditorGroup.OpenFile(path)
 		},
 	})
 }

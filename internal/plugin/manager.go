@@ -114,7 +114,9 @@ func isLinkedDir(path, pluginDir string) (bool, error) {
 }
 
 func (m *Manager) LoadAll() []*Plugin {
-	os.MkdirAll(m.pluginsDir, 0755)
+	if err := os.MkdirAll(m.pluginsDir, 0755); err != nil {
+		m.discoveryError(m.pluginsDir, err)
+	}
 
 	regPath := m.registryPath
 	reg, err := LoadRegistry(regPath)
