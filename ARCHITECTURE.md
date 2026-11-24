@@ -81,12 +81,18 @@ does not add those guarantees or prevent concurrent read/modify/write lost updat
 ### Services
 
 Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`, `internal/jsonrpc`,
-`internal/lsp`, `internal/terminal`, `internal/watcher`,
+`internal/lsp`, `internal/dap`, `internal/dap/providers`, `internal/terminal`, `internal/watcher`,
 `internal/workspace`, `internal/trash`, and `internal/update`.
 
 Owns external-process and external-state integration. Services expose typed
 operations and results without owning product widgets. Long-running work must
 have explicit cancellation, identity, shutdown, and stale-result behavior.
+
+`internal/dap` owns protocol sessions, transports, and the provider interface.
+The built-in registry in `internal/dap/providers` connects launch configuration
+types to the delve, jsdebug, and debugpy packages. Each provider validates target
+arguments and opens its adapter through the host transport operations. The app
+owns workspace saves, breakpoint intent, session selection, and debugger UI state.
 
 `internal/scm` owns the internal provider, repository, optional staging, and
 optional working-copy baseline and single-change read contracts. Git supplies

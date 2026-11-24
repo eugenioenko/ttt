@@ -1,14 +1,30 @@
 # Debugging in ttt
 
-Design draft for implementation in ~/Documents/ttt, based on main at 99db0be6. The first release includes configured launch and attach, mandatory saving, a Debug sidebar, clickable gutter breakpoints, and program output. Proposed defaults and remaining questions are called out below.
+ttt supports one active launch or attach session for Go, Node.js/TypeScript, or Python. Define a named target in `.ttt/launch.json`. Each workspace folder can instead use `.vscode/launch.json` when its native file is absent.
 
-## Implemented milestone — Go launch
+## Using the debugger
 
-Install Delve and put `dlv` on the PATH used by ttt. Open a workspace with the named Go launch configuration shown below. Click the breakpoint column immediately to the left of the source text, then run **Start Debugging** from the command palette. Choose a target if the workspace contains several configurations. ttt saves modified file-backed tabs in the target folder before launch.
+Click the breakpoint column beside the source text or run **Toggle Breakpoint**. Run **Start Debugging** and choose a target if several are configured. ttt saves modified file-backed tabs in the selected folder before starting the adapter. At a stop, use the Debug sidebar to expand variables, select a stack frame, and step or continue. Output appears under `debug:<target name>`. Use **Stop Debugging** for a launched program and **Detach Debugger** for an independently started program.
 
-At a stop, use the Debug sidebar to inspect Variables, activate a Call Stack frame to reveal its source, and use the **Debug: Step Over**, **Debug: Step In**, **Debug: Step Out**, **Debug: Continue**, or **Stop Debugging** palette commands. Program output appears in Output under `debug:<target name>`. Breakpoints survive stopping and launching again within the open workspace.
+| Provider | Setup | Launch | Attach by address |
+| --- | --- | --- | --- |
+| Delve (`go`) | Put `dlv` on PATH. | Set `program` to the Go target. | Set `mode` to `remote` and supply the headless server's `host` and `port`. Start Delve with `--accept-multiclient` to retain the target on detach. |
+| js-debug (`node`, `pwa-node`) | Put Node on PATH and set `TTT_JS_DEBUG_SERVER` to the standalone adapter's `src/dapDebugServer.js`. | Point `program` at the JavaScript entry point. For TypeScript, emit source maps and set `outFiles` to match generated JavaScript. | Set `address` and `port` to the Node inspector. An optional numeric `debugServer` selects a separate, already-running DAP server on loopback. |
+| debugpy (`debugpy`) | Install debugpy in the selected interpreter. ttt defaults to the workspace's `.venv`, then Python on PATH. | Specify exactly one of `module` or `program`. | Supply the debugpy listener's `host` and `port` inside `connect`. |
 
-Python launch also supports named configurations with type `debugpy`, request `launch`, and either `module` or `program`. ttt starts the adapter over stdio with the configured `python` interpreter, the workspace’s .venv interpreter, or Python from PATH. Install debugpy in that environment. Output uses internalConsole. The Python regression in `tests/functional/debugger-python.test.js` runs with TTT_TEST_DEBUGPY set to a Python executable containing debugpy. Address attach is available for Go and Python. Use `request: "attach"` with Go's `mode: "remote"`, `host` and `port` for a headless Delve server configured with `--accept-multiclient`. For Python, use `type: "debugpy"` with a `connect` object containing `host` and `port` for a debugpy listener. Choose **Detach Debugger** to leave the independently owned program running. The address regression test checks that the target keeps making progress after detaching from a stopped frame. Node.js and TypeScript launch and address attach use Microsoft's standalone js-debug DAP server. Set `TTT_JS_DEBUG_SERVER` to the absolute path of its `src/dapDebugServer.js` and place Node on PATH. A `node` or `pwa-node` launch target points `program` at the compiled JavaScript entry point. Build TypeScript with source maps and set `outFiles` to the generated files. For attach, `address` and `port` identify the Node inspector. The optional numeric `debugServer` selects an independently managed DAP server on loopback. ttt opens a second DAP connection for the target session requested by js-debug, and routes inspection and stepping to that target. Go and Python PID attach accept a positive `processId` or `"${command:pickProcess}"` for the searchable local process list. Go uses a managed Delve adapter in local attach mode. Python uses debugpy from the selected interpreter. Both require OS permission to debug the process. Node PID attach accepts the same picker or numeric PID. ttt enables the local Node inspector and verifies that the selected process owns its listening port before connecting js-debug. The default inspector port is 9229. Set `port` if the process uses a different fixed inspector port. PID resolution uses lsof on Unix and netstat on Windows. The real-adapter PID suite has been exercised on Linux. The real-editor regression test in `tests/functional/debugger.test.js` runs when Delve is on PATH.
+All three support a positive `processId` or `"${command:pickProcess}"` for local attach. Node PID attach verifies the process owns the inspector port using lsof on Unix or netstat on Windows. The default inspector port is 9229. The full adapter matrix has been exercised on Linux.
+
+### Configuration fields
+
+Every target requires `name`, `type`, and `request`. Paths can use `${workspaceFolder}`. Configuration files accept comments and trailing commas. The optional `presentation` metadata is accepted.
+
+| Provider | Additional launch fields | Additional attach fields |
+| --- | --- | --- |
+| Delve | `program`, `cwd`, `mode`, `args`, `env`, `buildFlags`, `stopOnEntry` | `mode`, `substitutePath`, and either `processId` or `host` and `port` |
+| js-debug | `program`, `cwd`, `args`, `env`, `runtimeExecutable`, `runtimeArgs`, `console` | `processId`, `address`, `port`, `cwd`, `localRoot`, `remoteRoot` |
+| debugpy | `program`, `module`, `cwd`, `python`, `args`, `env`, `justMyCode`, `stopOnEntry`, `console`, `redirectOutput` | `justMyCode`, `pathMappings`, and either `connect` or `processId` with optional `python` |
+
+Both js-debug workflows also accept `debugServer`, `outFiles`, `sourceMaps`, `skipFiles`, `stopOnEntry`, and `timeout`. Launches specifying `console` must use `internalConsole`.
 
 ## Real-editor verification
 
@@ -22,6 +38,8 @@ The Linux real-adapter run covers the following nine combinations. Each row uses
 
 To repeat the matrix, build ttt, place Delve, Node and tsc on PATH, set TTT_JS_DEBUG_SERVER to the standalone server script, and set TTT_TEST_DEBUGPY to a Python executable containing debugpy. From tests/functional run `pnpm exec vitest run debugger`. Check that the summary reports every test passed with zero skips. OS process-debugging permissions apply to attach.
 
+The Linux release check runs 22 real-editor tests, including the nine workflows, PID picker and configured PID cases, workspace selection, failed attach and cancellation, and Stop and editor quit with each adapter. The TypeScript launch test also expands a nested value. The Python launch test steps into a callee and back into the caller. The Go suite covers failed saves for both request types, split gutters, late inspection replies and both DAP startup reply orderings. Run `make test` and `make lint` for the repository gates.
+
 ## The first debugging session
 
 A developer opens a Go workspace, sets a breakpoint in a saved file, and chooses **Start Debugging**. If the workspace has one launch target, the command names and launches it. If there are several, the developer picks one. At a stop, the editor reveals the executing line, keeps keyboard focus, and shows the call stack and locals. Selecting another frame opens its source and shows its locals. Step Over updates both views. Continue clears the execution marker. After the program exits, the developer can change a breakpoint and run the same target again.
@@ -32,9 +50,9 @@ Build this loop for one active user session at a time. Ship Go with Delve, Node.
 
 A target has a display name, owning workspace folder, adapter ID, a launch or attach request, and adapter-specific arguments. The adapter definition describes how ttt starts and connects to the debugger. Keeping those records distinct lets two Go commands in one repository share Delve while using different programs, arguments, and working directories.
 
-Proposed first behavior: offer named targets scoped to workspace folders and remember the last explicitly selected target for the current workspace. Show folder names in the picker when names collide. Resolve relative target paths and working directories against the owning folder. After selection, editing a file in a different folder must not silently change the target. If there are no targets, offer a Go package default only when the adapter can identify a runnable package. Otherwise explain how to define a target. An explicit start action launches the program. Opening a workspace only reads configuration.
+Offer named targets scoped to workspace folders and remember the last selected target for the current workspace. Show folder names in the picker when names collide. Resolve relative target paths and working directories against the owning folder. After selection, editing a file in a different folder must not silently change the target. If there are no targets, explain how to define one. An explicit start action launches the program. Opening a workspace only reads configuration.
 
-Use `.ttt/launch.json` as the native project file. Proposed lookup order per workspace folder is the native file first, then `.vscode/launch.json` when the native file is absent. Report parsing errors against the selected file. Both use a VS Code-style configurations array. For example:
+Use `.ttt/launch.json` as the native project file. Lookup order per workspace folder is the native file first, then `.vscode/launch.json` when the native file is absent. Report parsing errors against the selected file. Both use a VS Code-style configurations array. For example:
 
 ```json
 {
