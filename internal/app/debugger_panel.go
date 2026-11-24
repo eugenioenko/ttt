@@ -113,16 +113,16 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 }
 func (a *App) debugStopped(r *debugRun) {
 	a.clearDebugInspection()
-	if r.thread == 0 {
+	if r.thread == nil {
 		debugQuery(a, r, "threads", struct{}{}, func(result struct{ Threads []struct{ ID int } }) {
 			if len(result.Threads) > 0 {
-				r.thread = result.Threads[0].ID
+				r.thread = &result.Threads[0].ID
 				a.debugStopped(r)
 			}
 		})
 		return
 	}
-	debugQuery(a, r, "stackTrace", map[string]int{"threadId": r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
+	debugQuery(a, r, "stackTrace", map[string]int{"threadId": *r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
 		p := &a.debugger.panel
 		p.frames = result.StackFrames
 		if len(p.frames) > 0 {

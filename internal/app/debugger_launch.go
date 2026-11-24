@@ -21,7 +21,7 @@ type debugRun struct {
 	ctx      context.Context
 	cancel   context.CancelFunc
 	session  *dap.Session
-	thread   int
+	thread   *int
 	closed   chan struct{}
 	ready    bool
 	sending  map[string]bool
@@ -192,13 +192,13 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 	switch event.Name {
 	case "stopped":
-		var b struct{ ThreadID int }
+		var b struct{ ThreadID *int }
 		if json.Unmarshal(event.Body, &b) == nil {
 			run.thread = b.ThreadID
 			a.debugStopped(run)
 		}
 	case "continued":
-		run.thread = 0
+		run.thread = nil
 		a.clearDebugInspection()
 	case "output":
 		var b struct{ Output string }
@@ -227,10 +227,10 @@ func (a *App) DebugStepIn()   { a.debugControl("stepIn") }
 func (a *App) DebugStepOut()  { a.debugControl("stepOut") }
 func (a *App) debugControl(cmd string) {
 	r := a.debugger.run
-	if r == nil || r.session == nil || r.thread == 0 {
+	if r == nil || r.session == nil || r.thread == nil {
 		return
 	}
-	tid := r.thread
+	tid := *r.thread
 	post := a.tasks.post
 	go func() {
 		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)
