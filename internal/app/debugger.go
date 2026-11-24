@@ -83,6 +83,19 @@ func (a *App) toggleBreakpoint(path string, line int) {
 	a.refreshDebugPanel()
 }
 
+func (a *App) ClearDebugBreakpoints() {
+	for path := range a.debugger.points {
+		delete(a.debugger.points, path)
+		if r := a.debugger.run; r != nil && a.debugOwnsSource(r, path) {
+			r.revision[path]++
+			a.syncDebugBreakpoints(path)
+		}
+	}
+	clear(a.debugger.sources)
+	clear(a.debugger.closedSources)
+	a.refreshDebugPanel()
+}
+
 func (a *App) syncDebugBreakpoints(path string) {
 	r := a.debugger.run
 	if r == nil || !r.ready || r.sending[path] || r.ctx.Err() != nil {

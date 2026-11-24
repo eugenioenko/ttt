@@ -39,6 +39,7 @@ type debugRun struct {
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
+		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
 		{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging},
 		{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger},

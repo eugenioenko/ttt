@@ -62,3 +62,18 @@ func TestDebugSourceRebasesOnceAndRequiresConfirmationOnReplacement(t *testing.T
 		t.Fatal("could not confirm new location")
 	}
 }
+
+func TestClearBreakpointsAcrossFoldersDuringStartup(t *testing.T) {
+	a := &App{Workspace: workspace.New([]string{"/project", "/project/nested"})}
+	first, second, other := "/project/a.go", "/project/b.go", "/project/nested/c.go"
+	for _, path := range []string{first, second, other} {
+		a.toggleBreakpoint(path, 1)
+	}
+	a.debugger.points[other][1].confirm = true
+	r := &debugRun{folder: "/project", revision: make(map[string]int)}
+	a.debugger.run = r
+	a.ClearDebugBreakpoints()
+	if len(a.debugger.points) != 0 || len(r.revision) != 2 || r.revision[first] != 1 || r.revision[second] != 1 {
+		t.Fatalf("points after clear = %v, pending adapter updates = %v", a.debugger.points, r.revision)
+	}
+}

@@ -12,7 +12,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     writeFileSync(file, [
       "function report(arg: number) {", "  const local = arg + 1; const payload = {answer: local};",
       '  console.log("TS_RESULT", local);', '  console.log("TS_DONE", local + 1);',
-      "}", "report(41);", "",
+      "}", "report(41);", 'console.log("AFTER_REPORT");', "",
     ].join("\n"));
     execFileSync("tsc", ["--target", "es2020", "--sourceMap", "--outDir", "dist", "app.ts"], { cwd: dir });
     mkdirSync(join(dir, ".ttt"));
@@ -23,6 +23,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.start(dir, file);
     tui.exec("Show Debug");
     tui.click(32, 6);
+    tui.click(32, 10);
     tui.exec("Start Debugging");
     tui.waitFor("local = 42");
     const stopped = tui.snapshot();
@@ -47,6 +48,10 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     tui.click(9, 21);
     tui.waitFor("Ln 6, Col 1");
     const caller = tui.snapshot();
+    tui.click(29, 30);
+    tui.waitFor("Clear All Breakpoints");
+    tui.press("enter");
+    const cleared = tui.snapshot();
     tui.exec("Debug: Continue");
     tui.panel("output");
     tui.waitFor("Debug session ended");
@@ -56,6 +61,8 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     expect(snapshots[expanded]).toContain("answer = 42");
     expect(snapshots[stepped]).toContain("Ln 4, Col 1");
     expect(snapshots[caller]).toContain("app.ts");
+    expect(snapshots[cleared]).not.toMatch(/∙ app.ts:[37]/);
+    expect(snapshots[output]).toContain("[debug:TS] AFTER_REPORT");
     expect(snapshots[output]).toContain("[debug:TS] TS_DONE 43");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 70000);

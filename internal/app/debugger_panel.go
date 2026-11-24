@@ -73,13 +73,22 @@ func (a *App) ensureDebugPanel() {
 	p.variables = section("vars", i18n.Text("debug.variables"))
 	p.variables.Config.OnMenu = a.showDebugVariableMenu
 	p.stack = section("stack", i18n.Text("debug.stack"))
-	p.points = section("points", i18n.Text("debug.breakpoints"))
+	p.points = widgets.NewTreeWidget(config)
+	title := widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.breakpoints"), Style: term.StyleHoverBold})
+	more := widgets.NewDropdownWidget(widgets.DropdownConfig{
+		Entries: []widgets.MenuEntry{{Label: i18n.Text("debug.clearBreakpoints"), Command: "debug.clearBreakpoints"}},
+		OnMenu: func(entries []widgets.MenuEntry, x, y int) {
+			a.showWidgetMenu(entries, x, y, func(cmd string) { a.Reg.Execute(cmd) })
+		},
+	})
+	header := widgets.NewHStackWidget(title, more)
+	header.FixedHeight = 1
 	p.toolbar = widgets.NewHStackWidget()
 	p.toolbar.FixedHeight = 1
 	p.toolbar.Gap = 1
 	p.toolbar.Align = "center"
 	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
-	sections := debugSectionSplit(inspection, p.points, 0.25, 5)
+	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, p.points), 0.25, 5)
 	a.refreshDebugControls()
 	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
@@ -166,8 +175,7 @@ func (a *App) refreshDebugPanel() {
 		frameParent.Children = append(frameParent.Children, node)
 		p.frameNodes[node] = f
 	}
-	points := p.points.Config.Items[0]
-	points.Children = nil
+	var points []*widgets.TreeNode
 	p.breakNodes = make(map[*widgets.TreeNode]debugLocation)
 	for _, path := range slices.Sorted(maps.Keys(a.debugger.points)) {
 		for _, line := range slices.Sorted(maps.Keys(a.debugger.points[path])) {
@@ -189,12 +197,13 @@ func (a *App) refreshDebugPanel() {
 				label += "  " + b.Message
 			}
 			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), IconName: a.breakpointIcon(point), IconStyle: term.StyleDebugBreakpoint, SelectedIconStyle: term.StyleDebugBreakpoint, Label: label}
-			points.Children = append(points.Children, n)
+			points = append(points, n)
 			p.breakNodes[n] = debugLocation{path, line}
 		}
 	}
+	p.points.SetItems(points)
 	p.variables.Config.Items[0].Children = p.scopes
-	for _, tree := range []*widgets.TreeWidget{p.variables, p.stack, p.points} {
+	for _, tree := range []*widgets.TreeWidget{p.variables, p.stack} {
 		tree.SetItems(tree.Config.Items)
 	}
 }

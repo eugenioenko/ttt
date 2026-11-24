@@ -18,6 +18,7 @@
   "debug.panel": "Debug",
   "debug.stack": "Call Stack",
   "debug.variables": "Variables",
+  "debug.clearBreakpoints": "Clear All Breakpoints",
   "debug.breakpoints": "Breakpoints",
   "debug.copyKey": "Copy Key",
   "debug.copyValue": "Copy Value",
