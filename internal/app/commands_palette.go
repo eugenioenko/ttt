@@ -294,7 +294,7 @@ func registerPaletteCommands(app *App) {
 		Handler: func() {
 			path := config.ConfigFilePath("keybindings.json")
 			config.EnsureConfigFile(path, "{}\n")
-			_ = app.EditorGroup.OpenFile(path)
+			app.EditorGroup.OpenFile(path)
 		},
 	})
 }
