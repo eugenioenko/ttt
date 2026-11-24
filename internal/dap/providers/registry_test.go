@@ -39,6 +39,10 @@ func TestWorkspaceLaunchSelection(t *testing.T) {
 	if err != nil || args["program"] != filepath.Join(dir, "cmd", "worker") || args["args"].([]any)[0] != dir {
 		t.Fatalf("arguments: %v, %v", args, err)
 	}
+	write(".ttt", `{"configurations":[],"compounds":[]}`)
+	if _, err := dap.LoadTargets(dir); err == nil {
+		t.Fatal("silently ignored unsupported compound configuration")
+	}
 	write(".ttt", "{")
 	if _, err := dap.LoadTargets(dir); err == nil {
 		t.Fatal("malformed native file fell back silently")

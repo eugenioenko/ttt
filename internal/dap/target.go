@@ -30,12 +30,21 @@ func LoadTargets(folder string) ([]Target, error) {
 		if err != nil {
 			return nil, err
 		}
-		var file struct{ Configurations []map[string]any }
+		var file map[string]json.RawMessage
 		if err = json.Unmarshal(jsonc.ToJSON(data), &file); err != nil {
 			return nil, fmt.Errorf("%s: %w", path, err)
 		}
+		for key := range file {
+			if key != "version" && key != "$schema" && key != "configurations" {
+				return nil, fmt.Errorf("%s: unsupported launch file field %q", path, key)
+			}
+		}
+		var configurations []map[string]any
+		if err = json.Unmarshal(file["configurations"], &configurations); err != nil || configurations == nil {
+			return nil, fmt.Errorf("%s: expected a configurations array", path)
+		}
 		var targets []Target
-		for i, args := range file.Configurations {
+		for i, args := range configurations {
 			name, _ := args["name"].(string)
 			adapter, _ := args["type"].(string)
 			request, _ := args["request"].(string)
