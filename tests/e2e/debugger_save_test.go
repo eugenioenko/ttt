@@ -58,3 +58,18 @@ func TestDebugBreakpointSharedAcrossSplits(t *testing.T) {
 		t.Fatal("removal from split left a stale gutter marker")
 	}
 }
+
+func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	defer h.stop()
+	if !h.app.Sidebar.HasPanel("debug") {
+		t.Fatal("Debug missing from sidebar on startup")
+	}
+	h.exec("sidebar.debug")
+	h.assertContains("Start Debugging")
+	h.assertContains("Breakpoints")
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	if lines := h.app.Output.Lines; len(lines) == 0 || !strings.Contains(lines[len(lines)-1].Message, ".ttt/launch.json") {
+		t.Fatal("Start action did not explain where to define a target")
+	}
+}

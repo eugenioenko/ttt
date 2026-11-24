@@ -54,6 +54,7 @@ const (
 	PanelExplorer Name = "panel-explorer"
 	PanelSearch   Name = "panel-search"
 	PanelChanges  Name = "panel-changes"
+	PanelDebug    Name = "panel-debug"
 	PanelOutline  Name = "panel-outline"
 	PanelPlugins  Name = "panel-plugins"
 	PanelApps     Name = "panel-apps"
@@ -114,6 +115,7 @@ var table = map[Name]glyphs{
 	PanelExplorer: {Plain: "⌂", Nerd: "\ueaf0"},
 	PanelSearch:   {Plain: "⌕", Nerd: "\uea6d"},
 	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
+	PanelDebug:    {Plain: "D", Nerd: "\uead8"},
 	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
 	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
 	PanelApps:     {Plain: "⏵", Nerd: "\U000f003b"},

@@ -21,7 +21,9 @@ it.skipIf(!process.env.TTT_TEST_DEBUGPY)("uses the selected workspace folder wit
     const file = join(dir, "left/main.py");
     tui.start("--workspace", workspace, file);
     tui.type("# unsaved");
-    tui.exec("Start Debugging");
+    tui.exec("Show Debug");
+    tui.waitFor("Start Debugging");
+    tui.press("enter");
     tui.type("right");
     tui.press("enter");
     tui.panel("output");

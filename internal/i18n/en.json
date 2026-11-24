@@ -324,6 +324,7 @@
   "command.showExplorer": "Show Explorer",
   "command.showFullFileDiffByDefault": "Show Full File Diff by Default",
   "command.showHover": "Show Hover",
+  "command.showDebug": "Show Debug",
   "command.showOutline": "Show Outline",
   "command.showSearch": "Show Search",
   "command.sortLinesAscending": "Sort Lines Ascending",

@@ -4,6 +4,8 @@ ttt supports one active launch or attach session for Go, Node.js/TypeScript, or 
 
 ## Using the debugger
 
+Open **View → Debug** to see the sidebar before starting a session. Choose **Start Debugging** there to run a configured target.
+
 Click the breakpoint column beside the source text or run **Toggle Breakpoint**. Run **Start Debugging** and choose a target if several are configured. ttt saves modified file-backed tabs in the selected folder before starting the adapter. At a stop, use the Debug sidebar to expand variables, select a stack frame, and step or continue. Output appears under `debug:<target name>`. Use **Stop Debugging** for a launched program and **Detach Debugger** for an independently started program.
 
 | Provider | Setup | Launch | Attach by address |

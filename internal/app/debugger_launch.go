@@ -146,7 +146,6 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 		}
 	}
 	a.debugger.run = run
-	a.ensureDebugPanel()
 	a.refreshDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()

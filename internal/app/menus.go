@@ -78,6 +78,7 @@ func initMenuText() {
 			{Label: i18n.Text("general.replace"), Command: "sidebar.searchReplace"},
 			{Label: i18n.Text("menu.changes"), Command: "sidebar.changes"},
 			{Label: i18n.Text("menu.outline"), Command: "sidebar.outline"},
+			{Label: i18n.Text("debug.panel"), Command: "sidebar.debug"},
 			ui.MenuSep(),
 			{Label: i18n.Text("menu.toggleSidebar"), Command: "sidebar.toggle"},
 			{Label: i18n.Text("menu.toggleTerminal"), Command: "terminal.toggle"},

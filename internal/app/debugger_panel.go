@@ -144,7 +144,12 @@ func (a *App) refreshDebugPanel() {
 	}
 	for _, id := range ids {
 		if cmd, ok := a.Reg.Get(id); ok {
-			nodes = append(nodes, &widgets.TreeNode{ID: id, Label: cmd.Title})
+			action := &widgets.TreeNode{ID: id, Label: cmd.Title}
+			if id == "debug.start" {
+				nodes = slices.Insert(nodes, 0, action)
+			} else {
+				nodes = append(nodes, action)
+			}
 		}
 	}
 	p.tree.SetItems(nodes)
