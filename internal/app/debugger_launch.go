@@ -17,6 +17,7 @@ import (
 )
 
 type debugRun struct {
+	output     map[string]string
 	attached   bool
 	ctx        context.Context
 	cancel     context.CancelFunc
@@ -208,6 +209,7 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			if err != nil && ctx.Err() == nil {
 				a.StatusError(t.Name + ": " + err.Error())
 			}
+			a.flushDebugOutput(run, t.Name)
 			cancel()
 			a.debugger.run = nil
 			if err == nil {
@@ -254,15 +256,45 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 		run.thread = nil
 		a.clearDebugInspection()
 	case "output":
-		var b struct{ Output string }
+		var b struct{ Category, Output string }
 		if json.Unmarshal(event.Body, &b) == nil {
-			for _, line := range strings.Split(strings.TrimSuffix(b.Output, "\n"), "\n") {
-				a.LogOutput("info", "debug:"+name, line)
-			}
+			a.appendDebugOutput(run, name, b.Category, b.Output)
 		}
 	case "terminated":
 		run.cancel()
 	}
+}
+func (a *App) appendDebugOutput(run *debugRun, name, category, chunk string) {
+	if category == "telemetry" {
+		return
+	}
+	if run.output == nil {
+		run.output = make(map[string]string)
+	}
+	chunk = run.output[category] + chunk
+	for {
+		line, rest, ok := strings.Cut(chunk, "\n")
+		if !ok {
+			break
+		}
+		a.LogOutput("info", "debug:"+name, strings.TrimSuffix(line, "\r"))
+		chunk = rest
+	}
+	if len(chunk) > 65536 || category != "stdout" && category != "stderr" {
+		if chunk != "" {
+			a.LogOutput("info", "debug:"+name, chunk)
+		}
+		chunk = ""
+	}
+	run.output[category] = chunk
+}
+func (a *App) flushDebugOutput(run *debugRun, name string) {
+	for _, chunk := range run.output {
+		if chunk != "" {
+			a.LogOutput("info", "debug:"+name, chunk)
+		}
+	}
+	clear(run.output)
 }
 func (a *App) StopDebugging() {
 	if r := a.debugger.run; r != nil {
