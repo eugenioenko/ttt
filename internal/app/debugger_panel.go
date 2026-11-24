@@ -86,7 +86,6 @@ func (a *App) ensureDebugPanel() {
 	p.toolbar = widgets.NewHStackWidget()
 	p.toolbar.FixedHeight = 1
 	p.toolbar.Gap = 1
-	p.toolbar.Align = "center"
 	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
 	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, p.points), 0.25, 5)
 	a.refreshDebugControls()
@@ -124,6 +123,7 @@ func (a *App) refreshDebugControls() {
 		p.toolbar.Children = append(p.toolbar.Children, b)
 	}
 	if !state.active {
+		p.toolbar.Children = append(p.toolbar.Children, widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.launchOrAttach"), Style: term.StyleMuted}))
 		button("debug.start", i18n.Text("debug.runAndDebug"), "", true)
 	} else {
 		if state.paused {

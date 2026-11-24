@@ -22,6 +22,7 @@
   "debug.breakpoints": "Breakpoints",
   "debug.copyKey": "Copy Key",
   "debug.copyValue": "Copy Value",
+  "debug.launchOrAttach": "Launch or attach",
   "debug.runAndDebug": "Run & Debug",
   "debug.start": "Start Debugging",
   "debug.stop": "Stop Debugging",

@@ -73,7 +73,7 @@ func TestDebugPanelAvailableBeforeConfiguration(t *testing.T) {
 		t.Fatal("Debug missing from sidebar on startup")
 	}
 	h.exec("sidebar.debug")
-	h.assertContains(" Run & Debug ")
+	h.assertContains("│Launch or attach  Run & Debug │")
 	h.assertContains("Breakpoints")
 	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 	if lines := h.app.Output.Lines; len(lines) == 0 || !strings.Contains(lines[len(lines)-1].Message, ".ttt/launch.json") {
