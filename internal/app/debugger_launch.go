@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -16,10 +17,14 @@ import (
 )
 
 type debugRun struct {
-	ctx     context.Context
-	cancel  context.CancelFunc
-	session *dap.Session
-	thread  int
+	ctx      context.Context
+	cancel   context.CancelFunc
+	session  *dap.Session
+	thread   int
+	closed   chan struct{}
+	ready    bool
+	sending  map[string]bool
+	revision map[string]int
 }
 
 func registerDebuggerCommands(a *App) {
@@ -89,7 +94,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 }
 func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 	ctx, cancel := context.WithCancel(context.Background())
-	run := &debugRun{ctx: ctx, cancel: cancel}
+	run := &debugRun{ctx: ctx, cancel: cancel, closed: make(chan struct{}), sending: make(map[string]bool), revision: make(map[string]int)}
 	a.debugger.run = run
 	a.ensureDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
@@ -102,14 +107,31 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 		points[path] = slices.Sorted(maps.Keys(lines))
 	}
 	post := a.tasks.post
+	// PostEvent can deliver concurrent posts out of order when the terminal queue fills.
+	var queueMu sync.Mutex
+	var pending []func()
 	deliver := func(f func()) {
-		_ = post(func() {
-			if a.debugger.run == run {
-				f()
-			}
-		})
+		queueMu.Lock()
+		schedule := len(pending) == 0
+		pending = append(pending, f)
+		queueMu.Unlock()
+		if schedule {
+			_ = post(func() {
+				queueMu.Lock()
+				batch := pending
+				pending = nil
+				queueMu.Unlock()
+				for _, apply := range batch {
+					if a.debugger.run == run {
+						apply()
+					}
+				}
+			})
+		}
 	}
+
 	go func() {
+		defer close(run.closed)
 		startup, endStartup := context.WithTimeout(ctx, 90*time.Second)
 		defer endStartup()
 		s, err := dap.StartDelve(startup, "dlv", t.Folder, func(event dap.Event) { deliver(func() { a.onDebugEvent(run, t.Name, event) }) })
@@ -134,6 +156,12 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 				return nil
 			})
 			if err == nil {
+				deliver(func() {
+					run.ready = true
+					for path := range run.revision {
+						a.syncDebugBreakpoints(path)
+					}
+				})
 				select {
 				case <-ctx.Done():
 				case <-s.Done():
@@ -147,6 +175,9 @@ func (a *App) startDebugRun(t dap.Target, args map[string]any) {
 			}
 			cancel()
 			a.debugger.run = nil
+			if err == nil {
+				a.StatusNotify(i18n.Text("debug.finished"))
+			}
 			a.clearDebugInspection()
 			for _, lines := range a.debugger.points {
 				for line := range lines {

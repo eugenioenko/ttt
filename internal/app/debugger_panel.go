@@ -153,14 +153,17 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 			VariablesReference int
 			Expensive          bool
 		}
-	}) { for _, scope := range result.Scopes {
-		n := &widgets.TreeNode{ID: fmt.Sprintf("scope:%d", scope.VariablesReference), Label: scope.Name, Expandable: scope.VariablesReference != 0, Expanded: !scope.Expensive}
-		p.scopes = append(p.scopes, n)
-		p.references[n] = scope.VariablesReference
-		if n.Expanded {
-			a.expandDebugNode(n)
+	}) {
+		for _, scope := range result.Scopes {
+			n := &widgets.TreeNode{ID: fmt.Sprintf("scope:%d", scope.VariablesReference), Label: scope.Name, Expandable: scope.VariablesReference != 0, Expanded: !scope.Expensive}
+			p.scopes = append(p.scopes, n)
+			p.references[n] = scope.VariablesReference
+			if n.Expanded {
+				a.expandDebugNode(n)
+			}
 		}
-	}; a.refreshDebugPanel() })
+		a.refreshDebugPanel()
+	})
 }
 func (a *App) expandDebugNode(n *widgets.TreeNode) {
 	p := &a.debugger.panel

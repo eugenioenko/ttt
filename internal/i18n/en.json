@@ -1,4 +1,5 @@
 {
+  "debug.finished": "Debug session ended",
   "debug.panel": "Debug",
   "debug.stack": "Call Stack",
   "debug.variables": "Variables",

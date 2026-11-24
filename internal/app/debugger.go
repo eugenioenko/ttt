@@ -1,8 +1,12 @@
 package app
 
 import (
+	"context"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -66,5 +70,44 @@ func (a *App) toggleBreakpoint(path string, line int) {
 	} else {
 		points[line] = false
 	}
+	if r := a.debugger.run; r != nil {
+		r.revision[path]++
+		a.syncDebugBreakpoints(path)
+	}
 	a.refreshDebugPanel()
+}
+
+func (a *App) syncDebugBreakpoints(path string) {
+	r := a.debugger.run
+	if r == nil || !r.ready || r.sending[path] || r.ctx.Err() != nil {
+		return
+	}
+	r.sending[path] = true
+	revision := r.revision[path]
+	lines := slices.Sorted(maps.Keys(a.debugger.points[path]))
+	post := a.tasks.post
+	go func() {
+		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)
+		defer cancel()
+		points, err := r.session.SetBreakpoints(ctx, path, lines)
+		_ = post(func() {
+			if a.debugger.run != r || r.ctx.Err() != nil {
+				return
+			}
+			delete(r.sending, path)
+			if revision != r.revision[path] {
+				a.syncDebugBreakpoints(path)
+				return
+			}
+			if err != nil {
+				a.StatusError(err.Error())
+				return
+			}
+			for i, bp := range points {
+				if i < len(lines) {
+					a.debugger.points[path][lines[i]] = bp.Verified
+				}
+			}
+		})
+	}()
 }
