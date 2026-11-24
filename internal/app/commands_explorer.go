@@ -116,7 +116,7 @@ func (a *App) ExplorerOpenInTerminal() {
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		path = filepath.Dir(path)
 	}
-	a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
+	_, _ = a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
 }
 
 func (a *App) ExplorerRevealActiveFile() {

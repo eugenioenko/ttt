@@ -151,7 +151,7 @@ func readPathCompletions(ctx context.Context, target pathCompletionTarget) ([]ui
 	if err != nil {
 		return nil, err
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 
 	prefix := target.prefix
 	if runtime.GOOS == "windows" {

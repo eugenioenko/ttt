@@ -47,7 +47,7 @@ func (a *App) wireCommitDetailContext(tabID string, detail *ui.CommitDetailWidge
 		}
 		screen := a.Screen
 		go func() {
-			screen.PostEvent(tcell.NewEventInterrupt(read()))
+			_ = screen.PostEvent(tcell.NewEventInterrupt(read()))
 		}()
 	}
 }

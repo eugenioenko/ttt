@@ -49,7 +49,7 @@ func (a *App) saveSettings(s config.Settings) error {
 func (a *App) OpenSettingsFile() {
 	path := a.settingsFilePath()
 	config.EnsureConfigFile(path, "{}\n")
-	a.EditorGroup.OpenFile(path)
+	_ = a.EditorGroup.OpenFile(path)
 }
 
 func (a *App) ReloadSettings() {

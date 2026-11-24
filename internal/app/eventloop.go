@@ -35,7 +35,7 @@ func RunEventLoop(
 	defer app.Root.CancelPointerCapture()
 	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
-		defer app.Watcher.Close()
+		defer func() { _ = app.Watcher.Close() }()
 	}
 	if app.Repository != nil {
 		defer app.Repository.Close()
@@ -283,7 +283,7 @@ func RunEventLoop(
 				// Short steps keep input responsive while a large file catches up;
 				// the frame is redrawn once the deferred lines are ready.
 				if highlight.Step(highlightStepBudget) {
-					screen.PostEvent(tcell.NewEventInterrupt(v))
+					_ = screen.PostEvent(tcell.NewEventInterrupt(v))
 					skipRedraw = true
 				}
 			case string:

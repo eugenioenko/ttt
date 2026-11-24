@@ -84,7 +84,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	}
 	pollable, err := makePtyPollable(pt)
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	pt = pollable
@@ -111,7 +111,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	if err := pt.Resize(cols, rows); err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 
@@ -119,7 +119,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	err = cmd.Start()
 	restoreHangup()
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	t.pt = pt
@@ -178,7 +178,7 @@ func (t *Terminal) waitLoop() {
 		close(t.waited)
 		return
 	}
-	t.cmd.Wait()
+	_ = t.cmd.Wait()
 
 	t.mu.Lock()
 	t.exited = true
@@ -186,7 +186,7 @@ func (t *Terminal) waitLoop() {
 	if isUnix {
 		// go-pty retains the parent's slave fd. Release it so the reader can
 		// drain to EOF without closing the master and discarding queued output.
-		unixPty.Slave().Close()
+		_ = unixPty.Slave().Close()
 		t.lastRead = time.Now()
 	}
 	t.mu.Unlock()
@@ -236,7 +236,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.mu.Lock()
 			if !t.closed {
-				t.term.Write(buf[:n])
+				_, _ = t.term.Write(buf[:n])
 				t.appendRawTail(buf[:n])
 			}
 			t.lastRead = time.Now()
@@ -377,7 +377,7 @@ func (t *Terminal) closePty() {
 		return
 	}
 	t.ptyClosed = true
-	t.pt.Close()
+	_ = t.pt.Close()
 }
 
 func (t *Terminal) signalShell(sig shellSignal, started bool) {

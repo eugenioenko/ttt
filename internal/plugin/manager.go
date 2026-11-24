@@ -483,12 +483,12 @@ func (m *Manager) Install(repoURL, repoPath string) (*Plugin, error) {
 
 	manifest, err := LoadManifest(targetDir)
 	if err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("invalid plugin: %w", err)
 	}
 
 	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("prepare language source: %w", err)
 	}
 
@@ -505,7 +505,7 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cmd := remoteGitCommand("clone", "--depth", "1", repoURL, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -528,12 +528,12 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	}
 
 	if err := copyDir(srcDir, targetDir); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("copy plugin: %w", err)
 	}
 
 	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("prepare language source: %w", err)
 	}
 
@@ -740,7 +740,7 @@ func (u *PluginUpdate) fetchFromSubdir() error {
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cmd := remoteGitCommand("clone", "--depth", "1", u.repo, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {

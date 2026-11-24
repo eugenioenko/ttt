@@ -39,7 +39,7 @@ func readWorkingTreeFilePlatform(ctx context.Context, root, path string) (workin
 			return workingTreeFile{}, classifyWorkingTreeOpenError(filepath.Join(root, path), workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(dirfd); closeErr != nil {
-			unix.Close(next)
+			_ = unix.Close(next)
 			return workingTreeFile{}, closeErr
 		}
 		dirfd = next
@@ -70,7 +70,7 @@ func openDirectoryPathNoFollow(ctx context.Context, path string) (int, error) {
 		return -1, classifyWorkingTreeOpenError(path, workingTreePathSymlinkComponent, openErr)
 	}
 	if closeErr != nil {
-		unix.Close(next)
+		_ = unix.Close(next)
 		return -1, closeErr
 	}
 	return next, nil
@@ -86,16 +86,16 @@ func openAbsoluteDirectoryNoFollow(ctx context.Context, abs, reportedPath string
 			continue
 		}
 		if err := ctx.Err(); err != nil {
-			unix.Close(fd)
+			_ = unix.Close(fd)
 			return -1, err
 		}
 		next, openErr := unix.Openat(fd, part, unix.O_RDONLY|unix.O_CLOEXEC|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
 		if openErr != nil {
-			unix.Close(fd)
+			_ = unix.Close(fd)
 			return -1, classifyWorkingTreeOpenError(reportedPath, workingTreePathSymlinkComponent, openErr)
 		}
 		if closeErr := unix.Close(fd); closeErr != nil {
-			unix.Close(next)
+			_ = unix.Close(next)
 			return -1, closeErr
 		}
 		fd = next

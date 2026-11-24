@@ -91,7 +91,7 @@ func (a *App) LogOutputAsync(level, source, message string) {
 	if a.Screen == nil {
 		return
 	}
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&OutputLineResult{
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&OutputLineResult{
 		Source:  source,
 		Level:   level,
 		Message: message,
