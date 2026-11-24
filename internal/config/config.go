@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -42,11 +43,10 @@ func Load(settingsFile string) AppConfig {
 	}
 
 	if cfg.Settings.Theme != "" {
-		themeFile := cfg.Settings.Theme + ".json"
-		if data, err := readFirstTheme(paths, themeFile); err == nil {
-			json.Unmarshal(data, &cfg.Theme)
-		} else if data, err := themes.FS.ReadFile(themeFile); err == nil {
-			json.Unmarshal(data, &cfg.Theme)
+		if theme, err := LoadTheme(cfg.Settings.Theme); err != nil {
+			slog.Error("load theme", "theme", cfg.Settings.Theme, "error", err)
+		} else {
+			cfg.Theme = theme
 		}
 	}
 
@@ -182,12 +182,16 @@ func ConfigFilePath(filename string) string {
 	return filepath.Join(".config", filename)
 }
 
-func EnsureConfigFile(path, defaultContent string) {
+func EnsureConfigFile(path, defaultContent string) error {
 	if _, err := os.Stat(path); err == nil {
-		return
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
 	}
-	os.MkdirAll(filepath.Dir(path), 0755)
-	os.WriteFile(path, []byte(defaultContent), 0644)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(defaultContent), 0644)
 }
 
 func readFirst(dirs []string, filename string) ([]byte, error) {

@@ -47,6 +47,7 @@ func ParseKeyBindings(bindings []KeyBinding) error {
 	for i := range bindings {
 		steps, err := ParseKeyString(bindings[i].Key)
 		if err != nil {
+			bindings[i].Steps = nil
 			if firstErr == nil {
 				firstErr = fmt.Errorf("keybinding %q: %w", bindings[i].Key, err)
 			}

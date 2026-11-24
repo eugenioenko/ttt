@@ -48,8 +48,11 @@ func (a *App) saveSettings(s config.Settings) error {
 
 func (a *App) OpenSettingsFile() {
 	path := a.settingsFilePath()
-	config.EnsureConfigFile(path, "{}\n")
-	a.EditorGroup.OpenFile(path)
+	if err := config.EnsureConfigFile(path, "{}\n"); err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	_ = a.EditorGroup.OpenFile(path)
 }
 
 func (a *App) ReloadSettings() {

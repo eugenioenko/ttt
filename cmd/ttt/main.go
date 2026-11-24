@@ -57,8 +57,11 @@ func handlePanic(screen *term.TcellScreen) {
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
 	crashPath := config.ConfigFilePath("crash.log")
 	header := fmt.Sprintf("ttt crash report — %s\nVersion: %s\n\n", time.Now().Format(time.RFC3339), version)
-	os.WriteFile(crashPath, []byte(header+crashMsg), 0644)
-	fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	if err := os.WriteFile(crashPath, []byte(header+crashMsg), 0644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	}
 	fmt.Fprintln(os.Stderr, crashMsg)
 	os.Exit(1)
 }
@@ -110,7 +113,9 @@ func parseFlags() cliFlags {
 		case "--size":
 			f.noForward = true
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH)
+				if _, err := fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH); err != nil {
+					f.sizeW, f.sizeH = 0, 0
+				}
 				i++
 			}
 		case "--debug":
@@ -280,7 +285,9 @@ Docs: https://tttedit.dev
 			}
 		}
 	}
-	config.ParseKeyBindings(cfg.Keybindings)
+	if err := config.ParseKeyBindings(cfg.Keybindings); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
 	if flags.debug {
 		cfg.Settings.DebugMode = true

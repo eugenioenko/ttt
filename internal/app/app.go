@@ -912,9 +912,18 @@ func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) 
 
 func OpenURL(rawURL string) {
 	cmd := openURLCommand(rawURL, runtime.GOOS)
-	if cmd != nil {
-		cmd.Start()
+	if cmd == nil {
+		return
 	}
+	if err := cmd.Start(); err != nil {
+		slog.Error("open URL", "url", rawURL, "error", err)
+		return
+	}
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			slog.Error("open URL", "url", rawURL, "error", err)
+		}
+	}()
 }
 
 func openURLCommand(rawURL, platform string) *exec.Cmd {

@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -96,7 +97,9 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	)
 	t.watchPromptMarks()
 	t.term.OnData(func(s string) {
-		io.WriteString(pt, s)
+		if _, err := io.WriteString(pt, s); err != nil {
+			slog.Debug("terminal response write", "error", err)
+		}
 	})
 
 	cmd := pt.Command(shell, args...)
@@ -257,7 +260,9 @@ func (t *Terminal) readLoop() {
 }
 
 func (t *Terminal) WriteString(s string) {
-	io.WriteString(t.pt, s)
+	if _, err := io.WriteString(t.pt, s); err != nil {
+		slog.Debug("terminal input write", "error", err)
+	}
 }
 
 func (t *Terminal) Resize(cols, rows int) {
@@ -267,9 +272,16 @@ func (t *Terminal) Resize(cols, rows int) {
 	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.resizeEmulator(cols, rows) {
-		t.pt.Resize(cols, rows)
+	if cols == t.cols && rows == t.rows {
+		return
 	}
+	if !t.exited && !t.closed {
+		if err := t.pt.Resize(cols, rows); err != nil {
+			slog.Warn("resize terminal", "cols", cols, "rows", rows, "error", err)
+			return
+		}
+	}
+	t.resizeEmulator(cols, rows)
 }
 
 // resizeEmulator reports whether the size changed. An unchanged size must not
