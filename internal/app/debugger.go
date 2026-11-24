@@ -44,16 +44,20 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 	g.Editor.BookmarkOverlay = func(line int) (ui.Bookmark, bool) {
 		path := g.ActiveFilePath()
 		if path == a.debugger.stoppedFile && line+1 == a.debugger.stoppedLine {
-			return ui.Bookmark{Icon: icons.Rune(icons.ChevronRight), Style: term.StyleActiveLine}, true
+			return ui.Bookmark{Icon: icons.Rune(icons.DebugExecution), Style: term.StyleDebugExecution}, true
 		}
 		if point, ok := a.debugger.points[path][line+1]; ok {
-			if point.binding.Verified {
-				return ui.Bookmark{Icon: icons.Rune(icons.Breakpoint), Style: term.StyleActiveLine}, true
-			}
-			return ui.Bookmark{Icon: icons.Rune(icons.PendingBreakpoint), Style: term.StyleActiveLine}, true
+			return ui.Bookmark{Icon: a.breakpointGlyph(point), Style: term.StyleDebugBreakpoint}, true
 		}
 		return ui.Bookmark{}, false
 	}
+}
+
+func (a *App) breakpointGlyph(point *debugBreakpoint) rune {
+	if !point.confirm && (a.debugger.run == nil || point.binding.Verified) {
+		return icons.Rune(icons.Breakpoint)
+	}
+	return icons.Rune(icons.PendingBreakpoint)
 }
 
 func (a *App) toggleBreakpoint(path string, line int) {

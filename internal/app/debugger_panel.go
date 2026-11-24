@@ -171,12 +171,9 @@ func (a *App) refreshDebugPanel() {
 	p.breakNodes = make(map[*widgets.TreeNode]debugLocation)
 	for _, path := range slices.Sorted(maps.Keys(a.debugger.points)) {
 		for _, line := range slices.Sorted(maps.Keys(a.debugger.points[path])) {
-			b := a.debugger.points[path][line].binding
-			marker := icons.PendingBreakpoint
-			if b.Verified {
-				marker = icons.Breakpoint
-			}
-			label := fmt.Sprintf("%c %s:%d", icons.Rune(marker), filepath.Base(path), line)
+			point := a.debugger.points[path][line]
+			b := point.binding
+			label := fmt.Sprintf("%s:%d", filepath.Base(path), line)
 			if b.Line > 0 && (b.Line != line || b.Source.Path != "" && b.Source.Path != path) {
 				dest := path
 				if b.Source.Path != "" {
@@ -191,7 +188,7 @@ func (a *App) refreshDebugPanel() {
 			} else if b.Message != "" {
 				label += "  " + b.Message
 			}
-			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: label}
+			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Icon: string(a.breakpointGlyph(point)), IconStyle: term.StyleDebugBreakpoint, Label: label}
 			points.Children = append(points.Children, n)
 			p.breakNodes[n] = debugLocation{path, line}
 		}

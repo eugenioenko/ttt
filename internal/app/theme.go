@@ -159,6 +159,8 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleHighlight, theme.Editor.Highlight)
 	applyStyleDef(&m, term.StyleHighlightStrong, theme.Editor.HighlightStrong)
 	applyStyleDef(&m, term.StyleNote, theme.Editor.Note)
+	applyStyleDef(&m, term.StyleDebugBreakpoint, theme.Editor.DebugBreakpoint)
+	applyStyleDef(&m, term.StyleDebugExecution, theme.Editor.DebugExecution)
 	applyStyleDef(&m, term.StyleActiveLine, theme.Editor.ActiveLine)
 	applyStyleDef(&m, term.StyleScrollbar, config.StyleDef{Fg: theme.Scrollbar.Bg})
 	applyStyleDef(&m, term.StyleScrollbarThumb, config.StyleDef{Fg: theme.Scrollbar.Fg})

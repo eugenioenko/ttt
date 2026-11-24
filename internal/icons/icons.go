@@ -12,6 +12,7 @@ import (
 type Name string
 
 const (
+	DebugExecution    Name = "debug-execution"
 	Breakpoint        Name = "breakpoint"
 	PendingBreakpoint Name = "breakpoint-pending"
 	Branch            Name = "branch"
@@ -73,8 +74,9 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Breakpoint:        {Plain: "*", Nerd: "●"},
-	PendingBreakpoint: {Plain: "o", Nerd: "○"},
+	DebugExecution:    {Plain: "⏵", Nerd: "\uf04b"},
+	Breakpoint:        {Plain: "⬤", Nerd: "\uf111"},
+	PendingBreakpoint: {Plain: "◦", Nerd: "\uf1db"},
 	Branch:            {Plain: "⎇", Nerd: "\ue702"},
 	Commit:            {Plain: "●", Nerd: "\ueafc"},
 	Lock:              {Plain: "⚿", Nerd: ""},
