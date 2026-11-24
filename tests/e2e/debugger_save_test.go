@@ -39,3 +39,22 @@ func TestDebugSaveFailurePreventsSession(t *testing.T) {
 		})
 	}
 }
+
+func TestDebugBreakpointSharedAcrossSplits(t *testing.T) {
+	h := newTestHarness(t, 140, 32)
+	defer h.stop()
+	path := filepath.Join(h.dir, "alpha.txt")
+	h.openFile(path)
+	left := h.app.EditorGroup
+	h.exec("debug.toggleBreakpoint")
+	h.exec("editor.split")
+	right := h.app.EditorGroup
+	requireNoError(t, right.OpenFile(path))
+	if left == right || left.Editor.DebugMarker(0) == 0 || left.Editor.DebugMarker(0) != right.Editor.DebugMarker(0) {
+		t.Fatal("split did not show the shared breakpoint")
+	}
+	h.exec("debug.toggleBreakpoint")
+	if right.Editor.DebugMarker(0) != 0 || left.Editor.DebugMarker(0) != 0 {
+		t.Fatal("removal from split left a stale gutter marker")
+	}
+}
