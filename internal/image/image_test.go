@@ -34,21 +34,22 @@ func mustPNG(t *testing.T, img image.Image) []byte {
 	return buf.Bytes()
 }
 
-func pngWithIHDR(width, height uint32) []byte {
+func pngWithIHDR(t *testing.T, width, height uint32) []byte {
+	t.Helper()
 	var buf bytes.Buffer
 	buf.WriteString("\x89PNG\r\n\x1a\n")
 	var ihdr bytes.Buffer
-	binary.Write(&ihdr, binary.BigEndian, width)
-	binary.Write(&ihdr, binary.BigEndian, height)
+	requireNoError(t, binary.Write(&ihdr, binary.BigEndian, width))
+	requireNoError(t, binary.Write(&ihdr, binary.BigEndian, height))
 	ihdr.Write([]byte{8, 2, 0, 0, 0})
 	chunk := func(typ string, data []byte) {
-		binary.Write(&buf, binary.BigEndian, uint32(len(data)))
+		requireNoError(t, binary.Write(&buf, binary.BigEndian, uint32(len(data))))
 		buf.WriteString(typ)
 		buf.Write(data)
 		crc := crc32.NewIEEE()
 		crc.Write([]byte(typ))
 		crc.Write(data)
-		binary.Write(&buf, binary.BigEndian, crc.Sum32())
+		requireNoError(t, binary.Write(&buf, binary.BigEndian, crc.Sum32()))
 	}
 	chunk("IHDR", ihdr.Bytes())
 	return buf.Bytes()
@@ -162,7 +163,7 @@ func TestLoadRejectsOversized(t *testing.T) {
 		{"pixels", 8000, 8000, "pixel count"},
 	} {
 		path := filepath.Join(t.TempDir(), tc.name+".png")
-		if err := os.WriteFile(path, pngWithIHDR(tc.w, tc.h), 0o644); err != nil {
+		if err := os.WriteFile(path, pngWithIHDR(t, tc.w, tc.h), 0o644); err != nil {
 			t.Fatalf("WriteFile: %v", err)
 		}
 		_, err := Load(path)

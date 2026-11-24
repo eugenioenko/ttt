@@ -17,7 +17,7 @@ func TestScanCancellationProcess(t *testing.T) {
 		if err != nil {
 			os.Exit(2)
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 		_, _ = conn.Write([]byte{1})
 		_, _ = io.Copy(io.Discard, conn)
 		return
@@ -26,7 +26,7 @@ func TestScanCancellationProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	cmd := exec.CommandContext(ctx, os.Args[0], "-test.run=^TestScanCancellationProcess$")
@@ -40,7 +40,7 @@ func TestScanCancellationProcess(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	if err := conn.SetReadDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatal(err)
 	}

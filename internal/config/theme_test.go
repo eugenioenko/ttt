@@ -51,7 +51,7 @@ func TestDefaultTheme(t *testing.T) {
 
 func TestThemePartialJSON(t *testing.T) {
 	th := DefaultTheme()
-	json.Unmarshal([]byte(`{"statusBar": {"fg": "yellow", "bg": "#ff0000"}}`), &th)
+	requireNoError(t, json.Unmarshal([]byte(`{"statusBar": {"fg": "yellow", "bg": "#ff0000"}}`), &th))
 	th.ResolveColors()
 
 	if th.StatusBar.Fg != "yellow" {
@@ -67,7 +67,7 @@ func TestThemePartialJSON(t *testing.T) {
 
 func TestThemeHexColors(t *testing.T) {
 	th := ThemeConfig{}
-	json.Unmarshal([]byte(`{"editor": {"lineNumber": {"fg": "#808080"}}}`), &th)
+	requireNoError(t, json.Unmarshal([]byte(`{"editor": {"lineNumber": {"fg": "#808080"}}}`), &th))
 
 	if th.Editor.LineNumber.Fg != "#808080" {
 		t.Fatalf("expected '#808080', got '%s'", th.Editor.LineNumber.Fg)

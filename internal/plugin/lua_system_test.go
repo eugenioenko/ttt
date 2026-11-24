@@ -47,7 +47,9 @@ func (m *mockSystemAPI) Exec(ctx context.Context, binary string, args []string, 
 			return "", "", -1, nil
 		}
 		if opts.Stdout != nil {
-			opts.Stdout.Write([]byte(chunk))
+			if _, err := opts.Stdout.Write([]byte(chunk)); err != nil {
+				return "", "", -1, err
+			}
 		}
 	}
 	if m.block {
@@ -55,8 +57,12 @@ func (m *mockSystemAPI) Exec(ctx context.Context, binary string, args []string, 
 		return "", "signal: killed", -1, nil
 	}
 	if opts.Stdout != nil && opts.Stderr != nil {
-		opts.Stdout.Write([]byte(m.stdout))
-		opts.Stderr.Write([]byte(m.stderr))
+		if _, err := opts.Stdout.Write([]byte(m.stdout)); err != nil {
+			return "", "", -1, err
+		}
+		if _, err := opts.Stderr.Write([]byte(m.stderr)); err != nil {
+			return "", "", -1, err
+		}
 		return "", "", m.exitCode, m.execErr
 	}
 	return m.stdout, m.stderr, m.exitCode, m.execErr
