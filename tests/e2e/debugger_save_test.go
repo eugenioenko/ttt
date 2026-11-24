@@ -161,7 +161,7 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
-	for _, dot := range []rune{'∙', '\uf111'} {
+	for _, dot := range []rune{'⦁', '\uf111'} {
 		h.assertContains("Create configuration")
 		mark, ok := h.app.EditorGroup.Editor.VisibleBookmark(0)
 		if !ok || mark.Icon != dot || mark.Style != term.StyleDebugBreakpoint || strings.Count(h.screenText(), string(dot)) < 2 {

@@ -61,7 +61,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
     expect(snapshots[expanded]).toContain("answer = 42");
     expect(snapshots[stepped]).toContain("Ln 4, Col 1");
     expect(snapshots[caller]).toContain("app.ts");
-    expect(snapshots[cleared]).not.toMatch(/∙ app.ts:[37]/);
+    expect(snapshots[cleared]).not.toMatch(/⦁ app.ts:[37]/);
     expect(snapshots[output]).toContain("[debug:TS] AFTER_REPORT");
     expect(snapshots[output]).toContain("[debug:TS] TS_DONE 43");
   } finally { rmSync(dir, { recursive: true, force: true }); }
