@@ -58,7 +58,13 @@ func TestStartupAcceptsEitherLaunchReplyOrdering(t *testing.T) {
 		if string(filters.Arguments) != `{"filters":["uncaught"]}` {
 			t.Fatal(string(filters.Arguments))
 		}
-		reply(filters, nil)
+		if late {
+			if err := codec.Send(map[string]any{"type": "response", "request_seq": filters.Seq, "success": false, "message": "unsupported filter"}); err != nil {
+				t.Fatal(err)
+			}
+		} else {
+			reply(filters, nil)
+		}
 		reply(receive("configurationDone"), nil)
 		if late {
 			reply(launch, nil)
@@ -146,5 +152,23 @@ func TestDetachResumesStoppedThreadWithZeroOrMissingID(t *testing.T) {
 			}
 		}
 		<-closed
+	}
+}
+
+func TestConnectDisablesLocalTerminal(t *testing.T) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Close()
+	s, err := Connect(context.Background(), listener.Addr().String(), nil, SessionOptions{
+		RunInTerminal: func(TerminalRequest) (int, error) { t.Fatal("unexpected terminal request"); return 0, nil },
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.conn.Close()
+	if s.options.RunInTerminal != nil {
+		t.Fatal("external adapter has local terminal capability")
 	}
 }

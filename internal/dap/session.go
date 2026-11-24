@@ -45,6 +45,8 @@ func (output adapterStderr) Write(data []byte) (int, error) {
 	return len(data), nil
 }
 
+type responseError struct{ error }
+
 type Session struct {
 	options           SessionOptions
 	child             *Session
@@ -57,6 +59,7 @@ type Session struct {
 	pending           map[int]chan packet
 	done              chan struct{}
 	initialized       chan struct{}
+	terminated        chan struct{}
 	onEvent           func(Event)
 	terminate         func()
 	closeOnce         sync.Once
@@ -70,7 +73,7 @@ func newSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent f
 	return makeSession(r, w, conn, kill, onEvent, SessionOptions{})
 }
 func makeSession(r io.Reader, w io.Writer, conn io.Closer, kill func(), onEvent func(Event), options SessionOptions) *Session {
-	s := &Session{options: options, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), onEvent: onEvent, terminate: kill}
+	s := &Session{options: options, conn: conn, codec: jsonrpc.NewCodec(r, w), pending: make(map[int]chan packet), done: make(chan struct{}), initialized: make(chan struct{}), terminated: make(chan struct{}), onEvent: onEvent, terminate: kill}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
 	return s
@@ -110,6 +113,13 @@ func (s *Session) read() {
 					s.mu.Unlock()
 				}
 			case "continued", "terminated":
+				if p.Event == "terminated" {
+					select {
+					case <-s.terminated:
+					default:
+						close(s.terminated)
+					}
+				}
 				s.mu.Lock()
 				s.stopped = false
 				s.stoppedThread = nil
@@ -182,7 +192,7 @@ func (s *Session) sendCall(ctx context.Context, command string, args, out any, s
 		if !p.Success {
 			var detail struct{ Error struct{ Format string } }
 			_ = json.Unmarshal(p.Body, &detail)
-			return fmt.Errorf("%s: %s %s", command, p.Message, detail.Error.Format)
+			return responseError{fmt.Errorf("%s: %s %s", command, p.Message, detail.Error.Format)}
 		}
 		if out != nil {
 			return json.Unmarshal(p.Body, out)
@@ -283,7 +293,11 @@ func (s *Session) Start(ctx context.Context, adapter, request string, args map[s
 					}
 				}
 				if err := s.call(ctx, "setExceptionBreakpoints", map[string]any{"filters": filters}, nil); err != nil {
-					return err
+					var rejected responseError
+					if !errors.As(err, &rejected) {
+						return err
+					}
+					_, _ = adapterStderr(s.onEvent).Write([]byte(err.Error() + "\n"))
 				}
 			}
 			if caps.SupportsConfigurationDoneRequest {
@@ -340,7 +354,13 @@ func (s *Session) Close(terminateDebuggee bool) {
 			}
 			if terminateDebuggee && supportsTerminate {
 				termCtx, cancel := context.WithTimeout(ctx, 500*time.Millisecond)
-				_ = s.call(termCtx, "terminate", struct{}{}, nil)
+				if s.call(termCtx, "terminate", struct{}{}, nil) == nil {
+					select {
+					case <-s.terminated:
+					case <-s.done:
+					case <-termCtx.Done():
+					}
+				}
 				cancel()
 			}
 			_ = s.Call(ctx, "disconnect", map[string]bool{"terminateDebuggee": terminateDebuggee}, nil)
@@ -382,6 +402,7 @@ func Connect(ctx context.Context, addr string, onEvent func(Event), options Sess
 	if err != nil {
 		return nil, err
 	}
+	options.RunInTerminal = nil
 	return SocketSession(conn, func() {}, onEvent, options), nil
 }
 

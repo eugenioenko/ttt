@@ -378,7 +378,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 
 The default `provider` is `generic`, including for familiar type names. Set it explicitly to `delve`, `jsdebug`, or `debugpy` for their language-specific launch and attach handling. The debugpy command can use `${python}` for the resolved interpreter. A generic adapter receives project launch arguments after recursive `${workspaceFolder}` expansion. ttt rejects `preLaunchTask` and `${input:...}`. Extra top-level launch-file keys can coexist with standalone configurations.
 
-Adapters can request an integrated terminal or a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
+Adapters connected over stdio or a session-owned private socket can request an integrated terminal. TCP connections and adapter-selected socket paths cannot start local terminal commands. Socket adapters can request a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
 
 ## LSP
 

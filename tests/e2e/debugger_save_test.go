@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -17,7 +18,7 @@ func TestDebugSaveFailurePreventsSession(t *testing.T) {
 		t.Run(request, func(t *testing.T) {
 			h := newTestHarness(t, 120, 40)
 			defer h.stop()
-			h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Provider: "delve", Languages: []string{"go"}}
+			h.app.Settings.Debug.Adapters["go"] = debugadapter.Config{Provider: "delve", Languages: []string{"go"}}
 			h.app.EditorGroup.OnError = h.app.StatusError
 			path := filepath.Join(h.dir, "alpha.txt")
 			h.openFile(path)
@@ -50,7 +51,7 @@ func TestDebugBreakpointSharedAcrossSplits(t *testing.T) {
 	defer h.stop()
 	path := filepath.Join(h.dir, "sample.go")
 	requireNoError(t, os.WriteFile(path, []byte("package main"), 0600))
-	h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Languages: []string{"go"}}
+	h.app.Settings.Debug.Adapters["go"] = debugadapter.Config{Languages: []string{"go"}}
 	h.openFile(path)
 	left := h.app.EditorGroup
 	h.exec("debug.toggleBreakpoint")
@@ -112,7 +113,7 @@ func TestDebugSetupOpensExistingVSCodeConfiguration(t *testing.T) {
 func TestDebugConfigurationFromPythonFile(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
-	h.app.Settings.Debug.Adapters["debugpy"] = dap.Adapter{Provider: "debugpy", Languages: []string{"python"}}
+	h.app.Settings.Debug.Adapters["debugpy"] = debugadapter.Config{Provider: "debugpy", Languages: []string{"python"}}
 	source := filepath.Join(h.dir, "app.py")
 	requireNoError(t, os.WriteFile(source, []byte("print(42)"), 0644))
 	h.openFile(source)
@@ -164,7 +165,7 @@ func TestDebugIconsSwitchInOpenSidebar(t *testing.T) {
 	defer icons.Configure("", nil)
 	path := filepath.Join(h.dir, "sample.go")
 	requireNoError(t, os.WriteFile(path, []byte("package main"), 0600))
-	h.app.Settings.Debug.Adapters["go"] = dap.Adapter{Languages: []string{"go"}}
+	h.app.Settings.Debug.Adapters["go"] = debugadapter.Config{Languages: []string{"go"}}
 	h.openFile(path)
 	h.exec("sidebar.debug")
 	h.exec("debug.toggleBreakpoint")
@@ -188,11 +189,11 @@ func TestDebugGutterRequiresConfiguredLanguage(t *testing.T) {
 	if g.OnGutterClick(path, 0) {
 		t.Fatal("empty registry claimed the gutter")
 	}
-	h.app.Settings.Debug.Adapters["python"] = dap.Adapter{Languages: []string{"python"}}
+	h.app.Settings.Debug.Adapters["python"] = debugadapter.Config{Languages: []string{"python"}}
 	if g.OnGutterClick(path, 0) {
 		t.Fatal("Python adapter claimed a C source")
 	}
-	h.app.Settings.Debug.Adapters["native"] = dap.Adapter{Languages: []string{"c"}}
+	h.app.Settings.Debug.Adapters["native"] = debugadapter.Config{Languages: []string{"c"}}
 	if !g.OnGutterClick(path, 0) {
 		t.Fatal("C breakpoint click unhandled")
 	}

@@ -3,6 +3,7 @@ package providers
 import (
 	"fmt"
 
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/dap/providers/debugpy"
 	"github.com/eugenioenko/ttt/internal/dap/providers/delve"
@@ -18,11 +19,12 @@ var registryPlugins = map[string]string{
 	"debugpy": "dap-debugpy", "lldb": "dap-codelldb", "gdb": "dap-gdb",
 }
 
-func For(t dap.Target, adapters map[string]dap.Adapter) (dap.Provider, error) {
-	a, ok := adapters[t.Type]
+func For(t dap.Target, adapters map[string]debugadapter.Config) (dap.Provider, error) {
+	settings, ok := adapters[t.Type]
 	if !ok {
 		return nil, MissingAdapter{Type: t.Type, Plugin: registryPlugins[t.Type]}
 	}
+	a := dap.Adapter(settings)
 	switch a.Provider {
 	case "", "generic":
 		return a, nil

@@ -113,7 +113,7 @@ func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, o
 				args = append(args, arg)
 			}
 			cmd.Args = append(args, "--client-addr", address)
-			return externalCommand(cmd)
+			return externalCommand(cmd, dir, p.Env)
 		}, onEvent, options)
 	}
 	if err != nil {

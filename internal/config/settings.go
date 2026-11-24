@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"github.com/eugenioenko/ttt/internal/filewrite"
 )
 
@@ -518,7 +518,7 @@ type LinkSettings struct {
 }
 
 type DebugSettings struct {
-	Adapters map[string]dap.Adapter `json:"adapters"`
+	Adapters map[string]debugadapter.Config `json:"adapters"`
 }
 
 type Settings struct {
@@ -625,7 +625,7 @@ func DefaultSettings() Settings {
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
-		Debug:        DebugSettings{Adapters: map[string]dap.Adapter{}},
+		Debug:        DebugSettings{Adapters: map[string]debugadapter.Config{}},
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
 		Image:        DefaultImageSettings(),

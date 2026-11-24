@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"github.com/eugenioenko/ttt/internal/dap"
 )
 
@@ -33,7 +34,7 @@ func TestWorkspaceLaunchSelection(t *testing.T) {
 	if err != nil || len(targets) != 1 || targets[0].Name != "worker" {
 		t.Fatalf("native: %v, %v", targets, err)
 	}
-	provider, err := For(targets[0], map[string]dap.Adapter{"go": {Provider: "delve"}})
+	provider, err := For(targets[0], map[string]debugadapter.Config{"go": {Provider: "delve"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestRejectUnsupportedTargetBeforeStartup(t *testing.T) {
 	} {
 		t.Run(tc.adapter+"/"+tc.request, func(t *testing.T) {
 			target := dap.Target{Type: tc.adapter, Request: tc.request, Arguments: tc.args}
-			provider, err := For(target, map[string]dap.Adapter{tc.adapter: {Provider: map[string]string{"node": "jsdebug", "debugpy": "debugpy", "go": "delve"}[tc.adapter]}})
+			provider, err := For(target, map[string]debugadapter.Config{tc.adapter: {Provider: map[string]string{"node": "jsdebug", "debugpy": "debugpy", "go": "delve"}[tc.adapter]}})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -83,7 +84,7 @@ func TestConfiguredAdapterUsesExplicitProvider(t *testing.T) {
 	if _, err := For(target, nil); !errors.As(err, &missing) || missing.Plugin != "dap-go" || missing.Type != "go" {
 		t.Fatalf("missing adapter: %v", err)
 	}
-	provider, err := For(target, map[string]dap.Adapter{"go": {Command: []string{"custom"}}})
+	provider, err := For(target, map[string]debugadapter.Config{"go": {Command: []string{"custom"}}})
 	if err != nil {
 		t.Fatal(err)
 	}

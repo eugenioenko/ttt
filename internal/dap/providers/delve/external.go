@@ -2,22 +2,41 @@ package delve
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
+	"strings"
 )
 
-func externalCommand(child *exec.Cmd) (*exec.Cmd, bool, error) {
+func terminalScript(child *exec.Cmd, dir string, configuredEnv map[string]string) (string, error) {
+	quote := func(s string) string { return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'" }
+	var script strings.Builder
+	script.WriteString("#!/bin/sh\ncd " + quote(child.Dir) + " || exit 1\nexec /usr/bin/env")
+	for _, entry := range child.Environ() {
+		name, _, _ := strings.Cut(entry, "=")
+		if _, configured := configuredEnv[name]; configured {
+			script.WriteString(" " + quote(entry))
+		}
+	}
+	script.WriteString(" " + quote(child.Path))
+	for _, arg := range child.Args[1:] {
+		script.WriteString(" " + quote(arg))
+	}
+	path := filepath.Join(dir, "launch.command")
+	return path, os.WriteFile(path, []byte(script.String()+"\n"), 0700)
+}
+
+func externalCommand(child *exec.Cmd, dir string, configuredEnv map[string]string) (*exec.Cmd, bool, error) {
 	if runtime.GOOS == "darwin" {
+		path, err := terminalScript(child, dir, configuredEnv)
+		if err != nil {
+			return nil, false, err
+		}
 		const script = `on run argv
-set launchCommand to "cd " & quoted form of (item 1 of argv) & " && exec " & quoted form of (item 2 of argv)
-repeat with arg in items 3 thru -1 of argv
-set launchCommand to launchCommand & " " & quoted form of arg
-end repeat
-tell application "Terminal" to do script launchCommand
+tell application "Terminal" to do script (quoted form of (item 1 of argv))
 end run`
-		cmd := exec.Command("osascript", append([]string{"-e", script, "--", child.Dir, child.Path}, child.Args[1:]...)...)
-		cmd.Dir = child.Dir
-		cmd.Env = child.Env
+		cmd := exec.Command("osascript", "-e", script, "--", path)
 		return cmd, true, nil
 	}
 	commands := [][]string{{"gnome-terminal", "--window", "--wait", "--"}, {"konsole", "--separate", "-e"}, {"kitty"}, {"alacritty", "-e"}, {"xterm", "-e"}, {"x-terminal-emulator", "-e"}}

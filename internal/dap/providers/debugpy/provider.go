@@ -109,5 +109,6 @@ func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, o
 		}
 		return dap.Connect(ctx, addr, onEvent, options)
 	}
-	return p.Adapter.Open(ctx, t, args, onEvent, options)
+	python, _ := args["python"].(string)
+	return p.Adapter.OpenWithVariables(ctx, t, onEvent, options, "${python}", python)
 }
