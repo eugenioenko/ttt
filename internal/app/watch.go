@@ -82,7 +82,10 @@ func (a *App) HandleFileChanged(path string) {
 
 func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	switch filepath.Base(path) {
-	case ".ttt", ".vscode", "launch.json":
+	case ".ttt", ".vscode":
+		a.SyncWatched()
+		fallthrough
+	case "launch.json":
 		a.refreshDebugConfiguration()
 	}
 	a.invalidateRepositoryPath(path, RepositoryWorktree)

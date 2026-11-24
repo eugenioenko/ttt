@@ -60,6 +60,9 @@ func BindKeys(root *ui.Root, reg *command.Registry, keybindings []config.KeyBind
 			bindCommandChord(root, reg, steps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(kb.Steps[0])
+			if cmdID == "debug.stepOver" && key == tcell.KeyF10 && mod == tcell.ModNone {
+				cmdID = "debug.contextualF10"
+			}
 			handler := func() { reg.Execute(cmdID) }
 			root.AddGlobalKey(key, mod, rn, handler)
 			if config.ForceKeyCommands[cmdID] {

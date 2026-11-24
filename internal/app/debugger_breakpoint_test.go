@@ -77,3 +77,32 @@ func TestClearBreakpointsAcrossFoldersDuringStartup(t *testing.T) {
 		t.Fatalf("points after clear = %v, pending adapter updates = %v", a.debugger.points, r.revision)
 	}
 }
+
+func TestDebugEditPreservesRuntimeLocationAndClampsDeletedLastLine(t *testing.T) {
+	path := "/project/main.go"
+	a := &App{Workspace: workspace.New([]string{"/project"})}
+	b := &buffer.Buffer{}
+	b.SetText("one\ntwo\nthree")
+	a.toggleBreakpoint(path, 1)
+	a.toggleBreakpoint(path, 3)
+	a.debugger.sources = map[string]debugSourceVersion{path: {weak.Make(b), b.Version()}}
+	r := &debugRun{folder: "/project", edited: map[string]bool{}, revision: map[string]int{}}
+	a.debugger.run = r
+	for n, p := range a.debugger.points[path] {
+		p.runtimeLine = n
+		p.binding.Verified = true
+	}
+	b.Splice(0, 0, "new")
+	a.updateDebugSource(path, b)
+	if p := a.debugger.points[path][2]; p == nil || !p.binding.Verified || p.runtimeLine != 1 {
+		t.Fatal("lost unchanged breakpoint")
+	}
+	b.Splice(3, 1)
+	a.updateDebugSource(path, b)
+	if p := a.debugger.points[path][3]; p == nil || !p.confirm {
+		t.Fatal("deleted last line cannot be confirmed")
+	}
+	if lines := a.debugLines(r, path); len(lines) != 1 || lines[0] != 1 {
+		t.Fatalf("runtime breakpoints %v", lines)
+	}
+}

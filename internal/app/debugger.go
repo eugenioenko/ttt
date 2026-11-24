@@ -10,6 +10,7 @@ import (
 	"time"
 	"weak"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -17,6 +18,7 @@ import (
 )
 
 type debuggerState struct {
+	picker                 *asynctask.Task[[]dap.Process]
 	lastFolder, lastTarget string
 	panel                  debugSidebar
 	run                    *debugRun
@@ -77,6 +79,9 @@ func (a *App) toggleBreakpoint(path string, line int) {
 		points[line] = &debugBreakpoint{}
 	}
 	if r := a.debugger.run; r != nil && a.debugOwnsSource(r, path) {
+		if p := points[line]; p != nil && !r.edited[path] {
+			p.runtimeLine = line
+		}
 		r.revision[path]++
 		a.syncDebugBreakpoints(path)
 	}
@@ -136,8 +141,9 @@ func (a *App) ToggleDebugBreakpoint() {
 }
 
 type debugBreakpoint struct {
-	confirm bool
-	binding dap.Breakpoint
+	runtimeLine int
+	confirm     bool
+	binding     dap.Breakpoint
 }
 
 func (a *App) debugOwnsSource(r *debugRun, path string) bool {
@@ -146,11 +152,21 @@ func (a *App) debugOwnsSource(r *debugRun, path string) bool {
 }
 
 func (a *App) applyDebugBindings(path string, lines []int, bindings []dap.Breakpoint) {
+	byLine := a.debugger.points[path]
+	if r := a.debugger.run; r != nil && r.edited[path] {
+		byLine = make(map[int]*debugBreakpoint, len(byLine))
+		for _, p := range a.debugger.points[path] {
+			if p.runtimeLine > 0 {
+				byLine[p.runtimeLine] = p
+			}
+		}
+	}
 	for i, line := range lines {
-		if p := a.debugger.points[path][line]; p != nil {
+		if p := byLine[line]; p != nil {
 			p.binding = dap.Breakpoint{}
 			if i < len(bindings) {
 				p.binding = bindings[i]
+				p.binding.Source.Path = a.debugSourcePath(p.binding.Source.Path)
 			}
 		}
 	}
@@ -158,9 +174,10 @@ func (a *App) applyDebugBindings(path string, lines []int, bindings []dap.Breakp
 }
 
 func (a *App) debugBindingEvent(r *debugRun, b dap.Breakpoint, reason string) {
+	b.Source.Path = a.debugSourcePath(b.Source.Path)
 	var match *debugBreakpoint
 	for path, points := range a.debugger.points {
-		if r.edited[path] || !a.debugOwnsSource(r, path) {
+		if !a.debugOwnsSource(r, path) {
 			continue
 		}
 		for line, p := range points {
@@ -172,7 +189,7 @@ func (a *App) debugBindingEvent(r *debugRun, b dap.Breakpoint, reason string) {
 					match = p
 					break
 				}
-			} else if path == b.Source.Path && line == b.Line {
+			} else if path == b.Source.Path && ((!r.edited[path] && line == b.Line) || (r.edited[path] && p.runtimeLine == b.Line)) {
 				match = p
 			}
 		}
@@ -218,12 +235,13 @@ func (a *App) toggleEditorBreakpoint(g *ui.EditorGroupWidget, line int) {
 }
 
 func (a *App) debugLines(r *debugRun, path string) []int {
-	if r.edited[path] {
-		return nil
-	}
+
 	var lines []int
 	for line, p := range a.debugger.points[path] {
-		if !p.confirm {
+		if r.edited[path] {
+			line = p.runtimeLine
+		}
+		if !p.confirm && line > 0 {
 			lines = append(lines, line)
 		}
 	}
@@ -241,6 +259,7 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 		return
 	}
 	points := a.debugger.points[path]
+	resync := false
 	replayed := prev.buf == now.buf && b.ChangesSince(prev.version, func(c buffer.Change) {
 		shifted := make(map[int]*debugBreakpoint, len(points))
 		for _, line := range slices.Sorted(maps.Keys(points)) {
@@ -250,6 +269,11 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 			case line > c.Start+c.Removed:
 				line += c.Added - c.Removed
 			default:
+				if p.runtimeLine != 0 {
+					resync = true
+				}
+				p.runtimeLine = 0
+				p.binding = dap.Breakpoint{}
 				p.confirm = true
 				line = c.Start + max(1, min(line-c.Start, c.Added))
 			}
@@ -259,18 +283,29 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 		}
 		points = shifted
 	})
-	for _, p := range points {
-		p.binding = dap.Breakpoint{}
+	for line, p := range points {
 		if !replayed {
 			p.confirm = true
+			p.runtimeLine = 0
+			p.binding = dap.Breakpoint{}
+			resync = true
+		}
+		if line > len(b.Lines) {
+			delete(points, line)
+			last := max(1, len(b.Lines))
+			if points[last] == nil {
+				points[last] = p
+			}
 		}
 	}
 	a.debugger.points[path] = points
 	a.debugger.sources[path] = now
 	if r := a.debugger.run; r != nil && a.debugOwnsSource(r, path) {
 		r.edited[path] = true
-		r.revision[path]++
-		a.syncDebugBreakpoints(path)
+		if resync {
+			r.revision[path]++
+			a.syncDebugBreakpoints(path)
+		}
 	}
 	a.refreshDebugPanel()
 }
@@ -297,4 +332,33 @@ func (a *App) checkDebugSource(path string) {
 		a.updateDebugSource(path, b)
 		delete(a.debugger.closedSources, path)
 	}
+}
+
+func (a *App) debugSourcePath(path string) string {
+	if path == "" {
+		return ""
+	}
+	path = filepath.Clean(path)
+	if _, ok := a.debugger.points[path]; ok {
+		return path
+	}
+	var candidates []string
+	for _, g := range a.editorGroups() {
+		if g != nil {
+			if g.BufferForPath(path) != nil {
+				return path
+			}
+			candidates = append(candidates, g.OpenFilePaths()...)
+		}
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return path
+	}
+	for _, p := range append(candidates, slices.Collect(maps.Keys(a.debugger.points))...) {
+		if other, err := os.Stat(p); err == nil && os.SameFile(info, other) {
+			return p
+		}
+	}
+	return path
 }

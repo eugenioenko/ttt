@@ -196,7 +196,7 @@ func (a *App) refreshDebugPanel() {
 			}
 			if a.debugger.points[path][line].confirm {
 				label += "  " + i18n.Text("debug.confirmLine")
-			} else if r := a.debugger.run; r != nil && r.edited[path] {
+			} else if r := a.debugger.run; r != nil && r.edited[path] && point.runtimeLine == 0 {
 				label += "  " + i18n.Text("debug.editedSource")
 			} else if b.Message != "" {
 				label += "  " + b.Message
@@ -274,6 +274,9 @@ func (a *App) loadDebugStack(r *debugRun, tid int, executing bool) {
 	debugQuery(a, r, "stackTrace", map[string]int{"threadId": *r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
 		p := &a.debugger.panel
 		p.frames = result.StackFrames
+		for i := range p.frames {
+			p.frames[i].Source.Path = a.debugSourcePath(p.frames[i].Source.Path)
+		}
 		if len(p.frames) > 0 {
 			f := p.frames[0]
 			if executing {
@@ -340,6 +343,11 @@ func (a *App) expandDebugNode(n *widgets.TreeNode) {
 }
 
 func (a *App) revealDebugLocation(path string, line int) {
+	if a.Root.HasModalOverlay() {
+		return
+	}
+	focus := a.Root.Focused
+	follow := focus == a.EditorGroup || focus == a.debugger.panel.adapter
 	if a.EditorGroup.ActiveFilePath() != path {
 		for _, g := range a.editorGroups() {
 			if g.BufferForPath(path) != nil {
@@ -350,11 +358,16 @@ func (a *App) revealDebugLocation(path string, line int) {
 		}
 	}
 	if a.EditorGroup.ActiveFilePath() != path {
-		a.navigateToLocation(path, line-1, 0)
-		return
+		if err := a.EditorGroup.OpenFile(path); err != nil {
+			return
+		}
 	}
 	a.EditorGroup.GoToLine(line)
-	a.Root.SetFocus(a.EditorGroup)
+	if follow {
+		a.Root.SetFocus(a.EditorGroup)
+	} else if focus != nil && a.Root.Focused != focus {
+		a.Root.SetFocus(focus)
+	}
 }
 
 func (a *App) showDebugVariableMenu(_ []widgets.MenuEntry, n *widgets.TreeNode, x, y int) {

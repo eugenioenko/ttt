@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
-
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/dap/providers"
@@ -38,6 +39,7 @@ type debugRun struct {
 
 func registerDebuggerCommands(a *App) {
 	for _, cmd := range []command.Command{
+		{ID: "debug.contextualF10", Hidden: true, Handler: a.debugF10},
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
 		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
@@ -56,6 +58,22 @@ func registerDebuggerCommands(a *App) {
 func (a *App) StartDebugging() {
 	if a.debugger.run != nil || a.Root.HasModalOverlay() {
 		return
+	}
+	for _, g := range a.editorGroups() {
+		for _, folder := range a.Workspace.Folders {
+			for _, dir := range []string{".ttt", ".vscode"} {
+				path := filepath.Join(folder.Path, dir, "launch.json")
+				if g.IsDirtyPath(path) {
+					a.activateEditorGroup(g)
+					g.SwitchToTabByPath(path)
+					a.saveFile(a.StartDebugging)
+					return
+				}
+			}
+		}
+	}
+	if a.debugger.picker != nil {
+		a.debugger.picker.Stop()
 	}
 	var targets []dap.Target
 	for _, folder := range a.Workspace.Folders {
@@ -89,23 +107,32 @@ func (a *App) StartDebugging() {
 	}
 }
 func (a *App) pickDebugProcess(t dap.Target) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-	defer cancel()
-	processes, err := dap.Processes(ctx)
-	if err != nil {
-		a.StatusError(err.Error())
-		return
+	if a.debugger.picker == nil {
+		a.debugger.picker = NewTask[[]dap.Process](a, asynctask.TaskOptions{})
 	}
-	items := make([]widgets.SelectItem, 0, len(processes))
-	for _, p := range processes {
-		id := strconv.Itoa(p.PID)
-		items = append(items, widgets.SelectItem{ID: id, Label: id + "  " + p.Name})
-	}
-	a.ShowSelectDialog(i18n.Text("debug.pickProcess"), items, func(id string) {
-		t.Arguments = maps.Clone(t.Arguments)
-		t.Arguments["processId"] = id
-		a.prepareDebugTarget(t)
-	}, nil)
+	a.debugger.picker.Schedule(func(ctx context.Context) ([]dap.Process, error) {
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return dap.Processes(ctx)
+	}, func(processes []dap.Process, err error) {
+		if a.debugger.run != nil || a.Root.HasModalOverlay() {
+			return
+		}
+		if err != nil {
+			a.StatusError(err.Error())
+			return
+		}
+		items := make([]widgets.SelectItem, 0, len(processes))
+		for _, p := range processes {
+			id := strconv.Itoa(p.PID)
+			items = append(items, widgets.SelectItem{ID: id, Label: id + "  " + p.Name})
+		}
+		a.ShowSelectDialog(i18n.Text("debug.pickProcess"), items, func(id string) {
+			t.Arguments = maps.Clone(t.Arguments)
+			t.Arguments["processId"] = id
+			a.prepareDebugTarget(t)
+		}, nil)
+	})
 }
 func (a *App) prepareDebugTarget(t dap.Target) {
 	provider, err := providers.For(t)
@@ -155,6 +182,9 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 	for path := range a.debugger.points {
 		if a.debugOwnsSource(run, path) {
 			points[path] = a.debugLines(run, path)
+			for _, line := range points[path] {
+				a.debugger.points[path][line].runtimeLine = line
+			}
 		}
 	}
 	post := a.tasks.post
@@ -192,7 +222,13 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 				for path, lines := range points {
 					bps, err := s.SetBreakpoints(startup, path, lines)
 					if err != nil {
-						return err
+						if startup.Err() != nil {
+							return startup.Err()
+						}
+						bps = make([]dap.Breakpoint, len(lines))
+						for i := range bps {
+							bps[i].Message = err.Error()
+						}
 					}
 					deliver(func() {
 						if run.revision[path] == 0 {
@@ -237,6 +273,7 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 			}
 			for _, lines := range a.debugger.points {
 				for _, p := range lines {
+					p.runtimeLine = 0
 					p.binding = dap.Breakpoint{}
 				}
 			}
@@ -372,4 +409,12 @@ func (a *App) debugControl(cmd string) {
 			}
 		})
 	}()
+}
+
+func (a *App) debugF10() {
+	if a.debugger.run == nil {
+		a.Reg.Execute("menu.file")
+		return
+	}
+	a.DebugStepOver()
 }
