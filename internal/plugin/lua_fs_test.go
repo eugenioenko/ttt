@@ -11,6 +11,32 @@ type mockFilesystemAPI struct {
 	written map[string]string
 }
 
+type closeTrackingFilesystemAPI struct {
+	*mockFilesystemAPI
+	closeCount int
+}
+
+func (m *closeTrackingFilesystemAPI) Close() error {
+	m.closeCount++
+	return nil
+}
+
+func TestPluginFilesystemAPIResourcesClosedOnReplaceAndDestroy(t *testing.T) {
+	first := &closeTrackingFilesystemAPI{mockFilesystemAPI: &mockFilesystemAPI{}}
+	second := &closeTrackingFilesystemAPI{mockFilesystemAPI: &mockFilesystemAPI{}}
+	p := &Plugin{}
+
+	p.SetFilesystemAPI(first)
+	p.SetFilesystemAPI(second)
+	if first.closeCount != 1 {
+		t.Fatalf("replaced filesystem API close count = %d, want 1", first.closeCount)
+	}
+	p.Destroy()
+	if second.closeCount != 1 {
+		t.Fatalf("destroyed filesystem API close count = %d, want 1", second.closeCount)
+	}
+}
+
 func (m *mockFilesystemAPI) ReadFile(path string) (string, error) {
 	if content, ok := m.files[path]; ok {
 		return content, nil

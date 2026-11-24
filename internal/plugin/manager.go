@@ -334,7 +334,7 @@ func (m *Manager) SetEditorAPI(api EditorAPI) {
 func (m *Manager) SetFilesystemAPI(factory func(p *Plugin) FilesystemAPI) {
 	m.fsFactory = factory
 	for _, p := range m.plugins {
-		p.Filesystem = factory(p)
+		p.SetFilesystemAPI(factory(p))
 	}
 }
 
@@ -382,7 +382,11 @@ func (m *Manager) SetAppVersion(version string) {
 
 func (m *Manager) initPlugin(p *Plugin) error {
 	p.StorageDir = m.storageDir
-	return p.Init()
+	if err := p.Init(); err != nil {
+		p.Destroy()
+		return err
+	}
+	return nil
 }
 
 func (m *Manager) StorageDir() string { return m.storageDir }
@@ -401,7 +405,7 @@ func (m *Manager) wireAPIs(p *Plugin) {
 		p.System = m.systemAPI
 	}
 	if m.fsFactory != nil {
-		p.Filesystem = m.fsFactory(p)
+		p.SetFilesystemAPI(m.fsFactory(p))
 	}
 	if m.logFactory != nil {
 		p.Log = m.logFactory(p.Name)
