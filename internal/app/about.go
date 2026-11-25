@@ -58,8 +58,10 @@ func (a *App) ShowAbout() {
 	names.Style = term.StyleMuted
 	list := widgets.NewVStackWidget(names)
 	list.MeasureGrow = true
+	scroll := widgets.NewScrollViewWidget(list)
+	scroll.KeyScroll = true
 	credits := widgets.NewBoxWidget(widgets.BoxModel{})
-	credits.Child = widgets.NewScrollViewWidget(list)
+	credits.Child = scroll
 	credits.FixedHeight = aboutCreditsMaxHeight
 	if a.Screen != nil {
 		_, sh := a.Screen.Size()
