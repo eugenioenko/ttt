@@ -22,6 +22,7 @@ import (
 type Client struct {
 	cmd      *exec.Cmd
 	conn     *jsonrpc.Conn
+	stdin    io.Closer
 	closing  atomic.Bool
 	waitOnce sync.Once
 
@@ -82,6 +83,11 @@ func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, er
 
 func newClient(r io.Reader, w io.Writer, hooks ClientHooks) *Client {
 	c := &Client{hooks: hooks}
+	// Closing stdin is the only way to release a write blocked on a server
+	// that stopped reading, so keep it when the transport supports it.
+	if closer, ok := w.(io.Closer); ok {
+		c.stdin = closer
+	}
 	c.conn = jsonrpc.NewConn(r, w, jsonrpc.Options{
 		OnNotification: c.handleNotification,
 		OnRequest:      c.answer,
@@ -189,6 +195,25 @@ var errRequestTimeout = errors.New("lsp request timeout")
 
 func (c *Client) notify(method string, params any) error {
 	return c.conn.Notify(method, params)
+}
+
+// notifyContext sends a notification unless ctx ends first. A server that stops
+// reading stdin leaves the write blocked on a full pipe, which no context can
+// interrupt, so cancellation closes the client to release it.
+func (c *Client) notifyContext(ctx context.Context, method string, params any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	sent := make(chan error, 1)
+	go func() { sent <- c.notify(method, params) }()
+	select {
+	case err := <-sent:
+		return err
+	case <-ctx.Done():
+		c.Close()
+		<-sent
+		return ctx.Err()
+	}
 }
 
 func isNullResult(result json.RawMessage) bool {
@@ -638,8 +663,13 @@ func (c *Client) Shutdown() error {
 
 func (c *Client) Close() {
 	c.closing.Store(true)
-	_ = c.cmd.Process.Kill()
-	c.wait()
+	if c.stdin != nil {
+		_ = c.stdin.Close()
+	}
+	if c.cmd != nil {
+		_ = c.cmd.Process.Kill()
+		c.wait()
+	}
 }
 
 func (c *Client) wait() {

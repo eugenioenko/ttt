@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -1196,11 +1197,124 @@ func (a *App) lspWorkDirForServer(path, serverKey string) string {
 	if path == "" || a.LspManager == nil {
 		return workDir
 	}
-	markers := a.LspManager.ServerConfig(serverKey).RootMarkers
-	if root := lsp.FindRoot(filepath.Dir(path), markers); root != "" {
+	// A client only knows the documents opened on it, so a document stays on
+	// the root it was opened on: re-resolving mid-lifecycle would send its
+	// changes and requests to a client that never received its didOpen.
+	if root, pinned := a.pinnedLSPRoot(path); pinned {
+		return root
+	}
+	if root := a.lspRootFor(serverKey, filepath.Dir(path)); root != "" {
 		return root
 	}
 	return workDir
+}
+
+func (a *App) pinLSPRoot(path, root string) {
+	a.lspDocRootsMu.Lock()
+	if a.lspDocRoots == nil {
+		a.lspDocRoots = make(map[string]string)
+	}
+	a.lspDocRoots[path] = root
+	a.lspDocRootsMu.Unlock()
+}
+
+func (a *App) pinnedLSPRoot(path string) (string, bool) {
+	a.lspDocRootsMu.Lock()
+	root, ok := a.lspDocRoots[path]
+	a.lspDocRootsMu.Unlock()
+	return root, ok
+}
+
+func (a *App) unpinLSPRoot(path string) {
+	a.lspDocRootsMu.Lock()
+	delete(a.lspDocRoots, path)
+	a.lspDocRootsMu.Unlock()
+}
+
+type lspRootKey struct {
+	server string
+	dir    string
+}
+
+// lspRootFor returns the nearest root-marker directory for dir, remembering
+// the answer: FindRoot lists every ancestor until one matches, and open,
+// change, completion and hover requests ask for the same document repeatedly.
+func (a *App) lspRootFor(serverKey, dir string) string {
+	markers := a.LspManager.ServerConfig(serverKey).RootMarkers
+	if len(markers) == 0 {
+		return ""
+	}
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = filepath.Clean(dir)
+	}
+	key := lspRootKey{server: strings.ToLower(serverKey), dir: abs}
+	a.lspRootsMu.Lock()
+	root, cached := a.lspRoots[key]
+	gen := a.lspRootsGen
+	a.lspRootsMu.Unlock()
+	if cached {
+		return root
+	}
+
+	root = lsp.FindRoot(abs, markers)
+
+	a.lspRootsMu.Lock()
+	if a.lspRootsGen == gen {
+		if a.lspRoots == nil {
+			a.lspRoots = make(map[lspRootKey]string)
+		}
+		a.lspRoots[key] = root
+	}
+	a.lspRootsMu.Unlock()
+	return root
+}
+
+// invalidateLSPRootsUnder drops cached roots a marker appearing or disappearing
+// in dir could change: only documents in dir or below walk through it.
+func (a *App) invalidateLSPRootsUnder(dir string) {
+	abs, err := filepath.Abs(dir)
+	if err != nil {
+		abs = filepath.Clean(dir)
+	}
+	a.lspRootsMu.Lock()
+	defer a.lspRootsMu.Unlock()
+	a.lspRootsGen++
+	for key := range a.lspRoots {
+		if withinDir(abs, key.dir) {
+			delete(a.lspRoots, key)
+		}
+	}
+}
+
+// invalidateLSPRoots drops every cached root, for when root markers change.
+func (a *App) invalidateLSPRoots() {
+	a.lspRootsMu.Lock()
+	defer a.lspRootsMu.Unlock()
+	a.lspRootsGen++
+	clear(a.lspRoots)
+}
+
+func withinDir(dir, target string) bool {
+	if target == dir {
+		return true
+	}
+	return strings.HasPrefix(target, strings.TrimSuffix(dir, string(filepath.Separator))+string(filepath.Separator))
+}
+
+// lspRootMarkersChanged reports whether any server's root markers differ, the
+// only LSP setting that changes an already resolved root.
+func lspRootMarkersChanged(prev, next config.LSPSettings) bool {
+	if len(prev.Servers) != len(next.Servers) {
+		return true
+	}
+	for key, cfg := range next.Servers {
+		before, ok := prev.Servers[key]
+		if !ok || !slices.Equal(before.RootMarkers, cfg.RootMarkers) {
+			return true
+		}
+	}
+	return false
 }
 
 func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
@@ -1235,6 +1349,7 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 
 	text := strings.Join(lines, "\n")
 	workDir := a.lspWorkDirFor(path, lang)
+	a.pinLSPRoot(path, workDir)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path] = 1
@@ -1331,6 +1446,7 @@ func (a *App) NotifyLSPClose(path, lang string) {
 		return
 	}
 	workDir := a.lspWorkDirFor(path, lang)
+	a.unpinLSPRoot(path)
 	a.DocVersionsMu.Lock()
 	delete(a.DocVersions, path)
 	delete(a.lspSent, path)

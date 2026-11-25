@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 )
 
 // roslynBoundary returns a directory holding two solutions, which discovery
@@ -146,6 +149,46 @@ func TestOpenRoslynWorkspaceSendsProjectOpen(t *testing.T) {
 	}
 	if len(params.Projects) != 1 || params.Projects[0] != FileURI(project) {
 		t.Errorf("projects = %v, want [%q]", params.Projects, FileURI(project))
+	}
+}
+
+// signalingWriteCloser reports when the first frame starts writing, so a test
+// can cancel only once the notification is blocked on an unread pipe.
+type signalingWriteCloser struct {
+	*io.PipeWriter
+	started chan struct{}
+	once    sync.Once
+}
+
+func (w *signalingWriteCloser) Write(p []byte) (int, error) {
+	w.once.Do(func() { close(w.started) })
+	return w.PipeWriter.Write(p)
+}
+
+func TestOpenRoslynWorkspaceStopsWhenCanceled(t *testing.T) {
+	root := t.TempDir()
+	writeMarkerFile(t, filepath.Join(root, "App.sln"))
+	clientR, clientW := io.Pipe()
+	writer := &signalingWriteCloser{PipeWriter: clientW, started: make(chan struct{})}
+	c := newClient(clientR, writer, ClientHooks{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- c.OpenRoslynWorkspace(ctx, root) }()
+	select {
+	case <-writer.started:
+	case <-time.After(5 * time.Second):
+		t.Fatal("client never wrote solution/open")
+	}
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("err = %v, want context.Canceled", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("OpenRoslynWorkspace waited for an unread stdin write")
 	}
 }
 

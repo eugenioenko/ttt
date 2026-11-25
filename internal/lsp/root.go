@@ -3,7 +3,6 @@ package lsp
 import (
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // FindRoot walks up from startDir and returns the first directory containing
@@ -34,22 +33,23 @@ func containsMarker(dir string, markers []string) bool {
 	if err != nil {
 		return false
 	}
+	for _, entry := range entries {
+		if MatchesMarker(entry.Name(), markers) {
+			return true
+		}
+	}
+	return false
+}
+
+// MatchesMarker reports whether name matches any of markers with the same
+// glob-or-exact rules FindRoot applies to directory entries.
+func MatchesMarker(name string, markers []string) bool {
 	for _, marker := range markers {
 		if marker == "" {
 			continue
 		}
-		if strings.ContainsAny(marker, "*?[") {
-			for _, entry := range entries {
-				if matched, _ := filepath.Match(marker, entry.Name()); matched {
-					return true
-				}
-			}
-			continue
-		}
-		for _, entry := range entries {
-			if entry.Name() == marker {
-				return true
-			}
+		if matched, _ := filepath.Match(marker, name); matched {
+			return true
 		}
 	}
 	return false

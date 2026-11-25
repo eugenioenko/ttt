@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -29,8 +30,11 @@ type serverStart struct {
 	done   chan struct{}
 	cancel context.CancelFunc
 	client *Client
-	err    error
-	exited bool
+	// starting holds the client while startup is still running, so a stop can
+	// close its stdin and release a blocked startup notification.
+	starting atomic.Pointer[Client]
+	err      error
+	exited   bool
 }
 
 type Manager struct {
@@ -139,6 +143,20 @@ func (m *Manager) ServerConfig(key string) config.LSPServerConfig {
 	return config.LSPServerConfig{}
 }
 
+// HasRootMarker reports whether name matches a root marker of any configured
+// server, which is the only kind of on-disk change that can move a root.
+func (m *Manager) HasRootMarker(name string) bool {
+	if m == nil || name == "" {
+		return false
+	}
+	for _, cfg := range m.config.Servers {
+		if MatchesMarker(name, cfg.RootMarkers) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	server := strings.ToLower(lang)
 	key := clientKey(server, workDir)
@@ -184,6 +202,7 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 		client = nil
 		m.mu.Lock()
 	}
+	start.starting.Store(nil)
 	start.client, start.err = client, err
 	changed = false
 	if m.servers[key] == start {
@@ -212,6 +231,7 @@ func (m *Manager) startClient(ctx context.Context, server, key, lang, workDir st
 		m.log(server, "error", err.Error())
 		return nil, fmt.Errorf("start LSP for %s: %w", lang, err)
 	}
+	start.starting.Store(client)
 	client.OnDiagnostics = func(params PublishDiagnosticsParams) {
 		if m.OnDiagnostics != nil {
 			m.OnDiagnostics(server, params)
@@ -365,6 +385,17 @@ func stopStarts(starts map[string]*serverStart) {
 
 func stopStart(key string, start *serverStart) {
 	start.cancel()
+	// Cancellation releases initialize, but not a startup notification blocked
+	// on a server that stopped reading stdin. Close the in-flight client so the
+	// write fails before waiting for startup to finish.
+	if client := start.starting.Load(); client != nil {
+		select {
+		case <-start.done:
+			// Startup finished; its client is stopped gracefully below.
+		default:
+			client.Close()
+		}
+	}
 	<-start.done
 	if start.client != nil {
 		stopClient(key, start.client)

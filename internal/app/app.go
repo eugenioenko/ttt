@@ -208,6 +208,19 @@ type App struct {
 	// lastPulled holds the document state behind each path's applied pull.
 	// UI goroutine only.
 	lastPulled map[string]pullKey
+	// lspRoots caches lsp.FindRoot per server and document directory, including
+	// misses. Requests resolve it off the UI goroutine, so it is guarded by
+	// lspRootsMu; lspRootsGen lets a resolution started before an invalidation
+	// avoid storing its now-stale answer.
+	lspRootsMu  sync.Mutex
+	lspRootsGen uint64
+	lspRoots    map[lspRootKey]string
+	// lspDocRoots pins the root each open document was opened on, so its
+	// requests and synchronization keep reaching the client that has it open
+	// even when a marker change resolves another root for its directory. A
+	// close or an explicit server restart drops the pin.
+	lspDocRootsMu sync.Mutex
+	lspDocRoots   map[string]string
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
