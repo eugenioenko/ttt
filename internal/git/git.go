@@ -431,13 +431,43 @@ func parseNameStatusZ(out []byte) []FileStatus {
 	return files
 }
 
+func commitIdentityAndFirstParent(ctx context.Context, dir, ref string) (string, string, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "rev-list", "--parents", "-n", "1", ref, "--").Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", "", ctx.Err()
+		}
+		return "", "", err
+	}
+	refs := strings.Fields(string(out))
+	if len(refs) == 0 {
+		return "", "", fmt.Errorf("revision has no identity")
+	}
+	parent := ""
+	if len(refs) > 1 {
+		parent = refs[1]
+	}
+	return refs[0], parent, nil
+}
+
 func CommitFileDiff(dir, hash string, file FileStatus) (string, error) {
 	return CommitFileDiffContext(context.Background(), dir, hash, file)
 }
 
 func CommitFileDiffContext(ctx context.Context, dir, hash string, file FileStatus) (string, error) {
-	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "-C", "--find-copies-harder", "--format=", hash, "--"}
-	if file.OldPath != "" {
+	commit, parent, err := commitIdentityAndFirstParent(ctx, dir, hash)
+	if err != nil {
+		return "", err
+	}
+	// Diff against the resolved first parent so merge commits with a pathspec
+	// don't return empty output on older Git versions (e.g. git 2.34).
+	var args []string
+	if parent != "" {
+		args = []string{"-C", dir, "--literal-pathspecs", "diff", "-M", "-C", "--find-copies-harder", parent, commit, "--"}
+	} else {
+		args = []string{"-C", dir, "--literal-pathspecs", "show", "-M", "-C", "--find-copies-harder", "--format=", commit, "--"}
+	}
+	if file.OldPath != "" && file.OldPath != file.Path {
 		args = append(args, file.OldPath)
 	}
 	args = append(args, file.Path)
