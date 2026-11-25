@@ -345,6 +345,18 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 }
 func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 	switch event.Name {
+	case "thread":
+		var b struct {
+			Reason   string
+			ThreadID int
+		}
+		if json.Unmarshal(event.Body, &b) == nil {
+			if b.Reason == "started" && run.lastThread == 0 {
+				run.lastThread = b.ThreadID
+			} else if b.Reason == "exited" && run.lastThread == b.ThreadID {
+				run.lastThread = 0
+			}
+		}
 	case "breakpoint":
 		var b struct {
 			Reason     string
@@ -446,16 +458,13 @@ func (a *App) debugControl(cmd string) {
 	go func() {
 		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)
 		defer cancel()
-		var err error
-		if cmd == "pause" {
+		if cmd == "pause" && tid == 0 {
 			var threads struct{ Threads []debugThread }
-			if err = r.session.Call(ctx, "threads", struct{}{}, &threads); err == nil && len(threads.Threads) > 0 {
+			if err := r.session.Call(ctx, "threads", struct{}{}, &threads); err == nil && len(threads.Threads) > 0 {
 				tid = threads.Threads[0].ID
 			}
 		}
-		if err == nil {
-			err = r.session.Call(ctx, cmd, map[string]int{"threadId": tid}, nil)
-		}
+		err := r.session.Call(ctx, cmd, map[string]int{"threadId": tid}, nil)
 		_ = post(func() {
 			if a.debugger.run != r || r.ctx.Err() != nil || r.stopGeneration != generation {
 				return
