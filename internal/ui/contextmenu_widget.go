@@ -160,6 +160,32 @@ func (c *ContextMenuWidget) renderAt(surface Surface, x, y, sw, sh int) {
 		return
 	}
 
+	if reader, hasReader := surface.(widgets.CellReader); hasReader {
+		// The menu anchors at raw mouse coordinates, which can land on the
+		// continuation cell of a fullwidth glyph in the content underneath.
+		// The terminal paints such a glyph across two columns and skips the
+		// continuation, so a border written there never displays: clear the
+		// glyph's head cell when its continuation lands on a vertical border,
+		// and clear a continuation orphaned outside the menu when the head
+		// itself sits on the border column.
+		right := x + menuW - 1
+		for row := y; row < y+menuH; row++ {
+			for _, bx := range []int{x, right} {
+				if head, ok := reader.CellAt(bx-1, row); ok && head.Ch != 0 && textwidth.Rune(head.Ch) > 1 {
+					head.Ch = ' '
+					head.Text = ""
+					surface.SetCell(bx-1, row, head)
+				}
+				if head, ok := reader.CellAt(bx, row); ok && head.Ch != 0 && textwidth.Rune(head.Ch) > 1 {
+					if cont, ok := reader.CellAt(bx+1, row); ok && cont.Ch == 0 && cont.Text == "" {
+						cont.Ch = ' '
+						surface.SetCell(bx+1, row, cont)
+					}
+				}
+			}
+		}
+	}
+
 	b := term.SingleBorderSet()
 	if c.Borders != nil {
 		b = *c.Borders
