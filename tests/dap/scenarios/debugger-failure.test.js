@@ -1,6 +1,6 @@
 import { fork, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
@@ -41,7 +41,8 @@ it("[dap] cancels a waiting attach, releases the connection and reports an unrea
     tui.exec("Start Debugging");
     tui.waitFor("Waiting: dial tcp");
     tui.run(20000);
-    expect(readFileSync(join(dir, "closed"), "utf8")).toBe("yes");
+    const marker = join(dir, "closed");
+    await expect.poll(() => existsSync(marker) && readFileSync(marker, "utf8")).toBe("yes");
   } finally {
     if (peer?.exitCode === null) peer.kill();
     rmSync(dir, { recursive: true, force: true });

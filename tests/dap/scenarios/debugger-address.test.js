@@ -2,6 +2,7 @@ import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createConnection } from "node:net";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
@@ -87,7 +88,10 @@ async function checkAddressAttach(type, externalAdapter = false) {
     tui.waitFor("Debug session ended");
     tui.run(40000);
     const pulse = () => { try { return readFileSync(heartbeat, "utf8"); } catch { return ""; } };
-    if (server) expect(server.exitCode).toBeNull();
+    if (server) {
+      const probe = createConnection(endpoint.debugServer, "127.0.0.1");
+      try { await once(probe, "connect"); } finally { probe.destroy(); }
+    }
     const first = Number(await waitFor(pulse, child));
     expect(await waitFor(() => Number(pulse()) > first, child)).toBe(true);
   } finally {
@@ -96,7 +100,7 @@ async function checkAddressAttach(type, externalAdapter = false) {
       child.kill("SIGINT");
       await closed;
     }
-    if (server && server.exitCode === null) { const closed = once(server, "exit"); server.kill(); await closed; }
+    if (server && server.exitCode === null && server.signalCode === null) { const closed = once(server, "exit"); server.kill(); await closed; }
     rmSync(dir, { recursive: true, force: true });
   }
 }
