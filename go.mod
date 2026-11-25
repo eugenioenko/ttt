@@ -6,7 +6,7 @@ require (
 	github.com/aymanbagabas/go-pty v0.2.3
 	github.com/clipperhouse/displaywidth v0.11.0
 	github.com/eugenioenko/textmate-go v0.5.0
-	github.com/eugenioenko/xterm-go v0.1.2
+	github.com/eugenioenko/xterm-go v0.1.3
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdamore/tcell/v3 v3.4.1
 	github.com/yuin/goldmark v1.8.2
