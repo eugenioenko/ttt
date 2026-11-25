@@ -157,7 +157,12 @@ type App struct {
 	// has a real height to scroll against.
 	PendingFileTargets []FileTarget
 	PluginsPanel       *PluginsPanel
-	Output             *ui.OutputWidget
+	// registryRequested is set once the community registry has been fetched,
+	// which waits until the plugins panel is first shown.
+	registryRequested bool
+	// FetchRegistry replaces the community registry download in tests.
+	FetchRegistry func() ([]plugin.RemoteRegistryEntry, error)
+	Output        *ui.OutputWidget
 	// runningRepoOp is the progress label of the in-flight task, empty when idle.
 	runningRepoOp             string
 	pluginDetailWidgets       map[string]*pluginDetailState

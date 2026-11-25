@@ -1039,13 +1039,12 @@ func (a *App) PluginUpdateByName(name string) {
 	}()
 }
 
-func (a *App) handleRemoteRegistryResult(result *RemoteRegistryResult) {
+func (a *App) HandleRemoteRegistryResult(result *RemoteRegistryResult) {
 	if a.PluginsPanel == nil {
 		return
 	}
 	if result.Err != nil {
-		a.PluginsPanel.SearchTree.Config.EmptyText = i18n.Text("plugins.couldNotLoadRegistry")
-		a.PluginsPanel.SearchTree.SetItems(nil)
+		a.PluginsPanel.setRegistryStatus(i18n.Text("plugins.couldNotLoadRegistry"))
 		return
 	}
 	a.PluginsPanel.SetAvailable(result.Entries)
@@ -1163,12 +1162,18 @@ func (a *App) ShowPluginRowMenu(name string, enabled bool, x, y int) {
 }
 
 func (a *App) PluginRefreshRegistry() {
+	a.registryRequested = true
 	if a.PluginsPanel != nil {
-		a.PluginsPanel.SearchTree.Config.EmptyText = i18n.Text("plugins.loadingPlugins")
-		a.PluginsPanel.SearchTree.SetItems(nil)
+		a.PluginsPanel.setRegistryStatus(i18n.Text("plugins.loadingPlugins"))
+	}
+	fetch := a.FetchRegistry
+	if fetch == nil {
+		fetch = func() ([]plugin.RemoteRegistryEntry, error) {
+			return plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
+		}
 	}
 	go func() {
-		entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
+		entries, err := fetch()
 		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RemoteRegistryResult{Entries: entries, Err: err}))
 	}()
 }

@@ -423,11 +423,6 @@ Docs: https://tttedit.dev
 		editor.Sidebar.AddPanel("plugins", i18n.Text("plugins.plugins"), pluginsPanel.Adapter)
 		editor.WirePluginsPanel(pluginsPanel)
 
-		go func() {
-			entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-			_ = screen.PostEvent(tcell.NewEventInterrupt(&app.RemoteRegistryResult{Entries: entries, Err: err}))
-		}()
-
 		if len(pendingApprovals) > 0 {
 			editor.PendingPluginApprovals = pendingApprovals
 		}
