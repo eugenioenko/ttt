@@ -41,7 +41,16 @@ type debugRun struct {
 }
 
 func registerDebuggerCommands(a *App) {
+	for _, pos := range debugToolbarPositions() {
+		a.Reg.Register(command.Command{ID: pos.command, Title: pos.label, PaletteHidden: true, Handler: func() {
+			a.debugger.toolbarCorner = pos.corner
+			if bar := a.Root.DebugToolbar; bar != nil {
+				bar.Corner = pos.corner
+			}
+		}})
+	}
 	for _, cmd := range []command.Command{
+		{ID: "debug.toggleToolbar", Title: i18n.Text("debug.toggleToolbar"), Handler: a.toggleDebugToolbar},
 		{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause},
 		{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.ClearDebugBreakpoints},
 		{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint},
@@ -183,6 +192,7 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 		}
 	}
 	a.debugger.run = run
+	a.toggleDebugToolbar()
 	a.refreshDebugPanel()
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()
@@ -330,6 +340,7 @@ func (a *App) startDebugRun(provider dap.Provider, t dap.Target, args map[string
 			}
 			cancel()
 			a.debugger.run = nil
+			a.Root.DebugToolbar = nil
 			if !run.failed {
 				a.StatusNotify(i18n.Text("debug.finished"))
 			}

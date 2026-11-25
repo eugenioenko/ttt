@@ -19,6 +19,7 @@ import (
 )
 
 type debuggerState struct {
+	toolbarCorner          ui.ToolbarCorner
 	picker                 *asynctask.Task[[]dap.Process]
 	lastFolder, lastTarget string
 	panel                  debugSidebar

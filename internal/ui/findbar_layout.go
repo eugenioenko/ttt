@@ -16,19 +16,15 @@ type findBarLayout struct {
 }
 
 func renderFindBar(surface Surface, borders *term.BorderSet, query string, current, matches int, expanded, toggle bool) findBarLayout {
+	h := 3
+	if expanded {
+		h++
+	}
 	sw, _ := surface.Size()
 	w := max(min(40, sw-4), 0)
-	l := findBarLayout{barRect: Rect{X: sw - w - 1, Y: 4, W: w, H: 3}}
-	if expanded {
-		l.barRect.H++
-	}
-	b := term.SingleBorderSet()
-	if borders != nil {
-		b = *borders
-	}
-	r := l.barRect
-	surface.DrawBorder(r.X, r.Y, r.W, r.H, b, term.StyleBorder)
-	surface.ClearRect(r.X+1, r.Y+1, max(w-2, 0), r.H-2, term.StyleInput)
+	r := Rect{X: sw - w - 1, Y: 4, W: w, H: h}
+	drawFloatingBar(surface, borders, r)
+	l := findBarLayout{barRect: r}
 	ox, oy := surface.Origin()
 	row := r.Y + 1
 	gutterW := min(3, max(w-3, 0))
@@ -75,6 +71,15 @@ func renderFindBar(surface Surface, borders *term.BorderSet, query string, curre
 		_, l.btnClose = drawFindBarButton(surface, x, row, "✕", r.X+w-1)
 	}
 	return l
+}
+
+func drawFloatingBar(surface Surface, borders *term.BorderSet, r Rect) {
+	b := term.SingleBorderSet()
+	if borders != nil {
+		b = *borders
+	}
+	surface.DrawBorder(r.X, r.Y, r.W, r.H, b, term.StyleBorder)
+	surface.ClearRect(r.X+1, r.Y+1, max(r.W-2, 0), r.H-2, term.StyleInput)
 }
 
 func drawFindBarButton(surface Surface, x, y int, label string, limit int) (int, HitRegion) {

@@ -394,3 +394,58 @@ func (a *App) showDebugVariableMenu(_ []widgets.MenuEntry, n *widgets.TreeNode, 
 		}
 	})
 }
+
+func (a *App) toggleDebugToolbar() {
+	r := a.debugger.run
+	if r == nil || a.Root.DebugToolbar != nil {
+		a.Root.DebugToolbar = nil
+		return
+	}
+	a.Root.DebugToolbar = &ui.DebugToolbar{
+		Corner:       a.debugger.toolbarCorner,
+		EditorBounds: func() ui.Rect { return a.EditorGroup.ContentRect() },
+		Borders:      a.Borders,
+		Attached:     r.attached,
+		CanStep:      func() bool { return r.ready && r.thread != nil },
+		OnCommand:    func(cmd string) { a.Reg.Execute(cmd) },
+		OnMenu:       a.showDebugToolbarDropdown,
+	}
+}
+
+type debugToolbarPosition struct {
+	corner         ui.ToolbarCorner
+	command, label string
+}
+
+func debugToolbarPositions() []debugToolbarPosition {
+	return []debugToolbarPosition{
+		{ui.ToolbarTopLeft, "debug.dockTopLeft", i18n.Text("debug.dockTopLeft")},
+		{ui.ToolbarTopRight, "debug.dockTopRight", i18n.Text("debug.dockTopRight")},
+		{ui.ToolbarBottomLeft, "debug.dockBottomLeft", i18n.Text("debug.dockBottomLeft")},
+		{ui.ToolbarBottomRight, "debug.dockBottomRight", i18n.Text("debug.dockBottomRight")},
+	}
+}
+
+func (a *App) debugToolbarMenu() []ui.ContextMenuItem {
+	label := i18n.Text("debug.showToolbar")
+	if a.Root.DebugToolbar != nil {
+		label = i18n.Text("debug.hideToolbar")
+	}
+	return []ui.ContextMenuItem{
+		{Label: label, Command: "debug.toggleToolbar", Disabled: a.debugger.run == nil},
+		{Label: i18n.Text("debug.toolbarPosition"), Submenu: a.debugToolbarPositionItems()},
+	}
+}
+
+func (a *App) debugToolbarPositionItems() []ui.ContextMenuItem {
+	var positions []ui.ContextMenuItem
+	for _, pos := range debugToolbarPositions() {
+		positions = append(positions, ui.ContextMenuItem{Label: pos.label, Command: pos.command, Checked: menuChecked(pos.corner == a.debugger.toolbarCorner)})
+	}
+	return positions
+}
+
+func (a *App) showDebugToolbarDropdown(x, y int) {
+	items := append(a.debugToolbarPositionItems(), ui.MenuSep(), ui.ContextMenuItem{Label: i18n.Text("debug.toolbarHidden"), Command: "debug.toggleToolbar"})
+	openContextMenu(a, items, x, y)
+}
