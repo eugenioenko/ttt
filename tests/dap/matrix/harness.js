@@ -22,7 +22,9 @@ export function startEditor(dir, file, spec, target) {
   const config = join(dir, "config");
   mkdirSync(config);
   writeFileSync(join(config, "settings.json"), JSON.stringify(spec.settings));
-  tui.start(dir, join(dir, file));
+  const workspace = spec.workspacePath || dir;
+  tui.start(workspace, join(workspace, file));
+  if (spec.workspacePath) tui.setCwd(dir);
   tui.setEnv({TTT_CONFIG_DIR: config});
 }
 

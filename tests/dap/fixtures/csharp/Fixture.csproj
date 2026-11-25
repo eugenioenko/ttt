@@ -3,6 +3,6 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <UseAppHost>false</UseAppHost>
-    <PathMap>$(MSBuildProjectDirectory)=.</PathMap>
+    <PathMap>$(MSBuildProjectDirectory)=/proc/self/cwd</PathMap>
   </PropertyGroup>
 </Project>
