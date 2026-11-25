@@ -10,3 +10,4 @@ tar -xjf "$archive" -C "$scratch" bin/micromamba
 MAMBA_ROOT_PREFIX="$scratch/mamba" "$scratch/bin/micromamba" create -y \
   -p "$DAP_TOOLS/gdb" --override-channels -c conda-forge 'gdb=16.3'
 ln -sf "$DAP_TOOLS/gdb/bin/gdb" "$DAP_TOOLS/bin/gdb"
+ln -sf "$DAP_TOOLS/gdb/bin/gdbserver" "$DAP_TOOLS/bin/gdbserver"

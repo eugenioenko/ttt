@@ -15,19 +15,27 @@
       }
     }
   },
-  "launch": {
-    "name": "go-delve",
-    "type": "go",
-    "request": "launch",
-    "program": "${workspaceFolder}/."
+  "launch": {"name": "go-delve", "type": "go", "request": "launch", "program": "${workspaceFolder}/."},
+  "baseline": {
+    "breakpoint": {"line": 10, "locals": {"count": "41"}},
+    "afterOver": {"line": 11, "locals": {"count": "42"}},
+    "insideCall": {"line": 5, "locals": {"value": "42"}},
+    "afterOut": {"line": 11, "locals": {"count": "42"}},
+    "output": "count = 43"
   },
-  "steps": [
-    {"breakpoint": {"line": 7}},
-    {"run": "launch"},
-    {"expectStopped": {"line": 7, "locals": {"count": "41"}}},
-    {"step": "over"},
-    {"expectStopped": {"line": 8, "locals": {"count": "42"}}},
-    {"continue": true},
-    {"expectExit": {"output": "count = 42"}}
-  ]
+  "pidAttach": {"arguments": {"processId": "${pid}"}, "picker": true},
+  "lifecycle": {"program": "${workspaceFolder}/main.go"},
+  "service": {
+    "source": "fixtures/go-attach/main.go",
+    "command": ["./go-probe"],
+    "build": ["go", "build", "-gcflags=all=-N -l", "-o", "go-probe", "main.go"],
+    "line": 18,
+    "nextLine": 19,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["dlv", "exec", "./go-probe", "--headless", "--accept-multiclient", "--listen=127.0.0.1:0"],
+    "portPattern": "listening at: 127\\.0\\.0\\.1:(\\d+)",
+    "arguments": {"mode": "remote", "host": "127.0.0.1", "port": "${port}"}
+  }
 }

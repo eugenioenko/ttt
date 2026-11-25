@@ -5,11 +5,7 @@
   "settings": {
     "debug": {
       "adapters": {
-        "debugpy": {
-          "command": ["${python}", "-m", "debugpy.adapter"],
-          "provider": "debugpy",
-          "languages": ["python"]
-        }
+        "debugpy": {"command": ["${python}", "-m", "debugpy.adapter"], "provider": "debugpy", "languages": ["python"]}
       }
     }
   },
@@ -20,13 +16,25 @@
     "program": "${workspaceFolder}/main.py",
     "python": "dap-python"
   },
-  "steps": [
-    {"breakpoint": {"line": 3}},
-    {"run": "launch"},
-    {"expectStopped": {"line": 3, "locals": {"count": "41"}}},
-    {"step": "over"},
-    {"expectStopped": {"line": 4, "locals": {"count": "42"}}},
-    {"continue": true},
-    {"expectExit": {"output": "count = 42"}}
-  ]
+  "baseline": {
+    "breakpoint": {"line": 6, "locals": {"count": "41"}},
+    "afterOver": {"line": 7, "locals": {"count": "42"}},
+    "insideCall": {"line": 2, "locals": {"value": "42"}},
+    "afterOut": {"line": 7, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {"arguments": {"processId": "${pid}", "python": "dap-python"}, "picker": true},
+  "lifecycle": {"program": "${workspaceFolder}/example.py", "python": "dap-python"},
+  "service": {
+    "source": "fixtures/python-attach/example.py",
+    "command": ["dap-python", "example.py"],
+    "line": 15,
+    "nextLine": 16,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["dap-python", "example.py", "--listen"],
+    "portFile": "port",
+    "arguments": {"connect": {"host": "127.0.0.1", "port": "${port}"}}
+  }
 }

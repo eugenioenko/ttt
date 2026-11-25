@@ -1,16 +1,12 @@
 {
   "name": "rust-codelldb",
-  "requires": ["install/codelldb.sh"],
+  "requires": ["install/codelldb.sh", "install/gdb.sh"],
   "source": "fixtures/rust-counter/main.rs",
   "binary": "bin/linux-amd64/rust-counter",
   "settings": {
     "debug": {
       "adapters": {
-        "lldb": {
-          "command": ["codelldb", "--port", "${port}"],
-          "transport": "server",
-          "languages": ["rust"]
-        }
+        "lldb": {"command": ["codelldb", "--port", "${port}"], "transport": "server", "languages": ["rust"]}
       }
     }
   },
@@ -20,13 +16,31 @@
     "request": "launch",
     "program": "${workspaceFolder}/rust-counter"
   },
-  "steps": [
-    {"breakpoint": {"line": 3}},
-    {"run": "launch"},
-    {"expectStopped": {"line": 3, "locals": {"count": "41"}}},
-    {"step": "over"},
-    {"expectStopped": {"line": 4, "locals": {"count": "42"}}},
-    {"continue": true},
-    {"expectExit": {"output": "count = 42"}}
-  ]
+  "baseline": {
+    "breakpoint": {"line": 6, "locals": {"count": "41"}},
+    "afterOver": {"line": 7, "locals": {"count": "42"}},
+    "insideCall": {"line": 2, "locals": {"value": "42"}},
+    "afterOut": {"line": 7, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {"arguments": {"pid": "${pid}"}, "picker": {"skip": "ttt process picker requires a provider hook"}},
+  "lifecycle": {"program": "${workspaceFolder}/rust-attach"},
+  "service": {
+    "source": "fixtures/rust-attach/main.rs",
+    "binary": "bin/linux-amd64/rust-attach",
+    "command": ["./rust-attach"],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["gdbserver", "--once", "--attach", "127.0.0.1:0", "${pid}"],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/rust-attach",
+      "targetCreateCommands": ["target create ${workspaceFolder}/rust-attach"],
+      "processCreateCommands": ["gdb-remote 127.0.0.1:${port}"]
+    },
+    "continueOnAttach": true
+  }
 }
