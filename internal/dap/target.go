@@ -81,7 +81,7 @@ func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string,
 	configs := []map[string]any{}
 	if program, err := filepath.Rel(folder, source); source != "" && adapter != "" && err == nil && filepath.IsLocal(program) {
 		config := map[string]any{"program": filepath.ToSlash(program)}
-		if t, ok := settings.FileTarget("${workspaceFolder}", filepath.ToSlash(program), adapter); ok {
+		if t, ok := settings.FileTarget("${workspaceFolder}", "${workspaceFolder}/"+filepath.ToSlash(program), adapter); ok {
 			expanded, err := t.expand(t.Arguments, true)
 			if err != nil {
 				return "", err
