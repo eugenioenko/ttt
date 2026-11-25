@@ -208,9 +208,10 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 
 // wakeAfterTimeLimit asks for one more frame: the document retries a line cut
 // off by the time limit only when the line is drawn again, which on a still
-// screen would wait for the next key press.
+// screen would wait for the next key press. A synchronous highlighter is
+// rebuilt on each render, so its latch would not hold across frames.
 func (h *Highlighter) wakeAfterTimeLimit() {
-	if h.stopWoke || wake == nil {
+	if h.sync || h.stopWoke || wake == nil {
 		return
 	}
 	h.stopWoke = true
