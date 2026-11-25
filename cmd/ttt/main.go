@@ -487,6 +487,9 @@ Docs: https://tttedit.dev
 	}
 
 	editor.CheckLanguagePackUpdates()
+	if flags.exec == "" {
+		editor.CheckForUpdatesOnStartup(time.Now())
+	}
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)

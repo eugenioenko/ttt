@@ -317,6 +317,15 @@ These are starting values. Once you drag a header, resize the sidebar, the commi
 
 Below the favorites, the welcome page lists the last 10 folders opened under **Recent**, most recent first. ttt keeps the history in `state.json`, so a `settings.json` in a dotfiles repo is not rewritten every time you open a folder. Favorites and folders that no longer exist are left out.
 
+## Update
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `update.startupCheck` | bool | `false` | When enabled, check for a newer ttt release at startup. Off by default. `--exec` skips the check. Also in **Settings > General**. |
+| `update.startupCheckInterval` | string | `"daily"` | How often an eligible startup runs the check: `"daily"` (at most once every 24 hours) or `"everyLaunch"`. Used only when `update.startupCheck` is enabled. Also in **Settings > General**. |
+
+The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `settings.json`, so a shared settings file does not reset the interval. A startup check only opens the existing Check for Updates dialog when a newer release is available. Installation and restart stay explicit actions in that dialog. A failed lookup or an already-current release is recorded and stays quiet. If a newer release cannot be shown because another dialog is open, the attempt is not recorded and the next launch can try again.
+
 ## Git
 
 | Key | Type | Default | Description |

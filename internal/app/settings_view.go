@@ -75,6 +75,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("session.restoreTabs"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.RestoreTabs },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.RestoreTabs = v }},
+			{Label: i18n.Text("settings.checkForUpdatesOnStartup"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Update.StartupCheck },
+				SetBool: func(s *config.Settings, v bool) { s.Update.StartupCheck = v }},
+			{Label: i18n.Text("settings.updateCheckFrequency"), Kind: settingEnum, Options: fixedOptions(updateCheckFrequencyItems),
+				GetString: func(s *config.Settings) string { return s.Update.Interval() },
+				SetString: func(s *config.Settings, v string) { s.Update.StartupCheckInterval = v }},
 			{Label: i18n.Text("settings.displayLanguage"), Kind: settingEnum, Restart: true, Options: languageItems,
 				GetString: func(s *config.Settings) string {
 					if s.Language.Locale == "" {
@@ -394,6 +400,13 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
+	}
+}
+
+func updateCheckFrequencyItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.UpdateCheckEveryLaunch, Label: i18n.Text("settings.updateCheckEveryLaunch")},
+		{ID: config.UpdateCheckDaily, Label: i18n.Text("settings.updateCheckDaily")},
 	}
 }
 

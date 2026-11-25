@@ -135,6 +135,7 @@ type App struct {
 	Updates                UpdateService
 	UpdateMethod           *update.Method
 	updateDialog           *updateDialogState
+	updateStartupTask      *asynctask.Task[update.Release]
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
 	largeFiles             largeFileState
