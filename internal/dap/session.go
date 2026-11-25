@@ -18,7 +18,7 @@ import (
 type packet struct {
 	Arguments  json.RawMessage
 	Type       string
-	Seq        int
+	Seq        json.Number
 	Command    string
 	RequestSeq int `json:"request_seq"`
 	Event      string
