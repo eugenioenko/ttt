@@ -7,6 +7,7 @@
     "name": "php-xdebug",
     "type": "php",
     "request": "launch",
+    "xdebugSettings": {"breakpoint_include_return_value": 0},
     "program": "${workspaceFolder}/main.php",
     "cwd": "${workspaceFolder}",
     "hostname": "127.0.0.1",

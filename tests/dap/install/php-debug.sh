@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-php --ri xdebug >/dev/null || { echo 'Install PHP CLI with the Xdebug extension.' >&2; exit 1; }
+php -r 'exit(version_compare(phpversion("xdebug") ?: "0", "3.2", ">=") ? 0 : 1);' || { echo 'Install PHP CLI with Xdebug 3.2 or newer for the DAP matrix.' >&2; exit 1; }
 asset=$(mktemp)
 trap 'rm -f "$asset"' EXIT
 curl -fsSL --retry 3 https://github.com/xdebug/vscode-php-debug/releases/download/v1.40.2/php-debug-1.40.2.vsix -o "$asset"
