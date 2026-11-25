@@ -223,6 +223,28 @@ func TestFindRoslynWorkspaceMissingRoot(t *testing.T) {
 	}
 }
 
+func TestFindProjectFilesStopsWalkingWhenCanceled(t *testing.T) {
+	root := t.TempDir()
+	writeMarkerFile(t, filepath.Join(root, "a.csproj"))
+	writeMarkerFile(t, filepath.Join(root, "b.csproj"))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	match := func(name string) bool {
+		if name == "a.csproj" {
+			cancel()
+		}
+		return isProjectFile(name)
+	}
+
+	projects, err := findProjectFiles(ctx, root, match, maxRoslynProjects)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if projects != nil {
+		t.Errorf("projects = %v, want none", projects)
+	}
+}
+
 func TestFindRoslynWorkspaceStopsWhenCanceled(t *testing.T) {
 	root := t.TempDir()
 	writeMarkerFile(t, filepath.Join(root, "src", "App.csproj"))

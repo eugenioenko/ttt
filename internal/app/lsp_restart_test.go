@@ -55,6 +55,44 @@ func TestRestartReopensAfterTheInFlightSend(t *testing.T) {
 	}
 }
 
+func TestOpenFromBeforeRestartIsNotSent(t *testing.T) {
+	a, path := missingGoServerApp(t)
+	oldRoot := filepath.Join(t.TempDir(), "old")
+	newRoot := filepath.Join(t.TempDir(), "new")
+	a.pinLSPRoot(path, oldRoot)
+	a.DocVersionsMu.Lock()
+	epoch := a.lspEpochs["go"]
+	a.DocVersionsMu.Unlock()
+
+	cases := []struct {
+		name   string
+		root   string
+		epoch  int
+		pinned string
+		want   bool
+	}{
+		{"current", oldRoot, epoch, oldRoot, true},
+		{"restarted", oldRoot, epoch + 1, oldRoot, false},
+		{"moved root", oldRoot, epoch + 1, newRoot, false},
+		{"closed", oldRoot, epoch, "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a.DocVersionsMu.Lock()
+			a.lspEpochs["go"] = tc.epoch
+			a.DocVersionsMu.Unlock()
+			a.unpinLSPRoot(path)
+			if tc.pinned != "" {
+				a.pinLSPRoot(path, tc.pinned)
+			}
+
+			if got := a.lspOpenStillCurrent("go", path, tc.root, epoch); got != tc.want {
+				t.Errorf("lspOpenStillCurrent = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestChangeFromBeforeRestartIsNotSent(t *testing.T) {
 	for _, restarted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("restarted=%v", restarted), func(t *testing.T) {

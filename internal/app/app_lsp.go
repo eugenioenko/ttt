@@ -1352,12 +1352,19 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	a.pinLSPRoot(path, workDir)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
+	epoch := a.lspEpochs[serverKey]
 	a.DocVersions[path] = 1
 	a.lspSent[path] = sent
 	a.DocVersionsMu.Unlock()
 	slog.Debug("lsp didOpen", "path", path, "language", langID)
 	go func() {
 		defer close(sent)
+		// A restart repins the document and reopens it on the root it resolves
+		// to now, so this open must not create a client for a root the document
+		// has since left.
+		if !a.lspOpenStillCurrent(serverKey, path, workDir, epoch) {
+			return
+		}
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
 			return
@@ -1366,6 +1373,20 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didOpen %s: %v", path, err))
 		}
 	}()
+}
+
+// lspOpenStillCurrent reports whether a didOpen resolved for workDir under
+// epoch still targets the document's current root. A restart bumps the epoch
+// and repins every open document, so an open queued before it is obsolete.
+func (a *App) lspOpenStillCurrent(server, path, workDir string, epoch int) bool {
+	a.DocVersionsMu.Lock()
+	restarted := a.lspEpochs[server] != epoch
+	a.DocVersionsMu.Unlock()
+	if restarted {
+		return false
+	}
+	root, pinned := a.pinnedLSPRoot(path)
+	return pinned && root == workDir
 }
 
 // The returned channel closes once the didChange send attempt finishes,
@@ -1441,12 +1462,16 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 }
 
 func (a *App) NotifyLSPClose(path, lang string) {
+	// The pin belongs to the closed document, not to the server, so it is
+	// released even while LSP is off: a stale pin would send the next open to
+	// a root resolved before the document was closed. Returning last keeps it
+	// in place for lspWorkDirFor, which reads it to pick the client below.
+	defer a.unpinLSPRoot(path)
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
 		return
 	}
 	workDir := a.lspWorkDirFor(path, lang)
-	a.unpinLSPRoot(path)
 	a.DocVersionsMu.Lock()
 	delete(a.DocVersions, path)
 	delete(a.lspSent, path)

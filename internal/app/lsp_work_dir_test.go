@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/lsp"
@@ -161,6 +162,19 @@ func TestLSPDocumentKeepsRootItWasOpenedOn(t *testing.T) {
 	}
 }
 
+func TestNotifyLSPCloseReleasesPinWhileLSPDisabled(t *testing.T) {
+	a, workspaceDir, file := lspWorkDirApp(t, []string{"*.csproj"})
+	disabled := false
+	a.Settings.LSP.Enabled = &disabled
+	a.pinLSPRoot(file, filepath.Join(workspaceDir, "project"))
+
+	a.NotifyLSPClose(file, "csharp")
+
+	if root, pinned := a.pinnedLSPRoot(file); pinned {
+		t.Errorf("pin = %q after close with LSP disabled, want released", root)
+	}
+}
+
 func TestLSPRestartRerootsOpenDocuments(t *testing.T) {
 	t.Setenv(fakePullServerEnv, "intrafile")
 	exe, err := os.Executable()
@@ -208,8 +222,20 @@ func TestLSPRestartRerootsOpenDocuments(t *testing.T) {
 		t.Fatal(err)
 	}
 	a.handleLSPServerStopped(&LSPServerStopped{Server: "go", WorkDir: project})
+	a.DocVersionsMu.Lock()
+	reopened := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+	select {
+	case <-reopened:
+	case <-time.After(5 * time.Second):
+		t.Fatal("document never reopened")
+	}
+
 	if got := a.lspWorkDirFor(path, "go"); got != src {
 		t.Fatalf("workDir after restart = %q, want the nearer root %q", got, src)
+	}
+	if client := a.LspManager.ReadyClient("go", src); client == nil {
+		t.Fatal("reopened document has no client for its new root")
 	}
 }
 
