@@ -2,9 +2,12 @@ package app
 
 import (
 	"context"
+	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"unicode"
 
@@ -12,6 +15,11 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
+)
+
+const (
+	pathCompletionLimit = 100
+	pathCompletionBatch = 256
 )
 
 type pathCompletionTarget struct {
@@ -131,43 +139,87 @@ func (a *App) requestPathCompletions(target pathCompletionTarget) {
 	})
 }
 
+// readPathCompletions keeps the lexicographically first pathCompletionLimit matches of a
+// directory. Directory names arrive in readdir order, so matches are inserted into a sorted
+// slice that never grows past the limit instead of being collected and sorted afterwards.
+// That bounds the memory to the limit plus one read batch, keeps the ordering predictable,
+// and lets cancellation stop the walk between batches. The walk still visits the whole
+// directory, and the limit applies after prefix filtering, so a longer prefix reaches entries
+// whose names sort after the first pathCompletionLimit matches.
 func readPathCompletions(ctx context.Context, target pathCompletionTarget) ([]ui.CompletionItem, error) {
-	entries, err := os.ReadDir(target.dir)
+	dir, err := os.Open(target.dir)
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = dir.Close() }()
+
 	prefix := target.prefix
 	if runtime.GOOS == "windows" {
 		prefix = strings.ToLower(prefix)
 	}
-	var items []ui.CompletionItem
-	for _, entry := range entries {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	items := make([]ui.CompletionItem, 0, pathCompletionLimit)
+	for {
+		entries, readErr := dir.ReadDir(pathCompletionBatch)
+		for _, entry := range entries {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if item, ok := pathCompletionItem(target, prefix, entry); ok {
+				items = insertPathCompletion(items, item)
+			}
 		}
-		name := entry.Name()
-		match := name
-		if runtime.GOOS == "windows" {
-			match = strings.ToLower(match)
+		if readErr != nil {
+			if errors.Is(readErr, io.EOF) {
+				return items, nil
+			}
+			return nil, readErr
 		}
-		if !strings.HasPrefix(match, prefix) || strings.ContainsAny(name, "\r\n\t") ||
-			(target.quote == 0 && strings.ContainsFunc(name, pathTokenBoundary)) ||
-			(target.quote != 0 && strings.ContainsRune(name, target.quote)) {
-			continue
+		if len(entries) == 0 {
+			return items, nil
 		}
-		isDir := entry.IsDir()
-		if entry.Type()&os.ModeSymlink != 0 {
-			info, err := os.Stat(filepath.Join(target.dir, name))
-			isDir = err == nil && info.IsDir()
-		}
-		kind := ui.CompletionVariable
-		if isDir {
-			name += string(target.separator)
-			kind = ui.CompletionModule
-		}
-		items = append(items, ui.CompletionItem{Label: name, InsertText: name, Kind: kind})
 	}
-	return items, nil
+}
+
+// insertPathCompletion adds item to the ascending items slice, drops the largest entry when the
+// slice is already at the limit, and returns the result.
+func insertPathCompletion(items []ui.CompletionItem, item ui.CompletionItem) []ui.CompletionItem {
+	at := sort.Search(len(items), func(i int) bool { return items[i].Label >= item.Label })
+	if at == len(items) {
+		if len(items) < pathCompletionLimit {
+			return append(items, item)
+		}
+		return items
+	}
+	if len(items) < pathCompletionLimit {
+		items = append(items, ui.CompletionItem{})
+	}
+	copy(items[at+1:], items[at:])
+	items[at] = item
+	return items
+}
+
+func pathCompletionItem(target pathCompletionTarget, prefix string, entry os.DirEntry) (ui.CompletionItem, bool) {
+	name := entry.Name()
+	match := name
+	if runtime.GOOS == "windows" {
+		match = strings.ToLower(match)
+	}
+	if !strings.HasPrefix(match, prefix) || strings.ContainsAny(name, "\r\n\t") ||
+		(target.quote == 0 && strings.ContainsFunc(name, pathTokenBoundary)) ||
+		(target.quote != 0 && strings.ContainsRune(name, target.quote)) {
+		return ui.CompletionItem{}, false
+	}
+	isDir := entry.IsDir()
+	if entry.Type()&os.ModeSymlink != 0 {
+		info, err := os.Stat(filepath.Join(target.dir, name))
+		isDir = err == nil && info.IsDir()
+	}
+	kind := ui.CompletionVariable
+	if isDir {
+		name += string(target.separator)
+		kind = ui.CompletionModule
+	}
+	return ui.CompletionItem{Label: name, InsertText: name, Kind: kind}, true
 }
 
 func (a *App) showPathCompletions(target pathCompletionTarget, items []ui.CompletionItem) {

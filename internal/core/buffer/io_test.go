@@ -14,7 +14,7 @@ import (
 
 func TestLoadAndSaveFile(t *testing.T) {
 	fname := "testfile.txt"
-	defer os.Remove(fname)
+	defer func() { _ = os.Remove(fname) }()
 	orig := &Buffer{Lines: []string{"hello", "world"}}
 	if err := orig.SaveFile(fname); err != nil {
 		t.Fatalf("SaveFile failed: %v", err)
@@ -150,7 +150,7 @@ func TestLineEndingChangedSinceLoadAndSave(t *testing.T) {
 func TestLoadShowTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "trailing.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: true}
 	if err := b.LoadFile(fname); err != nil {
@@ -164,7 +164,7 @@ func TestLoadShowTrailingNewline(t *testing.T) {
 func TestLoadNoShowTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "notrailing.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: false}
 	if err := b.LoadFile(fname); err != nil {
@@ -224,7 +224,7 @@ func TestLoadSavePreservesTrailingNewlines(t *testing.T) {
 func TestShowTrailingNewlineDoesNotAffectSave(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "save.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: false, InsertFinalNewline: true}
 	if err := b.LoadFile(fname); err != nil {
@@ -375,7 +375,7 @@ func TestDiskChangedNewBuffer(t *testing.T) {
 func TestLoadDetectsLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "lf.txt")
-	os.WriteFile(fname, []byte("line1\nline2\nline3\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("line1\nline2\nline3\n"), 0644))
 	b := &Buffer{}
 	if err := b.LoadFile(fname); err != nil {
 		t.Fatal(err)
@@ -388,7 +388,7 @@ func TestLoadDetectsLF(t *testing.T) {
 func TestLoadDetectsCRLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "crlf.txt")
-	os.WriteFile(fname, []byte("line1\r\nline2\r\nline3\r\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("line1\r\nline2\r\nline3\r\n"), 0644))
 	b := &Buffer{}
 	if err := b.LoadFile(fname); err != nil {
 		t.Fatal(err)
@@ -401,11 +401,11 @@ func TestLoadDetectsCRLF(t *testing.T) {
 func TestSavePreservesLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "lf.txt")
-	os.WriteFile(fname, []byte("a\nb"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("a\nb"), 0644))
 	b := &Buffer{}
-	b.LoadFile(fname)
+	requireNoError(t, b.LoadFile(fname))
 	b.Lines[0] = "edited"
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "edited\nb" {
 		t.Errorf("expected LF preserved, got %q", string(data))
@@ -415,11 +415,11 @@ func TestSavePreservesLF(t *testing.T) {
 func TestSavePreservesCRLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "crlf.txt")
-	os.WriteFile(fname, []byte("a\r\nb"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("a\r\nb"), 0644))
 	b := &Buffer{}
-	b.LoadFile(fname)
+	requireNoError(t, b.LoadFile(fname))
 	b.Lines[0] = "edited"
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "edited\r\nb" {
 		t.Errorf("expected CRLF preserved, got %q", string(data))
@@ -430,7 +430,7 @@ func TestNewBufferDefaultsToLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "new.txt")
 	b := &Buffer{Lines: []string{"hello", "world"}}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello\nworld" {
 		t.Errorf("expected LF default, got %q", string(data))
@@ -444,7 +444,7 @@ func TestSaveTrimsTrailingWhitespace(t *testing.T) {
 		Lines:                  []string{"hello   ", "world\t\t", "clean"},
 		TrimTrailingWhitespace: true,
 	}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello\nworld\nclean" {
 		t.Errorf("expected trimmed output, got %q", string(data))
@@ -457,7 +457,7 @@ func TestSaveWithoutTrimPreservesWhitespace(t *testing.T) {
 	b := &Buffer{
 		Lines: []string{"hello   ", "world\t\t"},
 	}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello   \nworld\t\t" {
 		t.Errorf("expected whitespace preserved, got %q", string(data))

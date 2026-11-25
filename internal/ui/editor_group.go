@@ -122,6 +122,7 @@ type EditorGroupWidget struct {
 	InsertSpaces      bool
 	LineNumbers       bool
 	IndentGuides      bool
+	FullLineSelection bool
 	GutterStyle       string
 	WordWrap          bool
 	PreviewTabs       bool
@@ -200,6 +201,7 @@ type EditorGroupWidget struct {
 	OnGutterClick     func(path string, line int) bool
 	LinkWorkDir       func() string
 	ControlModifiers  *tcell.ModMask
+	NativeLinks       bool
 	OnOpenURL         func(string)
 	OnOpenFileLink    func(string, int, int)
 	OnLinkHover       func(*EditorPaneWidget)
@@ -646,7 +648,7 @@ func sniffFileKind(path string) (fileKind, []byte) {
 	if err != nil {
 		return fileKindText, nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	var head [512]byte
 	n, _ := f.Read(head[:])
 	sample := head[:n]
@@ -883,6 +885,9 @@ func (g *EditorGroupWidget) ApplyDiffDefaults(surface DiffModeSurface) {
 	if guides, ok := surface.(indentGuideSurface); ok {
 		guides.SetIndentGuides(g.IndentGuides)
 	}
+	if sel, ok := surface.(fullLineSelectionSurface); ok {
+		sel.SetFullLineSelection(g.FullLineSelection)
+	}
 	if d, ok := surface.(diffSignsSurface); ok {
 		d.SetDiffSigns(g.DiffSigns)
 		d.SetDiffSignsColor(g.DiffSignsColor)
@@ -911,6 +916,22 @@ func (g *EditorGroupWidget) SetIndentGuides(enabled bool) {
 
 type indentGuideSurface interface {
 	SetIndentGuides(bool)
+}
+
+func (g *EditorGroupWidget) SetFullLineSelection(enabled bool) {
+	g.FullLineSelection = enabled
+	if g.Editor != nil {
+		g.Editor.FullLineSelection = enabled
+	}
+	for _, surface := range g.diffSurfaces() {
+		if sel, ok := surface.(fullLineSelectionSurface); ok {
+			sel.SetFullLineSelection(enabled)
+		}
+	}
+}
+
+type fullLineSelectionSurface interface {
+	SetFullLineSelection(bool)
 }
 
 func (g *EditorGroupWidget) SetFileIconMode(mode string) {
@@ -2225,17 +2246,17 @@ func (g *EditorGroupWidget) IsActiveReadOnly() bool {
 	return false
 }
 
-func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
+func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) error {
 	for i := range g.tabs {
 		if g.tabs[i].FilePath == path && g.tabs[i].ReadOnly {
 			g.SwitchTab(i)
-			return
+			return nil
 		}
 	}
 	newBuf := &buffer.Buffer{Lines: []string{""}}
 	if err := newBuf.LoadFile(path); err != nil {
 		g.reportError(i18n.Format("editorGroup.failedToOpen", i18n.Args{"path": path, "error": err}))
-		return
+		return err
 	}
 	tabSize := g.TabSize
 	detected := buffer.DetectIndent(newBuf.Lines)
@@ -2265,6 +2286,7 @@ func (g *EditorGroupWidget) OpenFileReadOnly(path, title string) {
 	g.rebuildHighlighter(&newTab)
 	g.tabs = append(g.tabs, newTab)
 	g.SwitchTab(len(g.tabs) - 1)
+	return nil
 }
 
 func (g *EditorGroupWidget) OpenBufferReadOnly(title, filePath string, lines []string) {

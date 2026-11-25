@@ -15,8 +15,8 @@ func TestUndoToClearsDirty(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "dirty.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('X')
@@ -39,8 +39,8 @@ func TestUndoToSavePoint(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "savepoint.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('A')
@@ -158,8 +158,8 @@ func TestPluginSetLineIdenticalTextIsUndoNoop(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "noop.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('X')
@@ -183,8 +183,8 @@ func TestPluginSetLineDifferentTextPushesUndo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "change.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -205,8 +205,8 @@ func TestPluginReplaceInvalidRangeIsNoop(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "invalid.txt")
-	os.WriteFile(f, []byte("alpha\nbeta\ngamma\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("alpha\nbeta\ngamma\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -232,8 +232,8 @@ func TestPluginEditPastLineEndUndoes(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "pastend.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -263,8 +263,8 @@ func TestDeleteLineOnEmptyBufferStaysClean(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "empty.txt")
-	os.WriteFile(f, []byte(""), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(""), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.deleteLine")

@@ -133,7 +133,7 @@ func (a *App) pluginInstall() {
 			if p != nil {
 				p.InstalledFromURL = true
 			}
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
 				plugin: p,
 				err:    err,
 			}))
@@ -438,7 +438,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.syncPluginPanel(&a.Sidebar.TabbedPanel, id, sidebarTitle, sidebar)
 	a.syncPluginPanel(&a.BottomPanel.TabbedPanel, id, bottomTitle, bottom)
 	p.RequestRedraw = func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ShowPanel = func(area string, focus bool) (bool, error) {
 		return a.ShowPluginPanel(p.Name, area, focus)
@@ -477,7 +477,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		if a.Running != nil {
 			*a.Running = false
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.OpenFile = func(path string, line int, readonly bool) {
 		absPath := path
@@ -487,9 +487,13 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			}
 		}
 		if readonly {
-			a.EditorGroup.OpenFileReadOnly(absPath, "")
+			if err := a.EditorGroup.OpenFileReadOnly(absPath, ""); err != nil {
+				return
+			}
 		} else {
-			a.EditorGroup.OpenFile(absPath)
+			if err := a.EditorGroup.OpenFile(absPath); err != nil {
+				return
+			}
 		}
 		if line > 0 {
 			a.EditorGroup.GoToLine(line)
@@ -572,7 +576,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		return result
 	}
 	p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(result))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(result))
 	})
 	pluginSource := "plugin:" + p.Name
 	p.PublishDiagnostics = func(path string, items []plugin.DiagnosticItem) {
@@ -592,7 +596,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		for _, group := range a.editorGroups() {
 			group.SetDiagnosticsSource(pluginSource, path, diags)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDiagnostics = func(path string) {
 		if path == "" {
@@ -604,7 +608,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				group.SetDiagnosticsSource(pluginSource, path, nil)
 			}
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetDecorations = func(path string, items []plugin.DecorationItem) {
 		decos := make([]ui.Decoration, len(items))
@@ -624,7 +628,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		for _, group := range a.editorGroups() {
 			group.SetDecorations(pluginSource, path, decos)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDecorations = func(path string) {
 		if path == "" {
@@ -636,11 +640,11 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				group.SetDecorations(pluginSource, path, nil)
 			}
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetBookmark = func(line int, icon rune, style term.Style) {
 		a.EditorGroup.Editor.SetBookmark(line, icon, style)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.GetBookmark = func(line int) (rune, term.Style, bool) {
 		b, ok := a.EditorGroup.Editor.GetBookmark(line)
@@ -648,7 +652,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.RemoveBookmark = func(line int) {
 		a.EditorGroup.Editor.RemoveBookmark(line)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetAllBookmarks = func(items []plugin.BookmarkItem) {
 		m := make(map[int]ui.Bookmark, len(items))
@@ -656,7 +660,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			m[it.Line] = ui.Bookmark{Icon: it.Icon, Style: it.Style}
 		}
 		a.EditorGroup.Editor.SetAllBookmarks(m)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.GetAllBookmarks = func() []plugin.BookmarkItem {
 		all := a.EditorGroup.Editor.GetAllBookmarks()
@@ -669,7 +673,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.ClearBookmarks = func() {
 		a.EditorGroup.Editor.ClearBookmarks()
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.RenderMarkdown = func(text string) []plugin.MarkdownLine {
 		rendered := markdown.Render(text)
@@ -811,7 +815,7 @@ func (a *App) wirePluginLog(p *plugin.Plugin) {
 			Level:      level,
 			Message:    message,
 		})
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 }
 
@@ -980,7 +984,7 @@ type RemoteRegistryResult struct {
 func (a *App) PluginInstallFromURL(repoURL, repoPath, name string) {
 	go func() {
 		p, err := a.PluginManager.Install(repoURL, repoPath)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
 			plugin: p,
 			name:   name,
 			err:    err,
@@ -1033,7 +1037,7 @@ func (a *App) PluginUpdateByName(name string) {
 	update := a.PluginManager.PrepareUpdate(name)
 	go func() {
 		err := update.Fetch()
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&PluginUpdateResult{update: update, err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PluginUpdateResult{update: update, err: err}))
 	}()
 }
 
@@ -1167,7 +1171,7 @@ func (a *App) PluginRefreshRegistry() {
 	}
 	go func() {
 		entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&RemoteRegistryResult{Entries: entries, Err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RemoteRegistryResult{Entries: entries, Err: err}))
 	}()
 }
 
@@ -1364,7 +1368,7 @@ type pluginInput struct {
 // postPluginInput sends events as one interrupt: PostEvent falls back to a
 // goroutine when the queue is full, which would reorder separate posts.
 func (a *App) postPluginInput(allowed func() bool, events ...tcell.Event) {
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events, Allowed: allowed}))
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events, Allowed: allowed}))
 }
 
 func (a *App) simulatePluginKeys(combo string, allowed func() bool) error {

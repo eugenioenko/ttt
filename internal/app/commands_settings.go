@@ -48,8 +48,11 @@ func (a *App) saveSettings(s config.Settings) error {
 
 func (a *App) OpenSettingsFile() {
 	path := a.settingsFilePath()
-	config.EnsureConfigFile(path, "{}\n")
-	a.EditorGroup.OpenFile(path)
+	if err := config.EnsureConfigFile(path, "{}\n"); err != nil {
+		a.StatusError(err.Error())
+		return
+	}
+	_ = a.EditorGroup.OpenFile(path)
 }
 
 func (a *App) ReloadSettings() {
@@ -164,6 +167,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.syncApps()
 	}
 	for _, tab := range a.allTerminals() {
+		tab.Widget.NativeLinks = s.Links.Native
 		tab.Widget.CtrlVPastes = s.Terminal.CtrlVPastes
 		tab.Widget.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 		if tab.Tab != nil {
@@ -276,6 +280,7 @@ func registerSettingsCommands(app *App) {
 }
 
 func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settings) {
+	group.NativeLinks = s.Links.Native
 	group.TabBar.SetStyle(s.Editor.TabBarStyle)
 	group.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
 	group.TabSize = s.Editor.TabSize
@@ -283,6 +288,7 @@ func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settin
 	group.InsertSpaces = s.Editor.InsertSpaces
 	group.LineNumbers = s.Editor.LineNumbers
 	group.SetIndentGuides(s.Editor.IndentGuides)
+	group.SetFullLineSelection(s.Editor.FullLineSelection)
 	group.GutterStyle = s.Editor.GutterStyle
 	group.InsertFinalNewline = s.Editor.InsertFinalNewline
 	group.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
@@ -310,6 +316,7 @@ func applyEditorGroupSettings(group *ui.EditorGroupWidget, s, prev config.Settin
 	group.SetImageProtocol(s.Image.Protocol)
 
 	if group.Editor != nil {
+		group.Editor.NativeLinks = s.Links.Native
 		group.Editor.TabSize = s.Editor.TabSize
 		group.Editor.LineNumbers = s.Editor.LineNumbers
 		group.Editor.IndentGuides = s.Editor.IndentGuides

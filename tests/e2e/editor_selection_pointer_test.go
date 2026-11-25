@@ -45,7 +45,7 @@ func TestEditorSelectionKeepsTextPointerThroughDrag(t *testing.T) {
 	if err := os.WriteFile(path, []byte("hello world\nsecond line\nthird line\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.EditorGroup.CommitActiveTab()
 	h.app.ShowBottomPanel()
 	h.redraw()

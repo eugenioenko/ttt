@@ -7,6 +7,7 @@ import (
 	lua "github.com/yuin/gopher-lua"
 )
 
+// CallLuaFunc records and logs callback failures before returning them.
 func (p *Plugin) CallLuaFunc(fn *lua.LFunction, args ...lua.LValue) error {
 	if p.State == nil || fn == nil {
 		return nil

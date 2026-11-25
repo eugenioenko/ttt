@@ -233,6 +233,113 @@ func TestScrollViewContentRendersWithScroll(t *testing.T) {
 	}
 }
 
+// keyEatingChild consumes key events when eat is set, to prove the scroll view
+// only scrolls on keys the child ignored.
+type keyEatingChild struct {
+	*scrollTestChild
+	eat bool
+}
+
+func (c *keyEatingChild) HandleEvent(ev tcell.Event) EventResult {
+	if c.eat {
+		return EventConsumed
+	}
+	return c.scrollTestChild.HandleEvent(ev)
+}
+
+func TestScrollViewKeyScroll(t *testing.T) {
+	key := func(k tcell.Key) *tcell.EventKey {
+		return tcell.NewEventKey(k, "", tcell.ModNone)
+	}
+
+	// 20x10 viewport over 15x30 content: view height 10, max scroll 20.
+	setup := func() *ScrollViewWidget {
+		sv := NewScrollViewWidget(newScrollTestChild(15, 30))
+		sv.KeyScroll = true
+		renderWidget(sv, 0, 0, 20, 10)
+		return sv
+	}
+
+	t.Run("disabled by default", func(t *testing.T) {
+		sv := NewScrollViewWidget(newScrollTestChild(15, 30))
+		renderWidget(sv, 0, 0, 20, 10)
+		for _, k := range []tcell.Key{tcell.KeyUp, tcell.KeyDown, tcell.KeyPgUp, tcell.KeyPgDn, tcell.KeyHome, tcell.KeyEnd} {
+			if got := sv.HandleEvent(key(k)); got != EventIgnored || sv.scrollY != 0 {
+				t.Fatalf("disabled scroll view handled %v: result=%v scrollY=%d", k, got, sv.scrollY)
+			}
+		}
+	})
+
+	t.Run("up and down one row", func(t *testing.T) {
+		sv := setup()
+		if got := sv.HandleEvent(key(tcell.KeyDown)); got != EventConsumed || sv.scrollY != 1 {
+			t.Fatalf("down: result=%v scrollY=%d, want consumed/1", got, sv.scrollY)
+		}
+		sv.HandleEvent(key(tcell.KeyDown))
+		if got := sv.HandleEvent(key(tcell.KeyUp)); got != EventConsumed || sv.scrollY != 1 {
+			t.Fatalf("up: result=%v scrollY=%d, want consumed/1", got, sv.scrollY)
+		}
+		sv.HandleEvent(key(tcell.KeyUp))
+		if got := sv.HandleEvent(key(tcell.KeyUp)); got != EventConsumed || sv.scrollY != 0 {
+			t.Fatalf("up clamped at top: result=%v scrollY=%d, want consumed/0", got, sv.scrollY)
+		}
+	})
+
+	t.Run("page keys scroll a viewport", func(t *testing.T) {
+		sv := setup()
+		if got := sv.HandleEvent(key(tcell.KeyPgDn)); got != EventConsumed || sv.scrollY != 10 {
+			t.Fatalf("pgdn: result=%v scrollY=%d, want consumed/10", got, sv.scrollY)
+		}
+		if got := sv.HandleEvent(key(tcell.KeyPgUp)); got != EventConsumed || sv.scrollY != 0 {
+			t.Fatalf("pgup: result=%v scrollY=%d, want consumed/0", got, sv.scrollY)
+		}
+	})
+
+	t.Run("home and end jump to the edges", func(t *testing.T) {
+		sv := setup()
+		if got := sv.HandleEvent(key(tcell.KeyEnd)); got != EventConsumed || sv.scrollY != 20 {
+			t.Fatalf("end: result=%v scrollY=%d, want consumed/20", got, sv.scrollY)
+		}
+		if got := sv.HandleEvent(key(tcell.KeyHome)); got != EventConsumed || sv.scrollY != 0 {
+			t.Fatalf("home: result=%v scrollY=%d, want consumed/0", got, sv.scrollY)
+		}
+	})
+
+	t.Run("clamps at both ends", func(t *testing.T) {
+		sv := setup()
+		sv.HandleEvent(key(tcell.KeyPgDn))
+		sv.HandleEvent(key(tcell.KeyPgDn))
+		sv.HandleEvent(key(tcell.KeyPgDn))
+		if sv.scrollY != 20 {
+			t.Fatalf("pgdn x3: scrollY=%d, want clamped 20", sv.scrollY)
+		}
+		sv.HandleEvent(key(tcell.KeyPgUp))
+		sv.HandleEvent(key(tcell.KeyPgUp))
+		sv.HandleEvent(key(tcell.KeyPgUp))
+		if sv.scrollY != 0 {
+			t.Fatalf("pgup x3: scrollY=%d, want clamped 0", sv.scrollY)
+		}
+	})
+
+	t.Run("child-consumed keys never scroll", func(t *testing.T) {
+		sv := NewScrollViewWidget(&keyEatingChild{scrollTestChild: newScrollTestChild(15, 30), eat: true})
+		sv.KeyScroll = true
+		renderWidget(sv, 0, 0, 20, 10)
+		for _, k := range []tcell.Key{tcell.KeyDown, tcell.KeyPgDn, tcell.KeyEnd} {
+			if got := sv.HandleEvent(key(k)); got != EventConsumed || sv.scrollY != 0 {
+				t.Fatalf("child consumed %v but view scrolled: result=%v scrollY=%d", k, got, sv.scrollY)
+			}
+		}
+	})
+
+	t.Run("other keys still ignored", func(t *testing.T) {
+		sv := setup()
+		if got := sv.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "j", tcell.ModNone)); got != EventIgnored || sv.scrollY != 0 {
+			t.Fatalf("rune key: result=%v scrollY=%d, want ignored/0", got, sv.scrollY)
+		}
+	})
+}
+
 func TestScrollViewFocusable(t *testing.T) {
 	child := newScrollTestChild(10, 10)
 	sv := NewScrollViewWidget(child)

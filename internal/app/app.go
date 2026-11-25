@@ -135,6 +135,7 @@ type App struct {
 	Updates                UpdateService
 	UpdateMethod           *update.Method
 	updateDialog           *updateDialogState
+	updateStartupTask      *asynctask.Task[update.Release]
 	menuReturnFocus        ui.Widget
 	Watcher                *watcher.Watcher
 	largeFiles             largeFileState
@@ -196,8 +197,8 @@ type App struct {
 	resolveFileLink       func(string, string) string
 	searchReplace         searchReplaceState
 
-	// lspSent holds, per document, a channel closed once its latest didOpen or
-	// didChange was sent. Guarded by DocVersionsMu.
+	// lspSent holds, per document, a channel closed once its latest queued
+	// notification send attempt finishes. Guarded by DocVersionsMu.
 	lspSent map[string]<-chan struct{}
 	// lspEpochs counts restarts per server. Written on the UI goroutine under
 	// DocVersionsMu, so other goroutines must hold the lock to read it.
@@ -450,12 +451,13 @@ func (a *App) ToggleBottomPanel() {
 
 // SpawnTerminal opens a terminal tab running the configured shell.
 func (a *App) SpawnTerminal() {
-	a.SpawnTerminalSpec(TerminalSpec{})
+	_, _ = a.SpawnTerminalSpec(TerminalSpec{})
 }
 
 // SpawnTerminalSpec opens a terminal tab for a specific program. A caller that
 // names a Shell supplies its own Args (empty = run the program bare); an empty
-// Shell inherits both from the global terminal settings.
+// Shell inherits both from the global terminal settings. Startup errors are
+// reported in the status bar before being returned.
 func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw := ui.NewTerminalWidget(nil, a.Palette)
 	paddingX := a.Settings.Terminal.PaddingX
@@ -506,8 +508,9 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	tw.Term = t
 	tw.WorkDir = spec.Cwd
 	tw.CtrlVPastes = a.Settings.Terminal.CtrlVPastes
-	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
+	tw.NativeLinks = a.Settings.Links.Native
 	tw.OnOpenURL = OpenURL
+	tw.SuperShortcuts = a.Root.ControlModifiers&tcell.ModMeta != 0
 	tw.OnOpenFile = a.openFileLink
 
 	panelID := fmt.Sprintf("terminal-%d", a.TerminalSeq)
@@ -527,14 +530,14 @@ func (a *App) SpawnTerminalSpec(spec TerminalSpec) (string, error) {
 	}
 
 	t.OnUpdate = func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	t.OnExit = func() {
 		if spec.KeepOpen {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 			return
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(panelID))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(panelID))
 	}
 	t.Run()
 	return panelID, nil
@@ -580,7 +583,7 @@ func (a *App) TerminalTail(id string, maxBytes int) (string, error) {
 // FocusTerminal reveals the terminal's tab and focuses it.
 func (a *App) FocusTerminal(id string) error {
 	if a.focusEditorTerminal(id) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 		return nil
 	}
 	idx := -1
@@ -599,7 +602,7 @@ func (a *App) FocusTerminal(id string) error {
 	a.TerminalPanel.SetActive(idx)
 	a.BottomPanel.SetActivePanel("terminal")
 	a.Root.SetFocus(a.TerminalPanel)
-	a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	return nil
 }
 
@@ -775,12 +778,12 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		})
 	}
 	a.EditorGroup.SetImageRedraw(func() {
-		screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 	})
 	a.RefreshImageCellSize()
 	a.wireEditorAutoScroll(a.EditorGroup)
 	highlight.SetStepScheduler(func() {
-		screen.PostEvent(tcell.NewEventInterrupt(&highlightStep{}))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(&highlightStep{}))
 	})
 	a.StartWatcher()
 
@@ -824,16 +827,8 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.NotifyLSPOpen(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		}
 	}
-	a.Problems.OnNavigate = func(file string, line, col int) {
-		a.EditorGroup.OpenFile(file)
-		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
-	}
-	a.References.OnNavigate = func(file string, line, col int) {
-		a.EditorGroup.OpenFile(file)
-		a.EditorGroup.GoToLine(line + 1)
-		a.Root.SetFocus(a.EditorGroup)
-	}
+	a.Problems.OnNavigate = a.navigateToLocation
+	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
@@ -886,18 +881,18 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	// A server can die at any time; waking the loop redraws the status bar so
 	// the indicator does not keep claiming the server is up.
 	lspManager.OnStateChange = func() {
-		screen.PostEvent(tcell.NewEventInterrupt(&LSPStateChanged{}))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(&LSPStateChanged{}))
 	}
 
 	lspManager.OnDiagnosticRefresh = func(server string) {
-		screen.PostEvent(tcell.NewEventInterrupt(&LSPDiagnosticRefresh{Server: server}))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(&LSPDiagnosticRefresh{Server: server}))
 	}
 
 	lspManager.OnDiagnostics = func(server string, params lsp.PublishDiagnosticsParams) {
 		path := URIToPath(params.URI)
 		diags := params.Diagnostics
 		slog.Debug("lsp diagnostics", "path", path, "count", len(diags))
-		screen.PostEvent(tcell.NewEventInterrupt(&DiagnosticsResult{
+		_ = screen.PostEvent(tcell.NewEventInterrupt(&DiagnosticsResult{
 			Server:      server,
 			Path:        path,
 			Diagnostics: diags,
@@ -909,7 +904,7 @@ func (a *App) statusMessage(msg string, level view.NotifyLevel) {
 	a.Status.SetNotification(msg, level, 5*time.Second)
 	a.LogOutput(outputLevelForNotify(level), "notice", msg)
 	time.AfterFunc(5*time.Second, func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	})
 }
 
@@ -919,9 +914,18 @@ func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) 
 
 func OpenURL(rawURL string) {
 	cmd := openURLCommand(rawURL, runtime.GOOS)
-	if cmd != nil {
-		cmd.Start()
+	if cmd == nil {
+		return
 	}
+	if err := cmd.Start(); err != nil {
+		slog.Error("open URL", "url", rawURL, "error", err)
+		return
+	}
+	go func() {
+		if err := cmd.Wait(); err != nil {
+			slog.Error("open URL", "url", rawURL, "error", err)
+		}
+	}()
 }
 
 func openURLCommand(rawURL, platform string) *exec.Cmd {

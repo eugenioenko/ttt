@@ -21,7 +21,7 @@ func editorTerminalTitle(spec TerminalSpec) string {
 }
 
 func (a *App) SpawnEditorTerminal() {
-	a.SpawnTerminalSpec(TerminalSpec{InEditor: true})
+	_, _ = a.SpawnTerminalSpec(TerminalSpec{InEditor: true})
 }
 
 func (a *App) SendNextTerminalKey() {

@@ -115,8 +115,9 @@ func newDecoratedGroup(t *testing.T, files map[string]string) (*EditorGroupWidge
 	return NewEditorGroupWidget(nil, 4, false, "extended"), dir
 }
 
-func openCommitted(g *EditorGroupWidget, path string) {
-	g.OpenFile(path)
+func openCommitted(t *testing.T, g *EditorGroupWidget, path string) {
+	t.Helper()
+	requireNoError(t, g.OpenFile(path))
 	g.CommitActiveTab()
 }
 
@@ -128,11 +129,11 @@ func TestDecorationsFollowTheirFileAcrossTabs(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n", "b.txt": "x\n"})
 	a, b := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
 	g.SetDecorations("p", b, []Decoration{tint(0, term.StyleDiffAdded)})
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	if g.Editor.DiffOverlay != nil {
 		t.Fatal("decorations of b.txt shown on a.txt")
 	}
-	openCommitted(g, b)
+	openCommitted(t, g, b)
 	if got := g.Editor.DiffOverlay; got == nil || got.LineBg[0] != term.StyleDiffAdded {
 		t.Fatal("decorations set before b.txt opened were not applied")
 	}
@@ -152,7 +153,7 @@ func TestDecorationsFollowTheirFileAcrossTabs(t *testing.T) {
 func TestDecorationSourcesMerge(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\nthree\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("plugin:b", a, []Decoration{tint(0, term.StyleDiffDeleted), tint(1, term.StyleDiffDeleted)})
 	g.SetDecorations("plugin:a", a, []Decoration{tint(1, term.StyleDiffAdded), tint(2, term.StyleDiffAdded)})
 	want := map[int]term.Style{0: term.StyleDiffDeleted, 1: term.StyleDiffDeleted, 2: term.StyleDiffAdded}
@@ -169,7 +170,7 @@ func TestDecorationSourcesMerge(t *testing.T) {
 func TestDecorationSourcesKeepMovingWithEdits(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("first", a, []Decoration{tint(1, term.StyleDiffAdded)})
 	// More edits than the buffer's change log holds, each seen by the pane.
 	for range 100 {
@@ -187,8 +188,8 @@ func TestDecorationSourcesKeepMovingWithEdits(t *testing.T) {
 func TestDecorationsOnInactiveTabFollowItsEdits(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n", "b.txt": "x\n"})
 	a, b := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
-	openCommitted(g, a)
-	openCommitted(g, b)
+	openCommitted(t, g, a)
+	openCommitted(t, g, b)
 	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded)})
 	g.tabs[g.tabIndexByPath(a)].Buf.InsertLine(0, "zero")
 	g.SwitchToTabByPath(a)
@@ -201,7 +202,7 @@ func TestDecorationsOnInactiveTabFollowItsEdits(t *testing.T) {
 func TestDecorationTintGoesWithADeletedLine(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "l0\nl1\nl2\nl3\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded), tint(2, term.StyleDiffDeleted)})
 	g.Editor.Buf.DeleteLine(1)
 	renderGrid(g.Editor)
@@ -213,7 +214,7 @@ func TestDecorationTintGoesWithADeletedLine(t *testing.T) {
 func TestDecorationsOnLinesAReloadRemovesAreDropped(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "0\n1\n2\n3\n4\n5\n6\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded), tint(4, term.StyleDiffAdded), tint(5, term.StyleDiffDeleted)})
 	if err := os.WriteFile(a, []byte("0\n1\n"), 0o644); err != nil {
 		t.Fatal(err)
@@ -228,7 +229,7 @@ func TestDecorationsOnLinesAReloadRemovesAreDropped(t *testing.T) {
 func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("p", a, []Decoration{
 		tint(1, term.StyleDiffAdded),
 		{StartLine: 1, EndLine: 1, GhostText: "expired"},
@@ -254,7 +255,7 @@ func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 func TestDecorationsFollowSaveAs(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n"})
 	a, b := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.SetDecorations("plugin:x", a, []Decoration{tint(1, term.StyleDiffAdded)})
 	if !g.SaveAs(b) {
 		t.Fatal("SaveAs failed")
@@ -268,21 +269,21 @@ func TestDecorationsFollowSaveAs(t *testing.T) {
 func TestDecorationsAreDroppedWhenATabClosesWithUnsavedEdits(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n", "b.txt": "x\n"})
 	a, b := filepath.Join(dir, "a.txt"), filepath.Join(dir, "b.txt")
-	openCommitted(g, b)
-	openCommitted(g, a)
+	openCommitted(t, g, b)
+	openCommitted(t, g, a)
 	g.SetDecorations("p", a, []Decoration{tint(0, term.StyleDiffAdded)})
 	g.Editor.Buf.InsertLine(0, "new")
 	g.Editor.Buf.Dirty = true
 	renderGrid(g.Editor)
 	g.CloseTab()
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	if g.Editor.DiffOverlay != nil {
 		t.Fatalf("tints = %v after reopening, want none", g.Editor.DiffOverlay.LineBg)
 	}
 
 	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded)})
 	g.CloseTab()
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	if got := g.Editor.DiffOverlay; got == nil || !reflect.DeepEqual(got.LineBg, map[int]term.Style{1: term.StyleDiffAdded}) {
 		t.Fatal("decorations of a tab closed without edits did not come back")
 	}
@@ -399,7 +400,7 @@ func TestAnnotationHideYieldsToSelectionAndSearch(t *testing.T) {
 func TestGhostTextMovesWithItsLineAndExpiresOnEdit(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "above\na\n"})
 	path := filepath.Join(dir, "x.txt")
-	openCommitted(g, path)
+	openCommitted(t, g, path)
 	e := g.Editor
 	e.SetRect(Rect{W: 24, H: 6})
 	e.Viewport.Width, e.Viewport.Height = 24, 6
@@ -425,7 +426,7 @@ func TestGhostTextMovesWithItsLineAndExpiresOnEdit(t *testing.T) {
 
 func TestGhostTextClipsWideRuneAtPaneEdge(t *testing.T) {
 	e := newRowsEditor([]string{"a"}, 2, 1)
-	cells := e.renderLineSegmentToScreen("a", nil, false, "", 0, 4, 0, 2, ghostText{col: 1, text: "界"})
+	cells, _ := e.renderLineSegmentToScreen("a", nil, "", 0, 4, 0, 2, ghostText{col: 1, text: "界"})
 	if cells[1].ch != ' ' {
 		t.Fatalf("clipped preview cell = %q", cells[1].ch)
 	}
@@ -434,7 +435,7 @@ func TestGhostTextClipsWideRuneAtPaneEdge(t *testing.T) {
 func TestGhostTextAtRuneColumn(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "界ab"})
 	path := filepath.Join(dir, "x.txt")
-	openCommitted(g, path)
+	openCommitted(t, g, path)
 	e := g.Editor
 	e.SetRect(Rect{W: 24, H: 6})
 	e.Viewport.Width, e.Viewport.Height = 24, 6
@@ -465,7 +466,7 @@ func TestGhostTextAtRuneColumn(t *testing.T) {
 func TestGhostTextPreservesIndentGuides(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "        a\n\n        b"})
 	path := filepath.Join(dir, "x.txt")
-	openCommitted(g, path)
+	openCommitted(t, g, path)
 	e := g.Editor
 	e.SetRect(Rect{W: 24, H: 6})
 	e.Viewport.Width, e.Viewport.Height = 24, 6

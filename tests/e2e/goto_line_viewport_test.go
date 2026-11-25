@@ -16,8 +16,8 @@ func TestGoToLineViewportPosition(t *testing.T) {
 		lines = append(lines, "line "+string(rune('0'+i/100))+string(rune('0'+(i/10)%10))+string(rune('0'+i%10)))
 	}
 	f := filepath.Join(h.dir, "big.txt")
-	os.WriteFile(f, []byte(strings.Join(lines, "\n")+"\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(strings.Join(lines, "\n")+"\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.GoToLine(50)
@@ -47,8 +47,8 @@ func TestGoToLineCol(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "cols.txt")
-	os.WriteFile(f, []byte("short\nabcdefghij\nx\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("short\nabcdefghij\nx\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Column within the line: 1-based col 4 lands on 0-based col 3.

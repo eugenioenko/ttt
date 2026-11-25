@@ -63,7 +63,7 @@ func TestQuitSaveAllVisibility(t *testing.T) {
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = tc.enabled
 			h.app.Settings.Editor.SaveAllOnQuitExceptUnnamed = tc.exception
-			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+			h.openFile(filepath.Join(h.dir, "alpha.txt"))
 			h.typeText("edited")
 			if tc.unnamed {
 				h.exec("file.new")
@@ -90,7 +90,7 @@ func TestQuitSaveAllNamedBuffers(t *testing.T) {
 	h.app.Settings.Editor.SaveAllOnQuit = true
 	h.app.EditorGroup.TrimTrailingWhitespace = true
 	for _, name := range []string{"alpha.txt", "beta.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.pressKey(tcell.KeyEnd, tcell.ModNone)
 		h.typeText("edited   ")
 	}
@@ -114,7 +114,7 @@ func TestQuitSaveAllUnnamedBuffers(t *testing.T) {
 	h.exec("file.new")
 	firstName := h.app.EditorGroup.ActiveFileName()
 	h.typeText("first scratch")
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.typeText("named edit")
 	h.exec("file.new")
 	secondName := h.app.EditorGroup.ActiveFileName()
@@ -156,7 +156,7 @@ func TestQuitSaveAllCancellation(t *testing.T) {
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = true
 			named := filepath.Join(h.dir, "alpha.txt")
-			h.app.EditorGroup.OpenFile(named)
+			h.openFile(named)
 			h.typeText("named edit")
 			h.exec("file.new")
 			h.typeText("scratch")
@@ -195,7 +195,7 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = true
 			path := filepath.Join(h.dir, "alpha.txt")
-			h.app.EditorGroup.OpenFile(path)
+			h.openFile(path)
 			h.typeText("edited")
 			switch guard {
 			case "disk change":
@@ -305,7 +305,7 @@ func TestQuitWithOpenOverlay(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHarness(t, 100, 28)
 			defer h.stop()
-			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+			h.openFile(filepath.Join(h.dir, "alpha.txt"))
 			if tc.dirty {
 				h.typeText("edited")
 			}

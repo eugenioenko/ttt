@@ -48,8 +48,8 @@ func (s Service) replace(ctx context.Context, release Release, path, name string
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrNotWritable, err)
 	}
-	defer os.Remove(tmp.Name())
-	defer tmp.Close()
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	defer func() { _ = tmp.Close() }()
 	checksumURL, err := release.assetURL("checksums.txt")
 	if err != nil {
 		return err
@@ -59,7 +59,7 @@ func (s Service) replace(ctx context.Context, release Release, path, name string
 		return err
 	}
 	checksums, err := ParseChecksums(io.LimitReader(body, 1<<20))
-	body.Close()
+	_ = body.Close()
 	if err != nil {
 		return err
 	}
@@ -77,7 +77,7 @@ func (s Service) replace(ctx context.Context, release Release, path, name string
 	}
 	hash := sha256.New()
 	_, err = io.Copy(io.MultiWriter(tmp, hash), body)
-	body.Close()
+	_ = body.Close()
 	if err != nil {
 		return err
 	}

@@ -222,7 +222,9 @@ func (a *App) changesNavFile(dir int) {
 		}
 		target = paths[n]
 	}
-	a.EditorGroup.OpenFile(target)
+	if err := a.EditorGroup.OpenFile(target); err != nil {
+		return
+	}
 	a.FocusEditorIfEnabled()
 }
 

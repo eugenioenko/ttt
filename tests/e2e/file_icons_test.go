@@ -19,7 +19,7 @@ func TestFileIconsShowWhenEnabledInExplorerAndChanges(t *testing.T) {
 	h.exec("options.toggleFontIcons")
 
 	txt := fileicons.ForFile("alpha.txt").Glyph
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	tabRow := h.screenRow(2)
 	if !strings.Contains(tabRow, txt) || !strings.Contains(tabRow, "alpha.txt") {

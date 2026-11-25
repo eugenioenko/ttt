@@ -16,7 +16,7 @@ import (
 func TestRPCDisconnectBeforeContextCancellationDeliversCallback(t *testing.T) {
 	h := newRPCHarness(t, rpcPerms)
 	local, peer := net.Pipe()
-	defer peer.Close()
+	defer func() { _ = peer.Close() }()
 	if err := peer.SetDeadline(time.Now().Add(5 * time.Second)); err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +42,7 @@ func TestRPCDisconnectBeforeContextCancellationDeliversCallback(t *testing.T) {
 	if _, err := jsonrpc.NewCodec(peer, peer).Receive(); err != nil {
 		t.Fatal(err)
 	}
-	peer.Close()
+	requireNoError(t, peer.Close())
 	select {
 	case event := <-h.posted:
 		if c.ctx.Err() != nil {

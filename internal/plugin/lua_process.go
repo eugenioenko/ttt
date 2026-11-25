@@ -323,7 +323,7 @@ func (p *Plugin) unregisterProc(pp *pluginProc) {
 // killProcsLocked terminates every spawned process; caller must hold p.mu.
 func (p *Plugin) killProcsLocked() {
 	for pp := range p.procs {
-		pp.proc.Kill()
+		_ = pp.proc.Kill()
 	}
 	p.procs = nil
 }

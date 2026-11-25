@@ -377,7 +377,7 @@ func (p *Plugin) HasSidebarMenu() bool {
 
 func (p *Plugin) CallSidebarAction(cmd string) {
 	if p.sidebarMenuFunc != nil && p.State != nil {
-		p.CallLuaFunc(p.sidebarMenuFunc, lua.LString(cmd))
+		_ = p.CallLuaFunc(p.sidebarMenuFunc, lua.LString(cmd))
 	}
 }
 

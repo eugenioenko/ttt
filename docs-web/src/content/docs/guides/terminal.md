@@ -34,7 +34,13 @@ Custom plugin commands remain global. A plugin binding to a built-in editor comm
 
 With [`keyboard.modifierKey`](/reference/settings/#keyboard) set to `"control+super"` or `"super"`, Super+V also pastes and Super+C copies selected terminal text. Super is Command (⌘) on macOS. Super+C without a selection does nothing; Ctrl+C still copies selected text or sends an interrupt when nothing is selected. Super+V pastes even when `terminal.ctrlVPastes` is `false`, so Ctrl+V can remain available to terminal programs.
 
-Ctrl+click opens URLs and file links in terminal output. When Super shortcuts are enabled, Super+click also opens links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
+Ctrl+click opens plain file paths in terminal output in TTT, including line and column references. When Super shortcuts are enabled, Super+click also opens these links, shows the link cursor and underline, and permits local text selection when the terminal program captures the mouse. The outer terminal must report the modifier. These settings apply live to both panel terminals and editor terminal tabs; other shell key and mouse encodings keep their original modifiers.
+
+TTT detects plain HTTP(S) URLs, including URLs wrapped across terminal rows, and explicit OSC 8 hyperlinks with labels such as **Click here**. By default (`"links": { "native": false }`), TTT underlines links on Ctrl-hover and opens them on Ctrl+click (also Super+click when enabled). Web links open the browser on the machine running TTT; explicit local file links open in TTT. Explicit OSC 8 targets take precedence over URL-looking labels, and underline formatting from terminal programs is preserved.
+
+Set `"links": { "native": true }` in `settings.json`, or enable **General → Links → Open web links in outer terminal**, to forward hyperlink metadata to the outer terminal. This shared setting applies to editor links and terminal links immediately. The outer terminal controls hover appearance and the opening gesture: for example, Ghostty uses Ctrl+Shift+click while TTT captures the mouse, and foot uses its keyboard-driven URL mode. In native mode, TTT does not launch a browser for terminal links or treat explicit hyperlink labels as editor file paths.
+
+A supporting outer terminal opens OSC 8 web links on your local machine, including when TTT runs remotely over SSH. File-link behavior and support through multiplexers depend on the outer terminal and multiplexer. TTT's Ctrl+click handling for plain file paths runs on the machine hosting TTT in either mode.
 
 ## Shortcut forwarding
 
@@ -84,9 +90,9 @@ Terminal settings in `settings.json`:
 | `terminal.shell` | string | `""` | Shell command (empty uses system default) |
 | `terminal.padding_x` | int | `1` | Blank columns on each side of the terminal; `0` removes both margins |
 | `terminal.ctrlVPastes` | bool | `true` | Paste with Ctrl+V; set to `false` to pass `^V` through to the terminal program |
-| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes to the terminal. Available under General → Keyboard; applies immediately |
+| `terminal.forwardShortcuts` | bool | `false` | Forward reserved TTT shortcuts and chord prefixes to the terminal. Available under General → Keyboard and **Options > Terminal > Forward Shortcuts**; applies immediately |
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
-| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"` |
+| `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` or `"invert"`. Also under **Options > Terminal > Selection Style** |
 | `terminal.shellIntegration` | bool | `true` | Start bash with ttt's prompt marks so resizing redraws the prompt cleanly |
 
 Set `terminal.ctrlVPastes` to `false` for shell quoted insert or Vim visual-block mode. Ctrl+Shift+V still pastes when the outer terminal reports it distinctly. Some terminals handle Ctrl+Shift+V themselves and send a bracketed paste, which also works. Terminals that encode both shortcuts as `^V` cannot distinguish them. The setting applies immediately to open terminal tabs and is available under **Settings → Terminal → Ctrl+V pastes**.

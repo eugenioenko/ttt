@@ -1,6 +1,8 @@
 package app
 
 import (
+	"fmt"
+
 	"github.com/eugenioenko/ttt/internal/i18n"
 
 	"github.com/gdamore/tcell/v3"
@@ -43,7 +45,7 @@ func (a *App) RestartLSPServer() {
 	a.StatusNotify(i18n.Format("status.restarting", i18n.Args{"serverKey": serverKey}))
 	go func() {
 		a.LspManager.Stop(serverKey)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
 	}()
 }
 
@@ -85,11 +87,15 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		client, err := a.LspManager.ClientForLanguage(ev.Server, ev.WorkDir)
 		if err == nil {
 			for _, d := range docs {
-				client.DidOpen(d.uri, d.langID, d.text)
+				if openErr := client.DidOpen(d.uri, d.langID, d.text); openErr != nil {
+					err = fmt.Errorf("didOpen %s: %w", d.uri, openErr)
+					a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
+					break
+				}
 			}
 		}
 		close(sent)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
 	}()
 }
 

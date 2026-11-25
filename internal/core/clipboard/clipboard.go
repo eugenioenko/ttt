@@ -47,11 +47,12 @@ func Get() string {
 	return content
 }
 
+// Set has already retained a process-local copy; external backends are best-effort.
 func writeSystemClipboard(s string) {
 	// Only emit OSC 52 when a writer is configured — avoids leaking escape sequences
 	if oscWriter != nil {
 		encoded := base64.StdEncoding.EncodeToString([]byte(s))
-		fmt.Fprintf(oscWriter, "\033]52;c;%s\a", encoded)
+		_, _ = fmt.Fprintf(oscWriter, "\033]52;c;%s\a", encoded)
 	}
 
 	if name, args := findCopyCmd(); name != "" {
@@ -60,7 +61,7 @@ func writeSystemClipboard(s string) {
 		c := exec.CommandContext(ctx, name, args...)
 		c.WaitDelay = 100 * time.Millisecond
 		c.Stdin = strings.NewReader(s)
-		c.Run()
+		_ = c.Run()
 	}
 }
 

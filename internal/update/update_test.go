@@ -249,7 +249,9 @@ func TestLatest(t *testing.T) {
 					t.Error("missing user agent")
 				}
 				w.WriteHeader(tc.status)
-				fmt.Fprint(w, tc.body)
+				if _, err := fmt.Fprint(w, tc.body); err != nil {
+					t.Error(err)
+				}
 			}))
 			defer server.Close()
 			service := Service{URL: server.URL}
@@ -287,9 +289,13 @@ func TestBinaryReplacement(t *testing.T) {
 					if scenario == "checksum" {
 						hash = strings.Repeat("0", 64)
 					}
-					fmt.Fprintf(w, "%s  asset\n", hash)
+					if _, err := fmt.Fprintf(w, "%s  asset\n", hash); err != nil {
+						t.Error(err)
+					}
 				} else {
-					fmt.Fprint(w, data)
+					if _, err := fmt.Fprint(w, data); err != nil {
+						t.Error(err)
+					}
 				}
 			}))
 			defer server.Close()
@@ -298,7 +304,7 @@ func TestBinaryReplacement(t *testing.T) {
 				if err := os.Chmod(dir, 0o555); err != nil {
 					t.Fatal(err)
 				}
-				defer os.Chmod(dir, 0o755)
+				defer func() { _ = os.Chmod(dir, 0o755) }()
 			}
 			if scenario == "backup" {
 				if err := os.WriteFile(path+".old", []byte("backup"), 0o600); err != nil {
@@ -355,8 +361,12 @@ func TestBinaryReplacement(t *testing.T) {
 
 func TestCommandOutputIsBounded(t *testing.T) {
 	w := &tailWriter{}
-	w.Write([]byte(strings.Repeat("a", 9000)))
-	w.Write([]byte("\nlast line"))
+	if _, err := w.Write([]byte(strings.Repeat("a", 9000))); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("\nlast line")); err != nil {
+		t.Fatal(err)
+	}
 	if len(w.data) != 8192 || !strings.HasSuffix(string(w.data), "last line") {
 		t.Fatalf("tail: %d bytes, suffix %q", len(w.data), w.data[len(w.data)-10:])
 	}

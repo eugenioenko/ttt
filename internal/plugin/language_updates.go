@@ -22,7 +22,7 @@ func ReadLanguageData(path string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return readLanguageData(file)
 }
 
@@ -118,7 +118,7 @@ func fetchLanguageData(ctx context.Context, client *http.Client, url string) ([]
 	if err != nil {
 		return nil, err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	if response.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("language download returned status %d", response.StatusCode)
 	}

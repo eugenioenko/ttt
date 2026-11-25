@@ -19,10 +19,10 @@ func TestOpenChangesEditsInlineDiff(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	path := filepath.Join(h.dir, "code.txt")
-	os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
-	os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
@@ -155,9 +155,9 @@ func TestSplitInlineDiffScrollsInStep(t *testing.T) {
 			cur = append(cur, line)
 		}
 	}
-	os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "long.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
@@ -188,9 +188,9 @@ func TestSplitInlineDiffWrapsInStepAndCopiesFromHead(t *testing.T) {
 	h := newTestHarness(t, 100, 20)
 	defer h.stop()
 	path := filepath.Join(h.dir, "wrap.txt")
-	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(path, []byte("alpha\nbeta "+strings.Repeat("wrapped ", 12)+"\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\nbeta "+strings.Repeat("wrapped ", 12)+"\ngamma\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "wrap.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
@@ -231,11 +231,11 @@ func TestInlineDiffSuspendsFoldsAndRestoresThem(t *testing.T) {
 	defer h.stop()
 	path := filepath.Join(h.dir, "fold.txt")
 	content := "top\nblock:\n    inner one\n    inner two\nend\n"
-	os.WriteFile(path, []byte(content), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(content), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(path, []byte(strings.Replace(content, "top", "TOP", 1)), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(strings.Replace(content, "top", "TOP", 1)), 0644))
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.EditorGroup.GoToLine(2)
 	h.exec("fold.toggle")
 	h.redraw()
@@ -267,9 +267,9 @@ func TestInlineDiffGapRowExpands(t *testing.T) {
 	}
 	cur := append([]string(nil), old...)
 	cur[19] = "row 20 edited"
-	os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(strings.Join(old, "\n")+"\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(strings.Join(cur, "\n")+"\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "gaps.txt", Status: "M"}), false)
 	h.redraw()
@@ -295,9 +295,9 @@ func TestOpenChangesFocusFollowsFocusOnOpen(t *testing.T) {
 	for _, focusOnOpen := range []bool{false, true} {
 		h := newTestHarness(t, 100, 30)
 		path := filepath.Join(h.dir, "focus.txt")
-		os.WriteFile(path, []byte("one\ntwo\n"), 0644)
+		requireNoError(t, os.WriteFile(path, []byte("one\ntwo\n"), 0644))
 		initializeHarnessRepository(t, h.dir)
-		os.WriteFile(path, []byte("one\nTWO\n"), 0644)
+		requireNoError(t, os.WriteFile(path, []byte("one\nTWO\n"), 0644))
 		h.app.Settings.Editor.FocusOnOpen = focusOnOpen
 		h.app.FocusSidebar()
 		before := h.app.Root.Focused
@@ -328,10 +328,10 @@ func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	path := filepath.Join(h.dir, "code.txt")
-	os.WriteFile(path, []byte("foo\nbar\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("foo\nbar\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
-	os.WriteFile(path, []byte("foo\nbar\nbaz\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("foo\nbar\nbaz\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
@@ -357,9 +357,9 @@ func TestInlineDiffFindSurvivesRecompute(t *testing.T) {
 func openSplitDiffWithHeadFocused(t *testing.T, h *testHarness, beforeHead func()) {
 	t.Helper()
 	path := filepath.Join(h.dir, "keys.txt")
-	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\nBETA\ngamma\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "keys.txt", Status: "M"}), false)
 	h.exec("diff.splitView")
@@ -459,10 +459,10 @@ func TestInlineDiffWrapDownSkipsDeletedRows(t *testing.T) {
 	h := newTestHarness(t, 100, 20)
 	defer h.stop()
 	path := filepath.Join(h.dir, "wrapmove.txt")
-	os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\nbeta\ngamma\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
 	long := "beta " + strings.Repeat("wrapped ", 20)
-	os.WriteFile(path, []byte("alpha\n"+long+"\ngamma\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("alpha\n"+long+"\ngamma\n"), 0644))
 
 	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "wrapmove.txt", Status: "M"}), false)
 	h.exec("diff.unifiedView")

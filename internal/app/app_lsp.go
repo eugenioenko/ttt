@@ -3,6 +3,7 @@ package app
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"os/exec"
 	"path/filepath"
@@ -397,7 +398,7 @@ func (a *App) RequestFormatting(path, lang string) {
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
 				Path: path, Version: version, Buffer: buf, Edits: edits,
 			}))
 		}
@@ -432,7 +433,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 			return
 		}
 		if len(edits) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&FormattingResult{
 				Path: path, Version: version, Buffer: buf, Edits: edits,
 			}))
 		}
@@ -521,7 +522,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 			return
 		}
 		if edit := pickCodeActionEdit(actions); edit != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: edit}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionResult{Path: path, Edit: edit}))
 		}
 	}()
 }
@@ -588,7 +589,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 			return
 		}
 		if edit != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&RenameResult{Edit: edit}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RenameResult{Edit: edit}))
 		}
 	}()
 }
@@ -630,7 +631,7 @@ func (a *App) applyWorkspaceEditBatches(batches []lsp.FileEdits, saveOnRename bo
 		}
 	}
 
-	a.EditorGroup.OpenFile(currentPath)
+	_ = a.EditorGroup.OpenFile(currentPath)
 	return len(files), allApplied
 }
 
@@ -699,19 +700,19 @@ func (a *App) RequestInteractiveCodeActions() {
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
 		actions, err := client.CodeActionWithDiagnostics(FileURI(path), r, nil, diagnostics)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 				Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers, Err: err,
 			}))
 			return
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionsResult{
 			Path: path, Server: serverKey, Version: version, Buffer: buf, OpenBuffers: openBuffers,
 			Actions: applicableCodeActions(actions),
 		}))
@@ -858,7 +859,7 @@ func (a *App) executeCodeActionCommand(server, path string, command lsp.Command,
 		if err == nil {
 			err = client.ExecuteCommand(command.Command, command.Arguments)
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionCommandResult{Err: err, Notify: notify}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&CodeActionCommandResult{Err: err, Notify: notify}))
 	}()
 }
 
@@ -884,9 +885,9 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 			return
 		}
 		if len(locs) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{Locations: locs}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{Locations: locs}))
 		} else {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ReferencesResult{}))
 		}
 	}()
 }
@@ -1164,7 +1165,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 			return
 		}
 		if len(locs) > 0 {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: locs}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: locs}))
 		}
 	}()
 }
@@ -1205,7 +1206,7 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 					a.persistSettings()
 				}
 				time.AfterFunc(10*time.Second, func() {
-					a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+					_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 				})
 			}
 			return
@@ -1226,11 +1227,13 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 		if err != nil {
 			return
 		}
-		client.DidOpen(FileURI(path), langID, text)
+		if err := client.DidOpen(FileURI(path), langID, text); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didOpen %s: %v", path, err))
+		}
 	}()
 }
 
-// The returned channel closes once the didChange notification has been sent,
+// The returned channel closes once the didChange send attempt finishes,
 // so callers that must not race ahead of it (e.g. a signature-help request
 // for the same keystroke) can wait on it.
 func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{} {
@@ -1268,7 +1271,9 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 		if err != nil {
 			return
 		}
-		client.DidChange(FileURI(path), text, version)
+		if err := client.DidChange(FileURI(path), text, version); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didChange %s: %v", path, err))
+		}
 	}()
 	return done
 }
@@ -1294,7 +1299,9 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 		if err != nil {
 			return
 		}
-		client.DidSave(FileURI(path), text)
+		if err := client.DidSave(FileURI(path), text); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didSave %s: %v", path, err))
+		}
 	}()
 }
 
@@ -1315,6 +1322,8 @@ func (a *App) NotifyLSPClose(path, lang string) {
 		if err != nil {
 			return
 		}
-		client.DidClose(FileURI(path))
+		if err := client.DidClose(FileURI(path)); err != nil {
+			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didClose %s: %v", path, err))
+		}
 	}()
 }

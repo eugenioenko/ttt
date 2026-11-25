@@ -15,7 +15,7 @@ func TestExplorerRevealActiveFileSelectsNestedFileAndKeepsEditorFocus(t *testing
 
 	h.exec("sidebar.search")
 	nested := filepath.Join(h.dir, "subdir", "nested.txt")
-	h.app.EditorGroup.OpenFile(nested)
+	h.openFile(nested)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 
 	h.exec("explorer.revealActiveFile")
@@ -50,7 +50,7 @@ func TestExplorerRevealActiveFileScrollsRowIntoView(t *testing.T) {
 		t.Fatal(err)
 	}
 	h.exec("explorer.refresh")
-	h.app.EditorGroup.OpenFile(target)
+	h.openFile(target)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 
 	h.exec("explorer.revealActiveFile")

@@ -98,8 +98,8 @@ func TestPluginFileHandlerTabIDClosesAndFocuses(t *testing.T) {
 		t.Fatal(err)
 	}
 	text := filepath.Join(h.dir, "alpha.txt")
-	eg.OpenFile(pdf)
-	eg.OpenFile(text)
+	requireNoError(t, eg.OpenFile(pdf))
+	requireNoError(t, eg.OpenFile(text))
 	h.redraw()
 	if got := p.State.GetGlobal("tab_id"); got != lua.LString(pdf) {
 		t.Fatalf("tab.id = %v, want %q", got, pdf)

@@ -12,7 +12,7 @@ func TestLSPRestartWithoutServerWarns(t *testing.T) {
 	h.exec("lsp.restartServer")
 	h.assertContains("No language server for the active file")
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	h.exec("lsp.restartServer")
 	h.assertContains("No language server for the active file")

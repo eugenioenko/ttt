@@ -101,15 +101,15 @@ func TestDetectLinks_URLs(t *testing.T) {
 func TestDetectLinks_FileReferences(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "main.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	subDir := filepath.Join(tmpDir, "internal")
-	os.MkdirAll(subDir, 0755)
+	requireNoError(t, os.MkdirAll(subDir, 0755))
 	subFile := filepath.Join(subDir, "util.go")
-	os.WriteFile(subFile, []byte("package internal\n"), 0644)
+	requireNoError(t, os.WriteFile(subFile, []byte("package internal\n"), 0644))
 
 	makeFile := filepath.Join(tmpDir, "Makefile")
-	os.WriteFile(makeFile, []byte("all:\n"), 0644)
+	requireNoError(t, os.WriteFile(makeFile, []byte("all:\n"), 0644))
 
 	tests := []struct {
 		name     string
@@ -236,7 +236,7 @@ func TestDetectLinks_URLSpanPositions(t *testing.T) {
 func TestDetectLinks_MixedURLAndFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	input := "See https://example.com and ./test.go:10"
 	spans := detectLinks(input, tmpDir)
@@ -285,7 +285,7 @@ func TestResolveFilePath_Empty(t *testing.T) {
 func TestLinksForLine_Memoizes(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "main.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	tw := &TerminalWidget{WorkDir: tmpDir}
 	line := "err at ./main.go:3"
@@ -300,7 +300,7 @@ func TestLinksForLine_Memoizes(t *testing.T) {
 
 	// Deleting the file must not affect the memoized result: detection is
 	// served from the memo, no re-stat.
-	os.Remove(testFile)
+	requireNoError(t, os.Remove(testFile))
 	second := tw.linksForLine(line)
 	if len(second) != 1 || second[0].FilePath != testFile {
 		t.Fatalf("expected memoized link, got %+v", second)

@@ -397,7 +397,7 @@ func TestEditorSplitCloseLastSharedView(t *testing.T) {
 	defer h.stop()
 	left := h.app.EditorGroup
 	alpha, beta := filepath.Join(h.dir, "alpha.txt"), filepath.Join(h.dir, "beta.txt")
-	left.OpenFile(alpha)
+	requireNoError(t, left.OpenFile(alpha))
 	h.exec("editor.split")
 	if err := h.app.EditorGroup.OpenFile(alpha); err != nil {
 		t.Fatal(err)
@@ -433,7 +433,7 @@ func TestEditorSplitReloadSettingsAndSharedUndo(t *testing.T) {
 	defer h.stop()
 	path := filepath.Join(h.dir, "alpha.txt")
 	left := h.app.EditorGroup
-	left.OpenFile(path)
+	requireNoError(t, left.OpenFile(path))
 	h.exec("editor.split")
 	if err := h.app.EditorGroup.OpenFile(path); err != nil {
 		t.Fatal(err)

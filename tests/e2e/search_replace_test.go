@@ -30,7 +30,7 @@ func TestSearchReplaceKeepsUnsavedEdits(t *testing.T) {
 	if err := os.WriteFile(path, []byte("alpha\nfoo\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
 	h.pressRune('Z')
@@ -81,7 +81,7 @@ func TestSearchReplaceAllSkipsUnsavedAndChangedFiles(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	h.app.EditorGroup.OpenFile(edited)
+	h.openFile(edited)
 	h.app.Root.SetFocus(h.app.EditorGroup)
 	h.redraw()
 	h.pressRune('Z')

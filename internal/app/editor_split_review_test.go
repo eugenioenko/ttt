@@ -36,7 +36,9 @@ func TestCodeActionSnapshotUsesSelectedBufferAcrossGroups(t *testing.T) {
 	working := a.EditorGroup
 	workingBuffer := working.ActiveBuffer()
 	a.SplitEditor()
-	a.EditorGroup.OpenFileReadOnly(path, "Snapshot")
+	if err := a.EditorGroup.OpenFileReadOnly(path, "Snapshot"); err != nil {
+		t.Fatal(err)
+	}
 	if a.EditorGroup.ActiveBuffer() == workingBuffer {
 		t.Fatal("read-only peer must have a separate snapshot buffer")
 	}
@@ -53,7 +55,9 @@ func TestOpenWorkingFileDoesNotShareReadOnlyPeer(t *testing.T) {
 			if memory {
 				a.EditorGroup.OpenBufferReadOnly("Snapshot", path, []string{"historical"})
 			} else {
-				a.EditorGroup.OpenFileReadOnly(path, "Snapshot")
+				if err := a.EditorGroup.OpenFileReadOnly(path, "Snapshot"); err != nil {
+					t.Fatal(err)
+				}
 			}
 			readOnly := a.EditorGroup.ActiveBuffer()
 			a.SplitEditor()

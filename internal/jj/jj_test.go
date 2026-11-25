@@ -160,7 +160,7 @@ func TestDiscoverReportsUnreadableAncestors(t *testing.T) {
 	if err := os.Chmod(locked, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(locked, 0o755) })
+	t.Cleanup(func() { _ = os.Chmod(locked, 0o755) })
 	if _, err := (Provider{}).Discover(context.Background(), inner); err == nil || errors.Is(err, scm.ErrNotRepository) {
 		t.Fatalf("unreadable ancestor err = %v, want a filesystem error", err)
 	}

@@ -21,7 +21,7 @@ func TestSelectNextOccurrenceUsesCurrentSelection(t *testing.T) {
 			if err := os.WriteFile(path, []byte("unique\n"+matches), 0644); err != nil {
 				t.Fatal(err)
 			}
-			h.app.EditorGroup.OpenFile(path)
+			h.openFile(path)
 			h.app.FocusEditor()
 			h.redraw()
 			h.pressCtrl(tcell.KeyCtrlD)
@@ -38,7 +38,7 @@ func TestSelectNextOccurrenceUsesCurrentSelection(t *testing.T) {
 				if err := os.WriteFile(other, []byte(matches), 0644); err != nil {
 					t.Fatal(err)
 				}
-				h.app.EditorGroup.OpenFile(other)
+				h.openFile(other)
 				h.redraw()
 				firstLine = 0
 			case "keyboard":
@@ -93,7 +93,7 @@ func TestSelectNextOccurrenceScrollsToNewSelection(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.redraw()
 
@@ -183,7 +183,7 @@ func TestSelectNextOccurrenceScrollsWhenWrapping(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.app.EditorGroup.GoToLine(46) // 1-based line 46 = 0-based line 45
 	h.redraw()
@@ -227,7 +227,7 @@ func TestSelectNextOccurrenceScrollsToNewSelection_WordWrap(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.FocusEditor()
 	h.exec("options.toggleWordWrap")
 	h.redraw()

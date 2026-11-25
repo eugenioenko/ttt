@@ -34,6 +34,7 @@ func TestEditorFileLinksRenderAndInputWhileResolving(t *testing.T) {
 		return filepath.Join(dir, path)
 	}
 	e := a.EditorGroup.Editor
+	e.NativeLinks = false
 	e.Buf = &buffer.Buffer{Lines: []string{"target.go:12:3 https://example.com"}}
 	e.LinkWorkDir = t.TempDir()
 	e.ResolveFileLinks = a.EditorGroup.ResolveFileLinks

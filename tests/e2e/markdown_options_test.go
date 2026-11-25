@@ -63,7 +63,7 @@ func TestMarkdownOptionsApplyAndRestoreInheritance(t *testing.T) {
 	if err := os.WriteFile(path, []byte("Markdown text"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	if !h.app.EditorGroup.Editor.WordWrap || h.app.Settings.Editor.WordWrap {
 		t.Fatal("Markdown should wrap by default independently of global wrapping")
 	}
@@ -96,7 +96,7 @@ func TestMarkdownOptionsApplyAndRestoreInheritance(t *testing.T) {
 	if enabled, column := loaded.Editor.ResolveWordWrap("markdown"); !enabled || column != 65 {
 		t.Fatalf("saved Markdown wrapping = %v/%d", enabled, column)
 	}
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	if h.app.EditorGroup.Editor.WordWrap {
 		t.Fatal("Markdown override changed wrapping in another language")
 	}

@@ -28,7 +28,7 @@ func missingGoServerApp(t *testing.T) (*App, string) {
 	if err := os.WriteFile(path, []byte("package a\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	return a, path
 }
 

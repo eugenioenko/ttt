@@ -135,7 +135,7 @@ func TestIsChord(t *testing.T) {
 		{Key: "ctrl+k ctrl+c", Command: "test.chord"},
 		{Key: "ctrl+b", Command: "test.single"},
 	}
-	ParseKeyBindings(kb)
+	requireNoError(t, ParseKeyBindings(kb))
 
 	if !kb[0].IsChord() {
 		t.Fatal("ctrl+k ctrl+c should be a chord")

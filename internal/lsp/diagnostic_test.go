@@ -128,25 +128,24 @@ func TestDiagnosticReports(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, server, _ := initializeWith(t, `{"diagnosticProvider":{"identifier":"typescript"}}`)
-			go func() {
+			serverDone := serveAsync(func() error {
 				req, err := server.Receive()
 				if err != nil {
-					return
+					return err
 				}
 				var p DocumentDiagnosticParams
 				if err := json.Unmarshal(req.Params, &p); err != nil || req.Method != "textDocument/diagnostic" ||
 					p.TextDocument.URI != "file:///a.ts" || p.Identifier != "typescript" {
-					server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: &jsonrpc.Error{Code: -32602, Message: "bad request: " + string(req.Params)}})
-					return
+					return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: &jsonrpc.Error{Code: -32602, Message: "bad request: " + string(req.Params)}})
 				}
 				if tt.rpcErr != nil {
-					server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: tt.rpcErr})
-					return
+					return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Error: tt.rpcErr})
 				}
-				server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(tt.result)})
-			}()
+				return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(tt.result)})
+			})
 
 			diags, ok, err := c.Diagnostic(context.Background(), "file:///a.ts")
+			requireNoError(t, <-serverDone)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("err = %v, wantErr %v", err, tt.wantErr)
 			}

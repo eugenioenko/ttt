@@ -102,7 +102,7 @@ func TestHoverQueuedReplyCannotReopenAfterInvalidation(t *testing.T) {
 			case "edit":
 				a.EditorGroup.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
 			case "file":
-				a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(a.EditorGroup.ActiveFilePath()), "other.txt"))
+				requireNoError(t, a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(a.EditorGroup.ActiveFilePath()), "other.txt")))
 			case "disable":
 				enabled := false
 				a.Settings.LSP.Hover = &enabled

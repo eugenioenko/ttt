@@ -204,7 +204,7 @@ func scanCommand(ctx context.Context, cmd *exec.Cmd) (map[string][]Match, error)
 	if readErr != nil {
 		// rg can still be blocked writing to the pipe, so stop it before
 		// waiting; otherwise cmd.Wait blocks forever.
-		cmd.Process.Kill()
+		_ = cmd.Process.Kill()
 	}
 	waitErr := cmd.Wait()
 	if err := ctx.Err(); err != nil {

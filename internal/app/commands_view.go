@@ -172,9 +172,7 @@ func (a *App) showKeybindings(commandID string) {
 			}
 		}
 		filtered = append(filtered, config.KeyBinding{Key: newKey, Command: cmdID})
-		a.Keybindings = filtered
-		config.SaveKeybindings(a.Keybindings)
-		a.RebindKeys()
+		a.saveKeybindings(filtered)
 	}
 	w.OnReset = func(cmdID string) {
 		var defaultKey string
@@ -197,9 +195,7 @@ func (a *App) showKeybindings(commandID string) {
 		if defaultKey != "" {
 			filtered = append(filtered, config.KeyBinding{Key: defaultKey, Command: cmdID})
 		}
-		a.Keybindings = filtered
-		config.SaveKeybindings(a.Keybindings)
-		a.RebindKeys()
+		a.saveKeybindings(filtered)
 	}
 	w.OnClear = func(cmdID string) {
 		filtered := make([]config.KeyBinding, 0, len(a.Keybindings))
@@ -208,9 +204,7 @@ func (a *App) showKeybindings(commandID string) {
 				filtered = append(filtered, kb)
 			}
 		}
-		a.Keybindings = filtered
-		config.SaveKeybindings(a.Keybindings)
-		a.RebindKeys()
+		a.saveKeybindings(filtered)
 	}
 	w.OnHelp = func() {
 		content := widgets.NewKeyValueListWidget([]widgets.KeyValueEntry{
@@ -246,6 +240,15 @@ func (a *App) showKeybindings(commandID string) {
 		a.DismissDialog()
 	}
 	a.ShowDialog(w)
+}
+
+func (a *App) saveKeybindings(bindings []config.KeyBinding) {
+	if err := config.SaveKeybindings(bindings); err != nil {
+		a.StatusError(i18n.Format("keybindings.saveFailed", i18n.Args{"error": err.Error()}))
+		return
+	}
+	a.Keybindings = bindings
+	a.RebindKeys()
 }
 
 func (a *App) OpenGlobalSearch() {

@@ -36,7 +36,7 @@ func newBaselineTestApp(t *testing.T, repo scm.Repository) (*App, *testSCMProvid
 	provider := &testSCMProvider{repo: repo}
 	a.Changes = NewChangesPanelWithProvider(provider, repo.Root())
 	a.Repository = NewRepositoryState(a.Changes, []string{repo.Root()})
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	a.SyncRepositoryBranch()
 	t.Cleanup(func() {
 		a.CloseTasks()

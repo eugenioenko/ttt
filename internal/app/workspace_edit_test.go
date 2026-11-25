@@ -54,7 +54,7 @@ func renameEdit(uri string, line, start, end int, newText string) string {
 
 func bufferText(t *testing.T, a *App, path string) string {
 	t.Helper()
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	buf := a.EditorGroup.ActiveBuffer()
 	if buf == nil {
 		t.Fatalf("no buffer for %s", path)
@@ -166,7 +166,7 @@ func TestRenameAppliesDocumentChanges(t *testing.T) {
 		"util.go": "package main\n\nfunc greet() {}\n",
 	})
 	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 
 	a.ApplyWorkspaceEdit(decodeWorkspaceEdit(t, `{"documentChanges":[`+
 		renameEdit(FileURI(mainPath), 2, 14, 19, "hello")+","+
@@ -188,7 +188,7 @@ func TestCodeActionAppliesDocumentChanges(t *testing.T) {
 		"main.go": "package main\n\nimport \"os\"\n\nfunc main() {}\n",
 	})
 	path := filepath.Join(dir, "main.go")
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 
 	a.applyCodeActionEdit(path, decodeWorkspaceEdit(t, `{"documentChanges":[{"textDocument":{"uri":`+
 		fmt.Sprintf("%q", FileURI(path))+`,"version":1},"edits":[
@@ -324,7 +324,7 @@ func TestCodeActionPickerAppliesWorkspaceEdits(t *testing.T) {
 		"util.go": "func old()\n",
 	})
 	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	buf := a.EditorGroup.ActiveBuffer()
 	edit := &lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
 		FileURI(mainPath): {utf16Edit(0, 0, 4, "run")},
@@ -372,7 +372,7 @@ func TestInteractiveCodeActionEditFailsWhenAnyBatchCannotApply(t *testing.T) {
 		"main.go": "call()\n",
 	})
 	mainPath := filepath.Join(dir, "main.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	edit := &lsp.WorkspaceEdit{DocumentChanges: []lsp.DocumentChange{
 		{
 			TextDocument: lsp.VersionedTextDocumentIdentifier{URI: FileURI(mainPath)},
@@ -398,11 +398,11 @@ func TestCodeActionRejectsEditWhenAffectedOpenBufferWasReplaced(t *testing.T) {
 		"util.go": "func old()\n",
 	})
 	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	a.EditorGroup.CommitActiveTab()
-	a.EditorGroup.OpenFile(utilPath)
+	requireNoError(t, a.EditorGroup.OpenFile(utilPath))
 	a.EditorGroup.CommitActiveTab()
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
 	utilBuffer := a.EditorGroup.BufferForPath(utilPath)
 	snapshots := a.snapshotCodeActionBuffers()
@@ -413,7 +413,7 @@ func TestCodeActionRejectsEditWhenAffectedOpenBufferWasReplaced(t *testing.T) {
 
 	a.EditorGroup.SwitchToTabByPath(utilPath)
 	a.EditorGroup.CloseTab()
-	a.EditorGroup.OpenFile(utilPath)
+	requireNoError(t, a.EditorGroup.OpenFile(utilPath))
 	replacement := a.EditorGroup.BufferForPath(utilPath)
 	if replacement == utilBuffer {
 		t.Fatal("reopened utility file retained the original buffer identity")
@@ -455,11 +455,11 @@ func TestCodeActionRejectsEditWhenAffectedOpenBufferChanged(t *testing.T) {
 		"util.go": "func old()\n",
 	})
 	mainPath, utilPath := filepath.Join(dir, "main.go"), filepath.Join(dir, "util.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	a.EditorGroup.CommitActiveTab()
-	a.EditorGroup.OpenFile(utilPath)
+	requireNoError(t, a.EditorGroup.OpenFile(utilPath))
 	a.EditorGroup.CommitActiveTab()
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	edit := &lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
 		FileURI(mainPath): {utf16Edit(0, 0, 4, "run")},
 		FileURI(utilPath): {utf16Edit(0, 5, 8, "new")},
@@ -484,7 +484,7 @@ func TestWorkspaceEditViewerBatchIsNotCountedAsApplied(t *testing.T) {
 	if err := os.WriteFile(viewerPath, []byte{0, 1, 2}, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 
 	filesCount, allApplied := a.applyWorkspaceEditBatches([]lsp.FileEdits{
 		{URI: FileURI(mainPath), Edits: []lsp.TextEdit{utf16Edit(0, 0, 4, "run")}},
@@ -512,7 +512,7 @@ func TestWorkspaceEditCannotApplyToPluginSnapshot(t *testing.T) {
 	})
 	mainPath := filepath.Join(dir, "main.go")
 	pluginPath := filepath.Join(dir, "plugin.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	a.EditorGroup.OpenPluginTab(pluginPath, "Plugin snapshot", ui.NewCommitDetailWidget(dir, "ref", "abcdef0", false))
 	activePath := a.EditorGroup.ActiveFilePath()
 
@@ -555,7 +555,7 @@ func TestWorkspaceEditWithFileOperationChangesNothing(t *testing.T) {
 	const content = "package main\n\nfunc greet() {}\n"
 	a, dir := workspaceEditTestApp(t, map[string]string{"util.go": content})
 	path := filepath.Join(dir, "util.go")
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	edit := decodeWorkspaceEdit(t, `{"documentChanges":[`+renameEdit(FileURI(path), 2, 5, 10, "hello")+
 		`,{"kind":"rename","oldUri":`+fmt.Sprintf("%q", FileURI(path))+`,"newUri":"file:///elsewhere.go"}]}`)
 
@@ -573,7 +573,7 @@ func TestWorkspaceEditWithFileOperationChangesNothing(t *testing.T) {
 func TestSuccessiveDocumentChangesApplyInOrder(t *testing.T) {
 	a, dir := workspaceEditTestApp(t, map[string]string{"main.go": "foo bar\n"})
 	path := filepath.Join(dir, "main.go")
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	uri := FileURI(path)
 
 	// The second edit's range is in the text the first one leaves: "Xfoo bar".
@@ -629,7 +629,7 @@ func TestCodeActionsResultRunsCommandWithEmptyEdit(t *testing.T) {
 	}
 
 	mainPath := filepath.Join(dir, "main.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
 	snapshots := a.snapshotCodeActionBuffers()
 
@@ -708,7 +708,7 @@ func TestCodeActionsResultPreventsCommandOnUnsupportedEdit(t *testing.T) {
 	}
 
 	mainPath := filepath.Join(dir, "main.go")
-	a.EditorGroup.OpenFile(mainPath)
+	requireNoError(t, a.EditorGroup.OpenFile(mainPath))
 	mainBuffer := a.EditorGroup.BufferForPath(mainPath)
 	snapshots := a.snapshotCodeActionBuffers()
 

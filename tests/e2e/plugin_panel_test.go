@@ -17,15 +17,15 @@ func TestPluginPanelSidebarEvents(t *testing.T) {
 
 	// Create a plugin directory with a manifest and Lua file
 	pluginDir := filepath.Join(h.dir, "test-plugin")
-	os.MkdirAll(pluginDir, 0755)
-	os.WriteFile(filepath.Join(pluginDir, "plugin.ttt.json"), []byte(`{
+	requireNoError(t, os.MkdirAll(pluginDir, 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(pluginDir, "plugin.ttt.json"), []byte(`{
 		"name": "test-panel",
 		"description": "test",
 		"version": "0.1.0",
 		"entry": "init.lua",
 		"permissions": { "panel.sidebar": true }
-	}`), 0644)
-	os.WriteFile(filepath.Join(pluginDir, "init.lua"), []byte(`
+	}`), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(pluginDir, "init.lua"), []byte(`
 		local ttt = require("ttt")
 		ttt.register({
 			sidebar = {
@@ -43,7 +43,7 @@ func TestPluginPanelSidebarEvents(t *testing.T) {
 				end,
 			},
 		})
-	`), 0644)
+	`), 0644))
 
 	manifest, err := plugin.LoadManifest(pluginDir)
 	if err != nil {

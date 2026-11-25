@@ -37,12 +37,12 @@ func ReadLanguageSource(configDir, commit string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	file, err := root.Open(LanguageSourcePath(commit))
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	return readLanguageData(file)
 }
 
@@ -73,7 +73,7 @@ func loadLanguageSource(ctx context.Context, client *http.Client, configDir, com
 	if err != nil {
 		return nil, err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	for _, dir := range []string{"languages", filepath.Join("languages", "sources")} {
 		if err := root.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
 			return nil, err
@@ -87,7 +87,7 @@ func loadLanguageSource(ctx context.Context, client *http.Client, configDir, com
 		}
 	}
 	stage := filepath.Join("languages", "sources", ".tmp-"+rand.Text())
-	defer root.Remove(stage)
+	defer func() { _ = root.Remove(stage) }()
 	if err := root.WriteFile(stage, data, 0644); err != nil {
 		return nil, err
 	}
