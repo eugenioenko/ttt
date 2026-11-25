@@ -32,7 +32,7 @@ it("[go] saves, inspects, steps and reuses a gutter breakpoint with Delve", () =
     tui.exec("Toggle Font Icons");
     const nerd = tui.snapshot();
     tui.exec("Toggle Font Icons");
-    tui.click(9, 21);
+    tui.click(9, 25);
     tui.waitFor("caller = 41");
     const caller = tui.snapshot();
     tui.click(2, 4);

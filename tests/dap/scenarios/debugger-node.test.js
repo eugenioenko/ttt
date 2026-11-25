@@ -41,7 +41,7 @@ it("[ts] steps through original TypeScript source in a js-debug child session", 
     tui.waitFor("app.ts:4");
     const stepped = tui.snapshot();
     tui.waitFor("this = undefined");
-    tui.click(9, 21);
+    tui.click(9, 25);
     tui.waitFor("Ln 6, Col 1");
     const caller = tui.snapshot();
     tui.click(29, 30);
