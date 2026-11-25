@@ -61,8 +61,9 @@ func TestManagerCachesStartupFailureUntilRestart(t *testing.T) {
 			starts.Add(1)
 		}
 	}
+	dir := t.TempDir()
 	for range 3 {
-		if _, err := m.ClientForLanguage("plaintext", t.TempDir()); err == nil {
+		if _, err := m.ClientForLanguage("plaintext", dir); err == nil {
 			t.Fatal("missing server unexpectedly started")
 		}
 	}
@@ -70,7 +71,7 @@ func TestManagerCachesStartupFailureUntilRestart(t *testing.T) {
 		t.Errorf("failed startup attempted %d times, want once", got)
 	}
 	m.Stop("plaintext")
-	if _, err := m.ClientForLanguage("plaintext", t.TempDir()); err == nil {
+	if _, err := m.ClientForLanguage("plaintext", dir); err == nil {
 		t.Fatal("failing server unexpectedly started")
 	}
 	if got := starts.Load(); got != 2 {
@@ -153,14 +154,50 @@ func TestManagerOldExitCannotRemoveRestartedClient(t *testing.T) {
 	if _, err := m.ClientForLanguage("fake", dir); err != nil {
 		t.Fatal(err)
 	}
-	old := m.servers["fake"]
+	old := m.servers[clientKey("fake", dir)]
 	m.Stop("fake")
 	current, err := m.ClientForLanguage("fake", dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.forget("fake", old)
+	m.forget(clientKey("fake", dir), old)
 	if m.ReadyClient("fake") != current || m.State("fake") != ServerReady {
 		t.Fatal("old exit removed the new client")
+	}
+}
+
+// A file in another project must get its own process, rooted at that project,
+// rather than reusing the first root's server.
+func TestManagerStartsClientPerRoot(t *testing.T) {
+	m := fakeServerManager(t, "ok")
+	t.Cleanup(m.Shutdown)
+	firstDir, secondDir := t.TempDir(), t.TempDir()
+
+	first, err := m.ClientForLanguage("fake", firstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	second, err := m.ClientForLanguage("fake", secondDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if first == second {
+		t.Fatal("second root reused the first root's client")
+	}
+	if got := m.ReadyClient("fake", firstDir); got != first {
+		t.Error("first root did not return its own client")
+	}
+	if got := m.ReadyClient("fake", secondDir); got != second {
+		t.Error("second root did not return its own client")
+	}
+	again, err := m.ClientForLanguage("fake", firstDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again != first {
+		t.Error("same root did not reuse its client")
+	}
+	if m.State("fake") != ServerReady {
+		t.Errorf("state = %v, want ready", m.State("fake"))
 	}
 }

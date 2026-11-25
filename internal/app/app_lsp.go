@@ -142,7 +142,7 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 		path, lang := a.editorPathLang()
 		serverKey, _, ok := a.lspResolve(path, lang)
 		if ok {
-			if client := a.LspManager.ReadyClient(serverKey); client != nil {
+			if client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang)); client != nil {
 				resolved, err := client.ResolveCompletion(*lspItem)
 				if err == nil && resolved != nil {
 					if resolved.TextEdit != nil {
@@ -448,7 +448,7 @@ func (a *App) RunCodeActionsOnSave(path, lang string) {
 	if !ok {
 		return
 	}
-	client := a.LspManager.ReadyClient(serverKey)
+	client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang))
 	if client == nil {
 		return
 	}
@@ -553,7 +553,7 @@ func (a *App) FormatOnSave(path, lang string) {
 		return
 	}
 	tabSize, insertSpaces := a.editorTabSize()
-	client := a.LspManager.ReadyClient(serverKey)
+	client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang))
 	if client == nil {
 		return
 	}

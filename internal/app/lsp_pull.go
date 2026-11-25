@@ -82,6 +82,7 @@ type pullCandidate struct {
 	key       pullKey
 	sent      <-chan struct{}
 	unchanged bool
+	workDir   string
 }
 
 func (a *App) backgroundPullTask(server string) *asynctask.Task[[]backgroundPull] {
@@ -131,11 +132,22 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 	if task == nil {
 		return
 	}
+	files := a.openEditorFiles()
+	// FindRoot reads the filesystem; resolve each document's root before
+	// taking the versions lock the UI thread also uses.
+	workDirs := make(map[string]string, len(files))
+	for _, d := range files {
+		if d.Path == exclude {
+			continue
+		}
+		if key, _, ok := a.lspResolve(d.Path, d.Language); ok && key == server {
+			workDirs[d.Path] = a.lspWorkDirFor(d.Path, d.Language)
+		}
+	}
 	var candidates []pullCandidate
-	workDir := ""
 	a.DocVersionsMu.Lock()
 	epoch := a.lspEpochs[server]
-	for _, d := range a.openEditorFiles() {
+	for _, d := range files {
 		if d.Path == exclude {
 			continue
 		}
@@ -152,10 +164,8 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			key:       k,
 			sent:      a.lspSent[d.Path],
 			unchanged: a.lastPulled[d.Path] == k,
+			workDir:   workDirs[d.Path],
 		})
-		if workDir == "" {
-			workDir = a.lspWorkDirFor(d.Path, d.Language)
-		}
 	}
 	a.DocVersionsMu.Unlock()
 	if len(candidates) == 0 {
@@ -170,17 +180,30 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		if restarted {
 			return nil, nil
 		}
-		client, err := a.LspManager.ClientForLanguage(server, workDir)
-		if err != nil {
-			return nil, err
+		// Each root has its own client; a document must be pulled through the
+		// server process that has its root registered.
+		clients := make(map[string]*lsp.Client)
+		for _, c := range candidates {
+			if _, ok := clients[c.workDir]; ok {
+				continue
+			}
+			client, err := a.LspManager.ClientForLanguage(server, c.workDir)
+			if err != nil {
+				return nil, err
+			}
+			if !client.SupportsPullDiagnostics() {
+				clients[c.workDir] = nil
+				continue
+			}
+			clients[c.workDir] = client
 		}
-		if !client.SupportsPullDiagnostics() {
-			return nil, nil
-		}
-		interFile := client.InterFileDependencies()
 		var pulls []backgroundPull
 		for _, c := range candidates {
-			if c.unchanged && !interFile {
+			client := clients[c.workDir]
+			if client == nil {
+				continue
+			}
+			if c.unchanged && !client.InterFileDependencies() {
 				continue
 			}
 			if c.sent != nil {

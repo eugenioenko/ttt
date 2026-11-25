@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -37,6 +38,8 @@ type Manager struct {
 	config  *config.LSPSettings
 	mu      sync.Mutex
 
+	// One entry per running client, keyed like servers. State() aggregates
+	// them, since the editor shows a single indicator per server.
 	states map[string]ServerState
 	closed bool
 
@@ -62,17 +65,59 @@ func NewManager(cfg *config.LSPSettings) *Manager {
 	}
 }
 
+// clientKey identifies one server process by the root it was initialized in.
+// Files under different project roots need their own process: a server roots
+// itself at that directory, so a file from another root opened there would be
+// analyzed with the wrong project's configuration.
+func clientKey(server, workDir string) string {
+	if abs, err := filepath.Abs(workDir); err == nil {
+		workDir = abs
+	}
+	return strings.ToLower(server) + "\x00" + filepath.Clean(workDir)
+}
+
+func serverForKey(key string) string {
+	if i := strings.IndexByte(key, 0); i >= 0 {
+		return key[:i]
+	}
+	return key
+}
+
 // State reports the current state of a server. Safe to call from the UI.
 func (m *Manager) State(server string) ServerState {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.states[strings.ToLower(server)]
+	return m.serverStateLocked(strings.ToLower(server))
 }
 
-func (m *Manager) setStateLocked(server string, state ServerState) bool {
-	changed := m.states[server] != state
-	m.states[server] = state
-	return changed
+// serverStateLocked combines the states of every root of a server: a root
+// still starting is the most informative state, then a ready root (the server
+// works for that project), then a failure.
+func (m *Manager) serverStateLocked(server string) ServerState {
+	state := ServerStopped
+	for key, s := range m.states {
+		if serverForKey(key) != server {
+			continue
+		}
+		switch s {
+		case ServerStarting:
+			return ServerStarting
+		case ServerReady:
+			state = ServerReady
+		case ServerFailed:
+			if state == ServerStopped {
+				state = ServerFailed
+			}
+		}
+	}
+	return state
+}
+
+func (m *Manager) setStateLocked(key string, state ServerState) bool {
+	server := serverForKey(key)
+	before := m.serverStateLocked(server)
+	m.states[key] = state
+	return m.serverStateLocked(server) != before
 }
 
 func (m *Manager) notifyStateChange(changed bool) {
@@ -95,7 +140,8 @@ func (m *Manager) ServerConfig(key string) config.LSPServerConfig {
 }
 
 func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
-	key := strings.ToLower(lang)
+	server := strings.ToLower(lang)
+	key := clientKey(server, workDir)
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
@@ -112,7 +158,7 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 		m.mu.Unlock()
 		return client, err
 	}
-	serverCfg, ok := m.config.Servers[key]
+	serverCfg, ok := m.config.Servers[server]
 	if !ok || len(serverCfg.Command) == 0 {
 		m.mu.Unlock()
 		return nil, fmt.Errorf("no LSP server command configured for %q", lang)
@@ -124,7 +170,7 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	m.mu.Unlock()
 	m.notifyStateChange(changed)
 
-	client, err := m.startClient(ctx, key, lang, workDir, serverCfg, start)
+	client, err := m.startClient(ctx, server, key, lang, workDir, serverCfg, start)
 	m.mu.Lock()
 	if m.servers[key] != start || m.closed {
 		err = context.Canceled
@@ -154,45 +200,50 @@ func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	return client, err
 }
 
-func (m *Manager) startClient(ctx context.Context, key, lang, workDir string, serverCfg config.LSPServerConfig, start *serverStart) (*Client, error) {
-	slog.Info("lsp starting server", "language", lang, "command", serverCfg.Command)
-	m.log(key, "info", "starting "+strings.Join(serverCfg.Command, " "))
+func (m *Manager) startClient(ctx context.Context, server, key, lang, workDir string, serverCfg config.LSPServerConfig, start *serverStart) (*Client, error) {
+	slog.Info("lsp starting server", "language", lang, "root", workDir, "command", serverCfg.Command)
+	m.log(server, "info", "starting "+strings.Join(serverCfg.Command, " "))
 
 	client, err := NewClient(serverCfg.Command, workDir, ClientHooks{
-		OnLog:  func(level, message string) { m.log(key, level, message) },
+		OnLog:  func(level, message string) { m.log(server, level, message) },
 		OnExit: func() { m.forget(key, start) },
 	})
 	if err != nil {
-		m.log(key, "error", err.Error())
+		m.log(server, "error", err.Error())
 		return nil, fmt.Errorf("start LSP for %s: %w", lang, err)
 	}
 	client.OnDiagnostics = func(params PublishDiagnosticsParams) {
 		if m.OnDiagnostics != nil {
-			m.OnDiagnostics(key, params)
+			m.OnDiagnostics(server, params)
 		}
 	}
 	client.OnApplyEdit = func(edit WorkspaceEdit) ApplyWorkspaceEditResult {
 		if m.OnApplyEdit != nil {
-			return m.OnApplyEdit(key, edit)
+			return m.OnApplyEdit(server, edit)
 		}
 		return ApplyWorkspaceEditResult{FailureReason: "workspace edits are not supported"}
 	}
 	client.OnDiagnosticRefresh = func() {
 		if m.OnDiagnosticRefresh != nil {
-			m.OnDiagnosticRefresh(key)
+			m.OnDiagnosticRefresh(server)
 		}
 	}
 
 	rootURI := FileURI(workDir)
 	if err := client.initialize(ctx, rootURI); err != nil {
-		m.log(key, "error", "initialize failed: "+err.Error())
+		m.log(server, "error", "initialize failed: "+err.Error())
 		return client, fmt.Errorf("initialize LSP for %s: %w", lang, err)
 	}
-	if isRoslynServer(key, serverCfg.Command) {
-		client.OpenRoslynWorkspace(workDir)
+	if isRoslynServer(server, serverCfg.Command) {
+		// Discovery walks the whole tree, so a stop during startup must end it
+		// rather than wait for the walk to finish.
+		if err := client.OpenRoslynWorkspace(ctx, workDir); err != nil {
+			m.log(server, "error", "open workspace: "+err.Error())
+			return client, fmt.Errorf("open Roslyn workspace for %s: %w", lang, err)
+		}
 	}
 
-	m.log(key, "info", "ready")
+	m.log(server, "info", "ready")
 	return client, nil
 }
 
@@ -211,12 +262,30 @@ func (m *Manager) forget(key string, start *serverStart) {
 	m.notifyStateChange(changed)
 }
 
-// ReadyClient never starts a server or waits for initialization.
-func (m *Manager) ReadyClient(key string) *Client {
+// ReadyClient never starts a server or waits for initialization. With a
+// workDir it returns that root's client; without one, any ready client of the
+// server, since capabilities are the same for every root.
+func (m *Manager) ReadyClient(key string, workDir ...string) *Client {
+	server := strings.ToLower(key)
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	if start := m.servers[strings.ToLower(key)]; start != nil {
-		return start.client
+	if len(workDir) > 0 && workDir[0] != "" {
+		if start := m.servers[clientKey(server, workDir[0])]; start != nil {
+			return start.client
+		}
+		return nil
+	}
+	keys := make([]string, 0, len(m.servers))
+	for k := range m.servers {
+		if serverForKey(k) == server {
+			keys = append(keys, k)
+		}
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		if client := m.servers[k].client; client != nil {
+			return client
+		}
 	}
 	return nil
 }
@@ -259,19 +328,39 @@ var shutdownTimeout = 3 * time.Second
 // Stop returns only after the old read loop has exited, so callers can rely on
 // no message from the stopped server being delivered afterwards.
 func (m *Manager) Stop(key string) bool {
-	key = strings.ToLower(key)
+	server := strings.ToLower(key)
 	m.mu.Lock()
-	start, ok := m.servers[key]
-	delete(m.servers, key)
-	changed := m.setStateLocked(key, ServerStopped)
+	before := m.serverStateLocked(server)
+	starts := make(map[string]*serverStart)
+	for k, start := range m.servers {
+		if serverForKey(k) != server {
+			continue
+		}
+		starts[k] = start
+		delete(m.servers, k)
+		delete(m.states, k)
+	}
+	changed := m.serverStateLocked(server) != before
 	m.mu.Unlock()
-	if !ok {
+	if len(starts) == 0 {
 		return false
 	}
-	stopStart(key, start)
+	stopStarts(starts)
 	m.notifyStateChange(changed)
-	m.log(key, "info", "stopped")
+	m.log(server, "info", "stopped")
 	return true
+}
+
+func stopStarts(starts map[string]*serverStart) {
+	var wg sync.WaitGroup
+	for key, start := range starts {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			stopStart(key, start)
+		}()
+	}
+	wg.Wait()
 }
 
 func stopStart(key string, start *serverStart) {
@@ -308,16 +397,8 @@ func (m *Manager) Shutdown() {
 	m.closed = true
 	servers := m.servers
 	m.servers = make(map[string]*serverStart)
-	changed := false
-	for key := range servers {
-		changed = m.setStateLocked(key, ServerStopped) || changed
-	}
+	m.states = make(map[string]ServerState)
 	m.mu.Unlock()
-	var wg sync.WaitGroup
-	for key, start := range servers {
-		wg.Add(1)
-		go func() { defer wg.Done(); stopStart(key, start) }()
-	}
-	wg.Wait()
-	m.notifyStateChange(changed)
+	stopStarts(servers)
+	m.notifyStateChange(len(servers) > 0)
 }

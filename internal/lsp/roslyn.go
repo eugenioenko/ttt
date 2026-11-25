@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -42,13 +43,16 @@ func isRoslynServer(serverKey string, command []string) bool {
 	return false
 }
 
-func (c *Client) OpenRoslynWorkspace(root string) {
-	solution, projects := FindRoslynWorkspace(root)
+func (c *Client) OpenRoslynWorkspace(ctx context.Context, root string) error {
+	solution, projects, err := FindRoslynWorkspace(ctx, root)
+	if err != nil {
+		return err
+	}
 	switch {
 	case solution != "":
 		if err := c.notify("solution/open", roslynSolutionParams{Solution: FileURI(solution)}); err != nil {
 			c.log("error", "solution/open: "+err.Error())
-			return
+			return nil
 		}
 		c.log("info", "loading solution "+solution)
 	case len(projects) > 0:
@@ -58,31 +62,41 @@ func (c *Client) OpenRoslynWorkspace(root string) {
 		}
 		if err := c.notify("project/open", roslynProjectsParams{Projects: uris}); err != nil {
 			c.log("error", "project/open: "+err.Error())
-			return
+			return nil
 		}
 		c.log("info", fmt.Sprintf("loading %d project(s)", len(projects)))
 	default:
 		c.log("info", "no .sln or .csproj found under "+root)
 	}
+	return nil
 }
 
 // FindRoslynWorkspace prefers a solution next to root or in one of its
 // ancestors, then a single solution discovered below it, then every project.
-func FindRoslynWorkspace(root string) (solution string, projects []string) {
+// It returns the walk error when ctx is canceled while searching.
+func FindRoslynWorkspace(ctx context.Context, root string) (solution string, projects []string, err error) {
+	if err := ctx.Err(); err != nil {
+		return "", nil, err
+	}
 	if root == "" {
-		return "", nil
+		return "", nil, nil
 	}
 	abs, err := filepath.Abs(root)
 	if err != nil {
-		return "", nil
+		return "", nil, nil
 	}
 	if solution := solutionAtOrAbove(abs); solution != "" {
-		return solution, nil
+		return solution, nil, nil
 	}
-	if solutions := findProjectFiles(abs, isSolutionFile, 2); len(solutions) == 1 {
-		return solutions[0], nil
+	solutions, err := findProjectFiles(ctx, abs, isSolutionFile, 2)
+	if err != nil {
+		return "", nil, err
 	}
-	return "", findProjectFiles(abs, isProjectFile, maxRoslynProjects)
+	if len(solutions) == 1 {
+		return solutions[0], nil, nil
+	}
+	projects, err = findProjectFiles(ctx, abs, isProjectFile, maxRoslynProjects)
+	return "", projects, err
 }
 
 func solutionAtOrAbove(dir string) string {
@@ -116,9 +130,12 @@ func directProjectFiles(dir string, match func(string) bool) []string {
 	return found
 }
 
-func findProjectFiles(root string, match func(string) bool, limit int) []string {
+func findProjectFiles(ctx context.Context, root string, match func(string) bool, limit int) ([]string, error) {
 	var found []string
-	_ = filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+	err := filepath.WalkDir(root, func(path string, entry os.DirEntry, err error) error {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
 		if err != nil {
 			return nil
 		}
@@ -136,8 +153,11 @@ func findProjectFiles(root string, match func(string) bool, limit int) []string 
 		}
 		return nil
 	})
+	if err != nil {
+		return nil, err
+	}
 	sort.Strings(found)
-	return found
+	return found, nil
 }
 
 func isSolutionFile(name string) bool {

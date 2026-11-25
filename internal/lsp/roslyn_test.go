@@ -1,18 +1,43 @@
 package lsp
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 )
+
+// roslynBoundary returns a directory holding two solutions, which discovery
+// reads as ambiguous and stops at, so a search never ascends into directories
+// outside the fixture.
+func roslynBoundary(t *testing.T) string {
+	t.Helper()
+	boundary := t.TempDir()
+	writeMarkerFile(t, filepath.Join(boundary, "One.sln"))
+	writeMarkerFile(t, filepath.Join(boundary, "Two.sln"))
+	return boundary
+}
+
+func roslynFixtureRoot(t *testing.T) string {
+	t.Helper()
+	root := filepath.Join(roslynBoundary(t), "project")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
 
 func TestFindRoslynWorkspacePrefersRootSolution(t *testing.T) {
 	root := t.TempDir()
 	writeMarkerFile(t, filepath.Join(root, "App.sln"))
 	writeMarkerFile(t, filepath.Join(root, "src", "App.csproj"))
 
-	solution, projects := FindRoslynWorkspace(root)
+	solution, projects, err := FindRoslynWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if solution != filepath.Join(root, "App.sln") {
 		t.Errorf("solution = %q", solution)
 	}
@@ -26,31 +51,40 @@ func TestFindRoslynWorkspaceFindsSolutionInAncestor(t *testing.T) {
 	writeMarkerFile(t, filepath.Join(root, "App.sln"))
 	start := filepath.Join(root, "src", "App")
 
-	solution, _ := FindRoslynWorkspace(start)
+	solution, _, err := FindRoslynWorkspace(context.Background(), start)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if solution != filepath.Join(root, "App.sln") {
 		t.Errorf("solution = %q", solution)
 	}
 }
 
 func TestFindRoslynWorkspaceFindsSingleNestedSolution(t *testing.T) {
-	root := t.TempDir()
+	root := roslynFixtureRoot(t)
 	nested := filepath.Join(root, "src", "App.sln")
 	writeMarkerFile(t, nested)
 
-	solution, _ := FindRoslynWorkspace(root)
+	solution, _, err := FindRoslynWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	if solution != nested {
 		t.Errorf("solution = %q, want %q", solution, nested)
 	}
 }
 
 func TestFindRoslynWorkspaceFallsBackToProjects(t *testing.T) {
-	root := t.TempDir()
+	root := roslynFixtureRoot(t)
 	writeMarkerFile(t, filepath.Join(root, "src", "A", "A.csproj"))
 	writeMarkerFile(t, filepath.Join(root, "src", "B", "B.csproj"))
 	writeMarkerFile(t, filepath.Join(root, "src", "A", "bin", "Ignored.csproj"))
 	writeMarkerFile(t, filepath.Join(root, "src", "A", "obj", "Ignored.csproj"))
 
-	_, projects := FindRoslynWorkspace(root)
+	_, projects, err := FindRoslynWorkspace(context.Background(), root)
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
 		filepath.Join(root, "src", "A", "A.csproj"),
 		filepath.Join(root, "src", "B", "B.csproj"),
@@ -72,7 +106,7 @@ func TestOpenRoslynWorkspaceSendsSolutionOpen(t *testing.T) {
 	c, server := pipeClient(t)
 	done := make(chan struct{})
 	go func() {
-		c.OpenRoslynWorkspace(root)
+		_ = c.OpenRoslynWorkspace(context.Background(), root)
 		close(done)
 	}()
 
@@ -91,13 +125,13 @@ func TestOpenRoslynWorkspaceSendsSolutionOpen(t *testing.T) {
 }
 
 func TestOpenRoslynWorkspaceSendsProjectOpen(t *testing.T) {
-	root := t.TempDir()
+	root := roslynFixtureRoot(t)
 	project := filepath.Join(root, "App.csproj")
 	writeMarkerFile(t, project)
 	c, server := pipeClient(t)
 	done := make(chan struct{})
 	go func() {
-		c.OpenRoslynWorkspace(root)
+		_ = c.OpenRoslynWorkspace(context.Background(), root)
 		close(done)
 	}()
 
@@ -134,13 +168,29 @@ func TestIsRoslynServer(t *testing.T) {
 }
 
 func TestFindRoslynWorkspaceEmptyRoot(t *testing.T) {
-	if solution, projects := FindRoslynWorkspace(""); solution != "" || len(projects) != 0 {
-		t.Errorf("got %q, %v", solution, projects)
+	if solution, projects, err := FindRoslynWorkspace(context.Background(), ""); solution != "" || len(projects) != 0 || err != nil {
+		t.Errorf("got %q, %v, %v", solution, projects, err)
 	}
 }
 
 func TestFindRoslynWorkspaceMissingRoot(t *testing.T) {
-	if solution, projects := FindRoslynWorkspace(filepath.Join(os.TempDir(), "nonexistent-ttt-root")); solution != "" || len(projects) != 0 {
-		t.Errorf("got %q, %v", solution, projects)
+	root := filepath.Join(roslynBoundary(t), "nonexistent-ttt-root")
+	if solution, projects, err := FindRoslynWorkspace(context.Background(), root); solution != "" || len(projects) != 0 || err != nil {
+		t.Errorf("got %q, %v, %v", solution, projects, err)
+	}
+}
+
+func TestFindRoslynWorkspaceStopsWhenCanceled(t *testing.T) {
+	root := t.TempDir()
+	writeMarkerFile(t, filepath.Join(root, "src", "App.csproj"))
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	solution, projects, err := FindRoslynWorkspace(ctx, root)
+	if err == nil {
+		t.Fatalf("got solution %q projects %v, want the cancellation error", solution, projects)
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("err = %v, want context.Canceled", err)
 	}
 }

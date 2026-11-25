@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/lsp"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -58,21 +59,29 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		group.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
 	}
 	type openDoc struct {
-		uri, langID, text string
-		inFlight          <-chan struct{}
+		path, uri, langID, text, workDir string
+		inFlight                         <-chan struct{}
 	}
 	var docs []openDoc
-	sent := make(chan struct{})
-	a.DocVersionsMu.Lock()
 	for _, d := range a.openEditorDocuments() {
 		key, langID, ok := a.lspResolve(d.Path, d.Language)
 		if !ok || key != ev.Server {
 			continue
 		}
-		inFlight := a.lspSent[d.Path]
-		a.DocVersions[d.Path] = 1
-		a.lspSent[d.Path] = sent
-		docs = append(docs, openDoc{uri: FileURI(d.Path), langID: langID, text: d.Text, inFlight: inFlight})
+		docs = append(docs, openDoc{
+			path:    d.Path,
+			uri:     FileURI(d.Path),
+			langID:  langID,
+			text:    d.Text,
+			workDir: a.lspWorkDirFor(d.Path, d.Language),
+		})
+	}
+	sent := make(chan struct{})
+	a.DocVersionsMu.Lock()
+	for i := range docs {
+		docs[i].inFlight = a.lspSent[docs[i].path]
+		a.DocVersions[docs[i].path] = 1
+		a.lspSent[docs[i].path] = sent
 	}
 	a.DocVersionsMu.Unlock()
 
@@ -84,14 +93,23 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 				<-d.inFlight
 			}
 		}
-		client, err := a.LspManager.ClientForLanguage(ev.Server, ev.WorkDir)
-		if err == nil {
-			for _, d := range docs {
-				if openErr := client.DidOpen(d.uri, d.langID, d.text); openErr != nil {
-					err = fmt.Errorf("didOpen %s: %w", d.uri, openErr)
+		// Reopen each document on the process rooted at its own project.
+		clients := make(map[string]*lsp.Client)
+		var err error
+		for _, d := range docs {
+			client := clients[d.workDir]
+			if client == nil {
+				client, err = a.LspManager.ClientForLanguage(ev.Server, d.workDir)
+				if err != nil {
 					a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
 					break
 				}
+				clients[d.workDir] = client
+			}
+			if err = client.DidOpen(d.uri, d.langID, d.text); err != nil {
+				err = fmt.Errorf("didOpen %s: %w", d.uri, err)
+				a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
+				break
 			}
 		}
 		close(sent)
