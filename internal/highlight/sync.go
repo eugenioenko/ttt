@@ -19,12 +19,12 @@ func (h *Highlighter) SyncBuffer(buf *buffer.Buffer) {
 	if !h.dirty && h.buf == buf && h.version != version {
 		if start, removed, added, ok := mergedEdit(buf, h.version, h.doc.Len()); ok &&
 			h.doc.ReplaceLines(start, start+removed, buf.Lines[start:start+added]) == nil {
-			h.version, h.lines, h.wantLine = version, lines, 0
+			h.version, h.lines, h.wantLine, h.stopWoke = version, lines, 0, false
 			return
 		}
 	}
 	h.doc.SetLines(buf.Lines)
-	h.buf, h.version, h.lines, h.dirty, h.wantLine = buf, version, lines, false, 0
+	h.buf, h.version, h.lines, h.dirty, h.wantLine, h.stopWoke = buf, version, lines, false, 0, false
 }
 
 // mergedEdit folds the changes made to buf after version into one splice of a
