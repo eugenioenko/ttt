@@ -736,6 +736,9 @@ func registerWidgetCallbacks(app *App) {
 		if id == "explorer" {
 			app.Explorer.Reload()
 		}
+		if id == "plugins" && !app.registryRequested {
+			app.PluginRefreshRegistry()
+		}
 	}
 
 	revealSymbol := func(line, col int) {

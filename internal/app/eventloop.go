@@ -447,7 +447,7 @@ func RunEventLoop(
 			case *PluginUpdateResult:
 				app.HandlePluginUpdateResult(v)
 			case *RemoteRegistryResult:
-				app.handleRemoteRegistryResult(v)
+				app.HandleRemoteRegistryResult(v)
 			case *PrFetchResult:
 				if v.Err != nil {
 					app.StatusError(i18n.Format("status.prFetchFailed", i18n.Args{"error": v.Err.Error()}))
