@@ -24,6 +24,7 @@ type debugRun struct {
 	languages         []string
 	failed            bool
 	stopGeneration    uint64
+	stepping          bool
 	allThreadsStopped bool
 	edited            map[string]bool
 	folder            string
@@ -383,6 +384,7 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 		}
 		if json.Unmarshal(event.Body, &b) == nil {
 			run.stopGeneration++
+			run.stepping = false
 			run.allThreadsStopped = b.AllThreadsStopped
 			run.thread = b.ThreadID
 			if run.thread != nil {
@@ -397,8 +399,7 @@ func (a *App) onDebugEvent(run *debugRun, name string, event dap.Event) {
 		}
 	case "continued":
 		run.stopGeneration++
-		run.thread = nil
-		a.clearDebugInspection()
+		a.debugResumed(run)
 	case "output":
 		var b struct{ Category, Output string }
 		if json.Unmarshal(event.Body, &b) == nil {
@@ -460,6 +461,12 @@ func (a *App) debugControl(cmd string) {
 	if r == nil || r.session == nil || !r.ready || (cmd == "pause") != (r.thread == nil) {
 		return
 	}
+	if r.stepping && cmd != "pause" {
+		return
+	}
+	if cmd == "next" || cmd == "stepIn" || cmd == "stepOut" {
+		r.stepping = true
+	}
 	generation := r.stopGeneration
 	tid := r.lastThread
 	if r.thread != nil {
@@ -481,13 +488,15 @@ func (a *App) debugControl(cmd string) {
 				return
 			}
 			if err != nil {
+				if cmd != "pause" {
+					r.stepping = false
+				}
 				a.StatusError(err.Error())
 				return
 			}
 			if cmd != "pause" {
-				r.thread = nil
 				r.stopGeneration++
-				a.clearDebugInspection()
+				a.debugResumed(r)
 			}
 		})
 	}()

@@ -30,17 +30,23 @@ type debugThread struct {
 	ID   int
 	Name string
 }
+type debugInspection struct {
+	selectedThread int
+	threads        []debugThread
+	frames         []debugFrame
+	scopes         []*widgets.TreeNode
+	values         map[*widgets.TreeNode]debugVariable
+}
+
 type debugSidebar struct {
-	threads                  []debugThread
+	debugInspection
+	stale                    bool
 	threadNodes              map[*widgets.TreeNode]int
 	variables, stack, points *widgets.TreeWidget
 	toolbar                  *widgets.HStackWidget
 	adapter                  *ui.WidgetAdapter
 	idle                     debugIdleAction
 	controls                 debugControlState
-	frames                   []debugFrame
-	scopes                   []*widgets.TreeNode
-	values                   map[*widgets.TreeNode]debugVariable
 	frameNodes               map[*widgets.TreeNode]debugFrame
 	breakNodes               map[*widgets.TreeNode]debugLocation
 	epoch                    uint64
@@ -59,8 +65,10 @@ func (a *App) ensureDebugPanel() {
 		if cmd != "activate" {
 			return
 		}
-		if f, ok := p.frameNodes[n]; ok {
-			a.inspectDebugFrame(f)
+		if f, ok := p.frameNodes[n]; ok && !p.stale && a.debugger.run != nil && !a.debugger.run.stepping {
+			next := p.debugInspection
+			a.beginDebugInspection()
+			a.loadDebugFrame(a.debugger.run, &next, f)
 		}
 		if b, ok := p.breakNodes[n]; ok {
 			a.revealDebugLocation(b.path, b.line)
@@ -168,17 +176,15 @@ func (a *App) refreshDebugPanel() {
 	p.frameNodes = make(map[*widgets.TreeNode]debugFrame)
 	p.threadNodes = make(map[*widgets.TreeNode]int)
 	frameParent := stack
-	if r := a.debugger.run; r != nil && r.thread != nil {
-		for _, t := range p.threads {
-			selected := t.ID == *r.thread
-			n := &widgets.TreeNode{ID: fmt.Sprintf("thread:%d", t.ID), Label: t.Name, Expandable: true, Expanded: selected}
-			p.threadNodes[n] = t.ID
-			if selected {
-				frameParent = n
-				stack.Children = append([]*widgets.TreeNode{n}, stack.Children...)
-			} else {
-				stack.Children = append(stack.Children, n)
-			}
+	for _, t := range p.threads {
+		selected := t.ID == p.selectedThread
+		n := &widgets.TreeNode{ID: fmt.Sprintf("thread:%d", t.ID), Label: t.Name, Expandable: true, Expanded: selected}
+		p.threadNodes[n] = t.ID
+		if selected {
+			frameParent = n
+			stack.Children = append([]*widgets.TreeNode{n}, stack.Children...)
+		} else {
+			stack.Children = append(stack.Children, n)
 		}
 	}
 	for _, f := range p.frames {
@@ -219,15 +225,34 @@ func (a *App) refreshDebugPanel() {
 	}
 }
 
-func (a *App) clearDebugInspection() {
+func (a *App) beginDebugInspection() {
 	p := &a.debugger.panel
 	p.epoch++
-	p.threads = nil
-	p.frames = nil
-	p.scopes = nil
-	p.values = nil
-	a.debugger.stoppedFile = ""
+	p.stale = true
+}
+
+func (a *App) publishDebugInspection(next *debugInspection) {
+	p := &a.debugger.panel
+	p.debugInspection = *next
+	p.stale = false
 	a.refreshDebugPanel()
+}
+
+func (a *App) clearDebugInspection() {
+	a.beginDebugInspection()
+	a.debugger.stoppedFile = ""
+	a.publishDebugInspection(&debugInspection{})
+}
+
+func (a *App) debugResumed(r *debugRun) {
+	r.thread = nil
+	if r.stepping {
+		a.beginDebugInspection()
+		a.debugger.stoppedFile = ""
+		a.refreshDebugControls()
+		return
+	}
+	a.clearDebugInspection()
 }
 
 // DAP frame and variable references expire as soon as execution resumes.
@@ -245,68 +270,67 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 			}
 			if err != nil {
 				a.StatusError(err.Error())
-				return
 			}
 			apply(result)
 		})
 	}()
 }
 func (a *App) debugStopped(r *debugRun) {
-	a.clearDebugInspection()
+	a.debugger.stoppedFile = ""
+	a.beginDebugInspection()
+	a.refreshDebugControls()
+	next := &debugInspection{}
 	debugQuery(a, r, "threads", struct{}{}, func(result struct{ Threads []debugThread }) {
 		if r.thread == nil && len(result.Threads) > 0 {
 			r.thread = &result.Threads[0].ID
 		}
 		if r.thread == nil {
+			a.publishDebugInspection(next)
 			return
 		}
 		for _, t := range result.Threads {
 			if t.ID == *r.thread || r.allThreadsStopped {
-				a.debugger.panel.threads = append(a.debugger.panel.threads, t)
+				next.threads = append(next.threads, t)
 			}
 		}
-		a.loadDebugStack(r, *r.thread, true)
+		a.loadDebugStack(r, next, *r.thread, true)
 	})
 }
-func (a *App) loadDebugStack(r *debugRun, tid int, executing bool) {
-	p := &a.debugger.panel
-	p.epoch++
+
+func (a *App) loadDebugStack(r *debugRun, next *debugInspection, tid int, executing bool) {
 	r.thread = &tid
 	r.lastThread = tid
-	p.frames = nil
-	p.scopes = nil
-	p.values = nil
-	a.refreshDebugPanel()
-	debugQuery(a, r, "stackTrace", map[string]int{"threadId": *r.thread, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
-		p := &a.debugger.panel
-		p.frames = result.StackFrames
-		for i := range p.frames {
-			p.frames[i].Source.Path = a.debugSourcePath(p.frames[i].Source.Path)
+	next.selectedThread = tid
+	debugQuery(a, r, "stackTrace", map[string]int{"threadId": tid, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
+		next.frames = result.StackFrames
+		if len(next.frames) == 0 {
+			a.publishDebugInspection(next)
+			return
 		}
-		if len(p.frames) > 0 {
-			f := p.frames[0]
-			if executing {
-				a.debugger.stoppedFile = f.Source.Path
-				a.debugger.stoppedLine = f.Line
-			}
-			a.inspectDebugFrame(f)
+		for i := range next.frames {
+			next.frames[i].Source.Path = a.debugSourcePath(next.frames[i].Source.Path)
 		}
-		a.refreshDebugPanel()
+		f := next.frames[0]
+		if executing {
+			a.debugger.stoppedFile = f.Source.Path
+			a.debugger.stoppedLine = f.Line
+		}
+		a.loadDebugFrame(r, next, f)
 	})
 }
-func (a *App) inspectDebugFrame(f debugFrame) {
-	r := a.debugger.run
-	if r == nil {
-		return
-	}
-	p := &a.debugger.panel
-	p.epoch++
-	p.scopes = nil
-	p.values = make(map[*widgets.TreeNode]debugVariable)
+
+func (a *App) loadDebugFrame(r *debugRun, next *debugInspection, f debugFrame) {
 	if f.Source.Path != "" && f.Line > 0 {
 		a.revealDebugLocation(f.Source.Path, f.Line)
 	}
-	a.refreshDebugPanel()
+	expanded := make(map[string]bool)
+	for n := range a.debugger.panel.values {
+		if n.Expandable {
+			expanded[n.ID] = n.Expanded
+		}
+	}
+	next.scopes = nil
+	next.values = make(map[*widgets.TreeNode]debugVariable)
 	debugQuery(a, r, "scopes", map[string]int{"frameId": f.ID}, func(result struct {
 		Scopes []struct {
 			Name               string
@@ -314,38 +338,69 @@ func (a *App) inspectDebugFrame(f debugFrame) {
 			Expensive          bool
 		}
 	}) {
-		for _, scope := range result.Scopes {
-			n := &widgets.TreeNode{ID: fmt.Sprintf("scope:%d", scope.VariablesReference), Label: scope.Name, Expandable: scope.VariablesReference != 0, Expanded: !scope.Expensive}
-			p.scopes = append(p.scopes, n)
-			p.values[n] = debugVariable{VariablesReference: scope.VariablesReference}
-			if n.Expanded {
-				a.expandDebugNode(n)
+		// Count the scopes response as pending until every visible child request is scheduled.
+		pending := 1
+		done := func() {
+			pending--
+			if pending == 0 {
+				a.publishDebugInspection(next)
 			}
 		}
-		a.refreshDebugPanel()
+		var loadExpanded func(*widgets.TreeNode)
+		loadExpanded = func(n *widgets.TreeNode) {
+			if wasOpen, ok := expanded[n.ID]; ok {
+				n.Expanded = wasOpen
+			}
+			if !n.Expandable || !n.Expanded {
+				return
+			}
+			pending++
+			a.loadDebugVariables(r, next, n, func() {
+				for _, child := range n.Children {
+					loadExpanded(child)
+				}
+				done()
+			})
+		}
+		for _, scope := range result.Scopes {
+			n := &widgets.TreeNode{ID: "scope:" + strconv.Quote(scope.Name), Label: scope.Name, Expandable: scope.VariablesReference != 0, Expanded: !scope.Expensive}
+			next.scopes = append(next.scopes, n)
+			next.values[n] = debugVariable{VariablesReference: scope.VariablesReference}
+			loadExpanded(n)
+		}
+		done()
 	})
 }
+
+func (a *App) loadDebugVariables(r *debugRun, inspection *debugInspection, n *widgets.TreeNode, done func()) {
+	ref := inspection.values[n].VariablesReference
+	debugQuery(a, r, "variables", map[string]int{"variablesReference": ref}, func(result struct{ Variables []debugVariable }) {
+		n.Children = nil
+		for _, v := range result.Variables {
+			child := &widgets.TreeNode{ID: n.ID + "/" + strconv.Quote(v.Name), Label: v.Name + " = " + v.Value, Expandable: v.VariablesReference != 0}
+			n.Children = append(n.Children, child)
+			inspection.values[child] = v
+		}
+		done()
+	})
+}
+
 func (a *App) expandDebugNode(n *widgets.TreeNode) {
 	p := &a.debugger.panel
+	r := a.debugger.run
+	if p.stale || r == nil || r.thread == nil || r.stepping {
+		return
+	}
 	if tid, ok := p.threadNodes[n]; ok {
-		if r := a.debugger.run; r != nil && r.thread != nil && *r.thread != tid {
-			a.loadDebugStack(r, tid, false)
+		if *r.thread != tid {
+			a.beginDebugInspection()
+			a.loadDebugStack(r, &debugInspection{threads: p.threads}, tid, false)
 		}
 		return
 	}
-	ref := p.values[n].VariablesReference
-	if ref == 0 || len(n.Children) > 0 || a.debugger.run == nil {
-		return
+	if p.values[n].VariablesReference != 0 && len(n.Children) == 0 {
+		a.loadDebugVariables(r, &p.debugInspection, n, func() { p.variables.SetItems(p.variables.Config.Items) })
 	}
-	debugQuery(a, a.debugger.run, "variables", map[string]int{"variablesReference": ref}, func(result struct{ Variables []debugVariable }) {
-		n.Children = nil
-		for i, v := range result.Variables {
-			child := &widgets.TreeNode{ID: fmt.Sprintf("%s/%d", n.ID, i), Label: v.Name + " = " + v.Value, Expandable: v.VariablesReference != 0}
-			n.Children = append(n.Children, child)
-			p.values[child] = v
-		}
-		p.variables.SetItems(p.variables.Config.Items)
-	})
 }
 
 func (a *App) revealDebugLocation(path string, line int) {
