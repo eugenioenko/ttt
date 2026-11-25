@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
@@ -41,11 +41,13 @@ it("[python] debugs a module with a dependency from its workspace virtual enviro
     tui.exec("Debug: Continue");
     tui.panel("output");
     tui.waitFor("Debug session ended");
-    const output = tui.snapshot();
+    const state = join(dir, "state.json");
+    tui.dumpState(state);
     const { snapshots } = tui.run(60000);
     expect(snapshots[stopped]).toContain("report  appmod.py:4");
     expect(snapshots[returned]).toContain("report  appmod.py:4");
-    expect(snapshots[output]).toContain("[debug:Example] PY_DONE 43");
+    const { output } = JSON.parse(readFileSync(state, "utf8"));
+    expect(output).toContainEqual(expect.stringContaining("[debug:Example] PY_DONE 43"));
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

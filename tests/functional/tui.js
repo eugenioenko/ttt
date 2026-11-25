@@ -119,6 +119,10 @@ export function waitFor(text) {
   commands.push(`wait-for ${JSON.stringify(String(text))}`);
 }
 
+export function dumpState(path) {
+  commands.push(`debug ${JSON.stringify(path)}`);
+}
+
 export function snapshot() {
   const idx = snapCount++;
   const path = join(tmpDir, `snap-${idx}.txt`);
