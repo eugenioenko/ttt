@@ -47,7 +47,9 @@ type Manager struct {
 	states map[string]ServerState
 	closed bool
 
-	OnDiagnostics func(server string, params PublishDiagnosticsParams)
+	// OnDiagnostics receives the root of the client that published, so a
+	// result can be rejected once the document has moved to another root.
+	OnDiagnostics func(server, root string, params PublishDiagnosticsParams)
 	OnApplyEdit   func(server string, edit WorkspaceEdit) ApplyWorkspaceEditResult
 	// OnDiagnosticRefresh is called off the UI goroutine.
 	OnDiagnosticRefresh func(server string)
@@ -158,12 +160,28 @@ func (m *Manager) HasRootMarker(name string) bool {
 }
 
 func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
+	return m.clientForLanguage(lang, workDir, nil)
+}
+
+// ClientForLanguageCurrent refuses to start a server once current reports the
+// request as stale. The check runs under the manager lock, so a caller whose
+// context can change concurrently cannot have a server started for it in
+// between. current must not call back into the manager.
+func (m *Manager) ClientForLanguageCurrent(lang, workDir string, current func() bool) (*Client, error) {
+	return m.clientForLanguage(lang, workDir, current)
+}
+
+func (m *Manager) clientForLanguage(lang, workDir string, current func() bool) (*Client, error) {
 	server := strings.ToLower(lang)
 	key := clientKey(server, workDir)
 	m.mu.Lock()
 	if m.closed {
 		m.mu.Unlock()
 		return nil, fmt.Errorf("language server manager is closed")
+	}
+	if current != nil && !current() {
+		m.mu.Unlock()
+		return nil, context.Canceled
 	}
 	if start, ok := m.servers[key]; ok {
 		m.mu.Unlock()
@@ -234,7 +252,7 @@ func (m *Manager) startClient(ctx context.Context, server, key, lang, workDir st
 	start.starting.Store(client)
 	client.OnDiagnostics = func(params PublishDiagnosticsParams) {
 		if m.OnDiagnostics != nil {
-			m.OnDiagnostics(server, params)
+			m.OnDiagnostics(server, workDir, params)
 		}
 	}
 	client.OnApplyEdit = func(edit WorkspaceEdit) ApplyWorkspaceEditResult {

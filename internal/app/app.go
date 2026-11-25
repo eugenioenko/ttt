@@ -900,13 +900,14 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		_ = screen.PostEvent(tcell.NewEventInterrupt(&LSPDiagnosticRefresh{Server: server}))
 	}
 
-	lspManager.OnDiagnostics = func(server string, params lsp.PublishDiagnosticsParams) {
+	lspManager.OnDiagnostics = func(server, root string, params lsp.PublishDiagnosticsParams) {
 		path := URIToPath(params.URI)
 		diags := params.Diagnostics
 		slog.Debug("lsp diagnostics", "path", path, "count", len(diags))
 		_ = screen.PostEvent(tcell.NewEventInterrupt(&DiagnosticsResult{
 			Server:      server,
 			Path:        path,
+			Root:        root,
 			Diagnostics: diags,
 		}))
 	}

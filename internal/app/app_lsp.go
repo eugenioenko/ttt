@@ -1362,17 +1362,30 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 		// A restart repins the document and reopens it on the root it resolves
 		// to now, so this open must not create a client for a root the document
 		// has since left.
-		if !a.lspOpenStillCurrent(serverKey, path, workDir, epoch) {
+		current := func() bool { return a.lspOpenStillCurrent(serverKey, path, workDir, epoch) }
+		client, err := a.LspManager.ClientForLanguageCurrent(serverKey, workDir, current)
+		if err != nil {
 			return
 		}
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-		if err != nil {
+		// The lookup may hand back a client another root started, so the open
+		// still has to be current to reach that server.
+		if !current() {
 			return
 		}
 		if err := client.DidOpen(FileURI(path), langID, text); err != nil {
 			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didOpen %s: %v", path, err))
 		}
 	}()
+}
+
+// lspDiagnosticsStillCurrent reports whether diagnostics published by a client
+// rooted at root may be applied to path. A document that moved roots has its
+// diagnostics owned by the server now rooted at its pin, so the old root's
+// list must not replace that one. Documents without a pin (never opened here,
+// or closed) keep whatever their server publishes.
+func (a *App) lspDiagnosticsStillCurrent(path, root string) bool {
+	pinned, ok := a.pinnedLSPRoot(path)
+	return !ok || pinned == root
 }
 
 // lspOpenStillCurrent reports whether a didOpen resolved for workDir under

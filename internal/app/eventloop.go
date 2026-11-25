@@ -385,6 +385,9 @@ func RunEventLoop(
 			case *FormattingResult:
 				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
+				if !app.lspDiagnosticsStillCurrent(v.Path, v.Root) {
+					break
+				}
 				var lines []string
 				if len(v.Diagnostics) > 0 {
 					lines = app.lspLines(v.Path)

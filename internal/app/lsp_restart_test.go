@@ -93,6 +93,34 @@ func TestOpenFromBeforeRestartIsNotSent(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsFromAnotherRootAreRejected(t *testing.T) {
+	a, path := missingGoServerApp(t)
+	oldRoot := filepath.Join(t.TempDir(), "old")
+	newRoot := filepath.Join(t.TempDir(), "new")
+
+	cases := []struct {
+		name   string
+		root   string
+		pinned string
+		want   bool
+	}{
+		{"current root", newRoot, newRoot, true},
+		{"old root", oldRoot, newRoot, false},
+		{"no pin", oldRoot, "", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a.unpinLSPRoot(path)
+			if tc.pinned != "" {
+				a.pinLSPRoot(path, tc.pinned)
+			}
+			if got := a.lspDiagnosticsStillCurrent(path, tc.root); got != tc.want {
+				t.Errorf("lspDiagnosticsStillCurrent = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestChangeFromBeforeRestartIsNotSent(t *testing.T) {
 	for _, restarted := range []bool{false, true} {
 		t.Run(fmt.Sprintf("restarted=%v", restarted), func(t *testing.T) {

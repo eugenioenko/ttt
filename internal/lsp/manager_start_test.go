@@ -1,6 +1,9 @@
 package lsp
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -111,6 +114,24 @@ func TestManagerShutdownCancelsInitialization(t *testing.T) {
 	}
 	if _, err := m.ClientForLanguage("fake", t.TempDir()); err == nil {
 		t.Error("late request restarted a closed manager")
+	}
+}
+
+func TestManagerCurrentLookupDoesNotStartStaleServer(t *testing.T) {
+	m := fakeServerManager(t, "ok")
+	t.Cleanup(m.Shutdown)
+	var starts atomic.Int32
+	m.OnLog = func(_, _, message string) {
+		if strings.HasPrefix(message, "starting ") {
+			starts.Add(1)
+		}
+	}
+	client, err := m.ClientForLanguageCurrent("fake", t.TempDir(), func() bool { return false })
+	if client != nil || !errors.Is(err, context.Canceled) {
+		t.Fatalf("client, err = %v, %v; want nil, context.Canceled", client, err)
+	}
+	if starts.Load() != 0 || m.State("fake") != ServerStopped {
+		t.Fatal("a stale lookup started a server")
 	}
 }
 
