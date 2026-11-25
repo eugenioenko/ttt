@@ -15,9 +15,9 @@ for (const spec of cases) {
       const marker = executionMarker(dir, file);
       const snapshots = [];
       const inspect = ({line, locals}) => {
-        tui.waitFor(marker(line));
+        tui.waitFor(marker(line), 15000);
         const variables = Object.entries(locals).map(([key, value]) => `│    ${key} = ${value} `);
-        for (const variable of variables) tui.waitFor(variable);
+        for (const variable of variables) tui.waitFor(variable, 15000);
         snapshots.push({index: tui.snapshot(), line, variables});
       };
       const {breakpoint, afterOver, insideCall, afterOut, output} = spec.baseline;

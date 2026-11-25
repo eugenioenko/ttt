@@ -121,8 +121,9 @@ export function elapse(ms) {
   commands.push(`wait ${ms}`);
 }
 
-export function waitFor(text) {
-  commands.push(`wait-for ${JSON.stringify(String(text))}`);
+export function waitFor(text, timeoutMs) {
+  const timeout = timeoutMs === undefined ? "" : ` timeout=${timeoutMs}`;
+  commands.push(`wait-for ${JSON.stringify(String(text))}${timeout}`);
 }
 
 export function dumpState(path) {
