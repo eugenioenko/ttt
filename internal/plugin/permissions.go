@@ -692,7 +692,11 @@ func (ps PermissionSet) DisplayEntries() []PermissionDiffEntry {
 
 	add(i18n.Text("general.settings"), ps.Settings)
 	for _, k := range ps.SettingsKeys {
-		entries = append(entries, PermissionDiffEntry{Name: i18n.Text("permissions.settingsKey"), Value: k})
+		label := i18n.Text("permissions.settingsKey")
+		if strings.HasPrefix(k, "debug.adapters.") {
+			label = i18n.Text("permissions.debugCommand")
+		}
+		entries = append(entries, PermissionDiffEntry{Name: label, Value: k})
 	}
 
 	return entries

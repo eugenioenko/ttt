@@ -24,6 +24,7 @@ let tmpDir = "";
 let size = "120x40";
 let extraEnv = {};
 let input;
+let cwd;
 
 export function start(...startArgs) {
   commands = [];
@@ -33,6 +34,7 @@ export function start(...startArgs) {
   args = [];
   extraEnv = {};
   input = undefined;
+  cwd = undefined;
   for (const a of startArgs) {
     args.push(a);
   }
@@ -41,6 +43,10 @@ export function start(...startArgs) {
 // Text written to ttt's stdin for this run. Reset by start().
 export function stdin(text) {
   input = text;
+}
+
+export function setCwd(dir) {
+  cwd = dir;
 }
 
 export function setEnv(vars) {
@@ -115,8 +121,13 @@ export function elapse(ms) {
   commands.push(`wait ${ms}`);
 }
 
-export function waitFor(text) {
-  commands.push(`wait-for ${JSON.stringify(String(text))}`);
+export function waitFor(text, timeoutMs) {
+  const timeout = timeoutMs === undefined ? "" : ` timeout=${timeoutMs}`;
+  commands.push(`wait-for ${JSON.stringify(String(text))}${timeout}`);
+}
+
+export function dumpState(path) {
+  commands.push(`debug ${JSON.stringify(path)}`);
 }
 
 export function snapshot() {
@@ -138,6 +149,7 @@ export function run(timeout = 15000) {
 
   try {
     execFileSync(BINARY, ["--size", size, "--exec-split-on", SEP, "--exec", script, ...args], {
+      cwd,
       encoding: "utf8",
       timeout,
       stdio: "pipe",

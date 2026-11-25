@@ -181,7 +181,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.OnLinkHover = left.OnLinkHover
 	right.ResolveFileLinks = left.ResolveFileLinks
 	right.OnBookmarkChanged = left.OnBookmarkChanged
-	right.OnGutterClick = left.OnGutterClick
+	a.wireDebuggerGutter(right)
 	right.OnActiveTabChange = a.editorTabChanged
 	a.wireEditorGroupActivation(right)
 	right.NameUntitledPlaceholder()

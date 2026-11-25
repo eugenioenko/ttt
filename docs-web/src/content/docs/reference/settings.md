@@ -138,6 +138,19 @@ Plain defaults avoid East Asian *ambiguous*-width characters, which draw two col
 | `keyword` | `■` | `\ueb62` |  |
 | `snippet` | `■` | `\ueb66` |  |
 | `symbol` | `•` | `\ueb63` |  |
+| `breakpoint` | `⦁` | `U+F0765` | Breakpoint before launch or verified by the adapter |
+| `breakpoint-pending` | `◦` | `\uf1db` | Breakpoint awaiting verification or confirmation |
+| `debug-execution` | `▶` | `\uf04b` | Current execution line |
+| `debug-continue` | `⏵` | `\ueacf` | Continue execution |
+| `debug-pause` | `⏸` | `\uf04c` | Pause execution |
+| `debug-stop` | `∎` | `\uf04d` | Stop the launched program |
+| `debug-detach` | `⏏` | `\uf052` | Detach from the program |
+| `debug-step-over` | `↷` | `\uead6` | Step over |
+| `debug-step-in` | `⤓` | `\uead4` | Step in |
+| `debug-step-out` | `⤒` | `\uead5` | Step out |
+| `plugin-source` | `⤴` | `\uf08e` | Open the plugin source |
+| `plugin-install` | `⤓` | `\uf019` | Install a plugin |
+| `panel-debug` | `D` | `\uead8` | Debug sidebar tab |
 | `panel-explorer` | `⌂` | `\ueaf0` | Explore sidebar tab, when `sidebar.tabStyle` shows icons |
 | `panel-search` | `⌕` | `\uea6d` | Find sidebar tab |
 | `panel-changes` | `⎇` | `\uea68` | Changes sidebar tab |
@@ -335,6 +348,56 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `terminal.scrollback` | int | `1000` | Number of scrollback lines to retain |
 | `terminal.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
 | `terminal.shellIntegration` | bool | `true` | Start bash with an rcfile that loads `~/.bashrc` and adds OSC 133 prompt marks, so resizing redraws the prompt without leaving copies. Needs bash 4.4+; skipped when `terminal.args` is set. Applies to new terminal tabs |
+
+## Debug adapters
+
+`debug.adapters` is an empty object on a fresh install. Install a debugger configuration plugin in the Plugins panel, or add an entry to user settings. Install the debugger executable separately. Each key matches the `type` field of a target in the workspace’s `.ttt/launch.json` or fallback `.vscode/launch.json`.
+
+```json
+{
+  "debug": {
+    "adapters": {
+      "gdb": {
+        "command": ["gdb", "-q", "-nx", "-i", "dap"],
+        "transport": "stdio",
+        "languages": ["c", "cpp"]
+      }
+    }
+  }
+}
+```
+
+| Transport | Adapter connection |
+| --- | --- |
+| `stdio` (default) | Run the command and exchange DAP packets on stdin and stdout. |
+| `server` | Select a loopback port, substitute `${port}` in the command, and connect once the server starts. |
+| `listen` | Read the address from stdout. Supply an `addressPattern` regular expression with one capture group. The command can use `${socket}` for a socket path in a session-owned directory. |
+| `tcp` | Connect to the existing `address` (host:port). This transport needs no command. |
+
+`command` is an executable followed by literal arguments. Optional `cwd` and `env` configure the adapter process. Both those settings and command arguments support `${workspaceFolder}`. Adapter `languages` are editor language IDs. Gutter clicks accept breakpoints for configured languages, and a session receives breakpoints for its own languages.
+
+The default `provider` is `generic`, including for familiar type names. Set it explicitly to `delve`, `jsdebug`, or `debugpy` for their language-specific launch and attach handling. The debugpy command can use `${python}` for the resolved interpreter. A generic adapter receives project launch arguments after recursive `${workspaceFolder}` expansion. ttt rejects `preLaunchTask` and `${input:...}`. Extra top-level launch-file keys can coexist with standalone configurations.
+
+Adapters connected over stdio or a session-owned private socket can request an integrated terminal. TCP connections and adapter-selected socket paths cannot start local terminal commands. Socket adapters can request a child session of the same adapter type. The Debug sidebar inspects one active target at a time.
+
+An adapter can supply a `fileLaunch` object with the DAP launch arguments for **Debug File**. This works with the generic provider and with language-specific providers. For example, a Node adapter can set:
+
+```json
+"fileLaunch": { "program": "${file}", "cwd": "${workspaceFolder}" }
+```
+
+ttt expands `${file}`, `${fileDirname}`, and `${workspaceFolder}` in string values throughout the recipe, including arrays and nested objects. The workspace folder is the root containing the active file, or the file’s directory when it is outside the workspace. Adapters without a recipe can still run saved targets.
+
+For filename-specific arguments, add `fileLaunchOverrides`. The first `pattern` matching the file’s basename supplies top-level arguments that override the base recipe. For example, the Delve plugin uses:
+
+```json
+"fileLaunch": { "program": "${fileDirname}" },
+"fileLaunchOverrides": [
+  { "pattern": "*_test.go", "arguments": { "mode": "test" } }
+]
+```
+
+The other toolbar button is **Configure** when there are no saved targets. It opens or creates the launch file. With saved targets it becomes **Run & Debug**, which starts the only target or lets you pick among several.
 
 ## LSP
 

@@ -112,6 +112,7 @@ jobs:
             echo "| test-race | $runtime | blocking when selected |"
             echo "| functional-tests | $runtime | blocking when selected |"
             echo "| integration-tests | $runtime | blocking when selected |"
+            echo "| dap-tests | $runtime | blocking when selected |"
             echo "| lsp-tests | $runtime | blocking when selected |"
             echo "| bench-editor (pull requests) | $runtime | informational |"
             echo "| fast-contract, ci-contract | true | blocking |"
@@ -547,6 +548,40 @@ jobs:
         working-directory: tests/integration
         run: pnpm exec vitest run --reporter=verbose --exclude='**/lsp*.test.js'
 
+  dap-tests:
+    needs: classify
+    if: needs.classify.outputs.runtime == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: make build
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ env.PNPM_VERSION }}
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: tests/functional/pnpm-lock.yaml
+      - uses: actions/setup-python@v6
+        id: python
+        with:
+          python-version: '3.11'
+      - uses: actions/cache@v4
+        id: adapters
+        with:
+          path: ~/.cache/ttt-dap
+          key: dap-${{ runner.os }}-${{ runner.arch }}-${{ steps.python.outputs.python-version }}-${{ hashFiles('tests/dap/install/*.sh', 'tests/dap/cases/*.json') }}
+      - if: steps.adapters.outputs.cache-hit != 'true'
+        run: node tests/dap/run.mjs --install
+      - run: pnpm --dir tests/functional install --frozen-lockfile
+      - run: node tests/dap/run.mjs --run
+      - run: node tests/dap/run.mjs --scenarios
+
   lsp-tests:
     needs: classify
     if: needs.classify.outputs.runtime == 'true'
@@ -615,7 +650,7 @@ jobs:
           [[ "$failed" == "false" ]]
 
   ci-contract:
-    needs: [classify, fast-contract, test-race, functional-tests, integration-tests, lsp-tests]
+    needs: [classify, fast-contract, test-race, functional-tests, integration-tests, lsp-tests, dap-tests]
     if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -626,6 +661,7 @@ jobs:
       RACE_RESULT: ${{ needs.test-race.result }}
       FUNCTIONAL_RESULT: ${{ needs.functional-tests.result }}
       INTEGRATION_RESULT: ${{ needs.integration-tests.result }}
+      DAP_RESULT: ${{ needs.dap-tests.result }}
       LSP_RESULT: ${{ needs.lsp-tests.result }}
       LSP_TEST_OUTCOME: ${{ needs.lsp-tests.outputs.test_outcome || 'not-run' }}
     steps:
@@ -659,6 +695,7 @@ jobs:
           require_result test-race "$RUNTIME" "$RACE_RESULT"
           require_result functional-tests "$RUNTIME" "$FUNCTIONAL_RESULT"
           require_result integration-tests "$RUNTIME" "$INTEGRATION_RESULT"
+          require_result dap-tests "$RUNTIME" "$DAP_RESULT"
           require_result lsp-tests "$RUNTIME" "$LSP_RESULT"
 
           {
@@ -670,6 +707,7 @@ jobs:
             echo "| test-race | $RACE_RESULT | yes when selected |"
             echo "| functional-tests | $FUNCTIONAL_RESULT | yes when selected |"
             echo "| integration-tests | $INTEGRATION_RESULT | yes when selected |"
+            echo "| dap-tests | $DAP_RESULT | yes when selected |"
             echo "| lsp-tests | $LSP_RESULT ($LSP_TEST_OUTCOME) | yes when selected |"
             echo
             echo "The pinned real-LSP lane proves known C, Go, and TypeScript server compatibility. The scheduled canary owns latest-version ecosystem drift."

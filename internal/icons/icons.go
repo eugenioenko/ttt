@@ -12,10 +12,23 @@ import (
 type Name string
 
 const (
-	Branch Name = "branch"
-	Commit Name = "commit"
-	Lock   Name = "lock"
-	Pinned Name = "pinned"
+	PluginInstall     Name = "plugin-install"
+	PluginSource      Name = "plugin-source"
+	DebugStart        Name = "debug-start"
+	DebugContinue     Name = "debug-continue"
+	DebugPause        Name = "debug-pause"
+	DebugStop         Name = "debug-stop"
+	DebugDetach       Name = "debug-detach"
+	DebugStepOver     Name = "debug-step-over"
+	DebugStepIn       Name = "debug-step-in"
+	DebugStepOut      Name = "debug-step-out"
+	DebugExecution    Name = "debug-execution"
+	Breakpoint        Name = "breakpoint"
+	PendingBreakpoint Name = "breakpoint-pending"
+	Branch            Name = "branch"
+	Commit            Name = "commit"
+	Lock              Name = "lock"
+	Pinned            Name = "pinned"
 
 	ChevronRight Name = "chevron-right"
 	ChevronLeft  Name = "chevron-left"
@@ -52,6 +65,7 @@ const (
 	PanelExplorer Name = "panel-explorer"
 	PanelSearch   Name = "panel-search"
 	PanelChanges  Name = "panel-changes"
+	PanelDebug    Name = "panel-debug"
 	PanelOutline  Name = "panel-outline"
 	PanelPlugins  Name = "panel-plugins"
 	PanelApps     Name = "panel-apps"
@@ -70,10 +84,23 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Branch: {Plain: "⎇", Nerd: "\ue702"},
-	Commit: {Plain: "●", Nerd: "\ueafc"},
-	Lock:   {Plain: "⚿", Nerd: ""},
-	Pinned: {Plain: "♦", Nerd: ""},
+	PluginInstall:     {Plain: "⤓", Nerd: "\uf019"},
+	PluginSource:      {Plain: "⤴", Nerd: "\uf08e"},
+	DebugStart:        {Plain: "⏵", Nerd: "\uf04b"},
+	DebugContinue:     {Plain: "⏵", Nerd: "\ueacf"},
+	DebugPause:        {Plain: "⏸", Nerd: "\uf04c"},
+	DebugStop:         {Plain: "∎", Nerd: "\uf04d"},
+	DebugDetach:       {Plain: "⏏", Nerd: "\uf052"},
+	DebugStepOver:     {Plain: "↷", Nerd: "\uead6"},
+	DebugStepIn:       {Plain: "⤓", Nerd: "\uead4"},
+	DebugStepOut:      {Plain: "⤒", Nerd: "\uead5"},
+	DebugExecution:    {Plain: "▶", Nerd: "\uf04b"},
+	Breakpoint:        {Plain: "⦁", Nerd: "\U000f0765"},
+	PendingBreakpoint: {Plain: "◦", Nerd: "\uf1db"},
+	Branch:            {Plain: "⎇", Nerd: "\ue702"},
+	Commit:            {Plain: "●", Nerd: "\ueafc"},
+	Lock:              {Plain: "⚿", Nerd: ""},
+	Pinned:            {Plain: "♦", Nerd: ""},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
 	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
@@ -110,6 +137,7 @@ var table = map[Name]glyphs{
 	PanelExplorer: {Plain: "⌂", Nerd: "\ueaf0"},
 	PanelSearch:   {Plain: "⌕", Nerd: "\uea6d"},
 	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
+	PanelDebug:    {Plain: "D", Nerd: "\uead8"},
 	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
 	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
 	PanelApps:     {Plain: "⏵", Nerd: "\U000f003b"},

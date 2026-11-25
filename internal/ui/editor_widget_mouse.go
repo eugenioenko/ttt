@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -59,10 +60,18 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	gutterW := e.GutterWidth()
 	inGutter := gutterW > 0 && mx >= r.X && mx < r.X+gutterW
 
+	bookmarkSide := false
+	if inGutter && btn == tcell.ButtonNone {
+		line := e.rowAt(my - r.Y).bufLine
+		digits := len(strconv.Itoa(line + 1))
+		before, _ := e.gutterNumberPadding(gutterW, digits)
+		bookmarkSide = !e.LineNumbers || mx-r.X < before+(digits+1)/2
+	}
+
 	if btn == tcell.ButtonNone && !e.mouseDown {
 		prevHover := e.gutterHover
 		prevLine := e.gutterHoverLine
-		if inGutter {
+		if inGutter && !bookmarkSide {
 			screenY := my - r.Y
 			bufLine := e.screenToBufferLine(screenY)
 			e.gutterHover = true
@@ -140,7 +149,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 	if btn == tcell.ButtonNone && e.mouseDown {
 		e.mouseDown = false
 		e.cancelDragAutoScroll()
-		if mx == e.mouseDownX && my == e.mouseDownY && inGutter && mx-r.X <= e.bookmarkColumn() && e.OnGutterClick != nil {
+		if mx == e.mouseDownX && my == e.mouseDownY && inGutter && bookmarkSide && e.OnGutterClick != nil {
 			if line, ok := e.gutterLineAt(my - r.Y); ok && e.OnGutterClick(line) {
 				if e.Selection != nil {
 					e.Selection.Clear()
@@ -148,7 +157,7 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 				return EventConsumed
 			}
 		}
-		if mx == e.mouseDownX && my == e.mouseDownY && inGutter {
+		if mx == e.mouseDownX && my == e.mouseDownY && inGutter && !bookmarkSide {
 			row := e.rowAt(my - r.Y)
 			bufLine := row.bufLine
 			if !row.isPhantom() && e.Folds != nil && e.Folds.FoldAt(bufLine) != nil {

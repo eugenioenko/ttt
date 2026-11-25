@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"sync"
@@ -64,6 +65,7 @@ type TerminalSpec struct {
 }
 
 type App struct {
+	debugger        debuggerState
 	language        languageState
 	Root            *ui.Root
 	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
@@ -684,6 +686,7 @@ func (a *App) CloseAllTerminals() {
 }
 
 func (a *App) refreshWorkspaceWidgets() {
+	a.refreshDebugConfiguration()
 	a.updateEditorSessionWorkspace()
 	paths := a.Workspace.Paths()
 	a.RememberRecentFolders()
@@ -811,6 +814,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		}
 	}
 	a.EditorGroup.OnFileClose = func(path, lang string) {
+		a.rememberClosedDebugSource(path)
 		a.NotifyLSPClose(path, lang)
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("file.close", path)
@@ -830,6 +834,10 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
+		if r := a.debugger.run; r != nil && filepath.IsAbs(path) && a.debugOwnsSource(r, path) {
+			r.edited[path] = true
+		}
+		a.updateDebugSource(path, a.EditorGroup.ActiveBuffer())
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.cancelBackgroundPull(path, lang)
 		a.ScheduleDiagnosticPull(false)
@@ -845,13 +853,6 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
 		}
-	}
-	a.EditorGroup.OnGutterClick = func(path string, line int) bool {
-		if a.PluginManager == nil || !a.PluginManager.HasEventListeners("gutter.click") {
-			return false
-		}
-		a.PluginManager.DispatchEvent("gutter.click", path, line+1)
-		return true
 	}
 
 	lspManager.OnLog = func(server, level, message string) {

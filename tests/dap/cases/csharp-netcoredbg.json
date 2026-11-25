@@ -1,0 +1,35 @@
+{
+  "name": "csharp-netcoredbg",
+  "requires": ["install/netcoredbg.sh"],
+  "workspacePath": "/proc/self/cwd",
+  "source": "fixtures/csharp/Fixture.cs",
+  "binary": "bin/linux-amd64/csharp",
+  "settings": {
+    "debug": {"adapters": {"coreclr": {"command": ["netcoredbg", "--interpreter=vscode"], "languages": ["csharp"]}}}
+  },
+  "launch": {
+    "name": "csharp-netcoredbg",
+    "type": "coreclr",
+    "request": "launch",
+    "program": "${workspaceFolder}/csharp/Fixture.dll",
+    "cwd": "${workspaceFolder}"
+  },
+  "baseline": {
+    "breakpoint": {"line": 21, "locals": {"count": "41"}},
+    "afterOver": {"line": 22, "locals": {"count": "42"}},
+    "insideCall": {"line": 9, "locals": {"value": "42"}},
+    "afterOut": {"line": 22, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {"arguments": {"processId": "${pid}"}, "picker": {"skip": "ttt process picker requires a provider hook"}},
+  "lifecycle": {"program": "${workspaceFolder}/csharp/Fixture.dll", "args": ["service"], "cwd": "${workspaceFolder}"},
+  "service": {
+    "source": "fixtures/csharp/Fixture.cs",
+    "binary": "bin/linux-amd64/csharp",
+    "command": ["dotnet", "csharp/Fixture.dll", "service"],
+    "line": 41,
+    "nextLine": 42,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {"skip": "NetCoreDbg attaches to a CLR process by PID; its server port is an adapter endpoint"}
+}

@@ -2520,9 +2520,13 @@ events.on("gutter.click", function(path, line)
 end)
 ```
 
-While at least one plugin listens for `gutter.click`, a click in the bookmark
-column goes to the plugin instead of toggling a fold. Without a listener the
-click behaves as it always has.
+During a debug session or while the Debug sidebar is selected and visible, clicking
+the bookmark column toggles a breakpoint in files supported by a configured adapter. On a shared line the breakpoint is drawn
+over the bookmark. Plugins can still read and update the underlying bookmark,
+and removing the breakpoint reveals its current icon.
+
+Outside that interaction, a click goes to plugins listening for `gutter.click`.
+With no listener, clicking the bookmark column in a source file toggles a breakpoint even when the Debug sidebar is hidden.
 
 ## Editor Context Menu
 
@@ -3207,6 +3211,19 @@ Read a setting value. Returns the value (string, number, boolean, or table depen
 ```lua
 local formatter = settings.get("formatters.go")  -- "gofmt" or nil
 local debounce = settings.get("autocomplete.debounce")  -- 150
+```
+
+#### `settings.set_default(key, value)`
+
+Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt. A debugger contribution requires an exact `debug.adapters.<type>` permission. Plugins can supply its initial command through `set_default` during install. Subsequent edits belong to the user.
+
+```lua
+ttt.on_install(function()
+  settings.set_default("debug.adapters.gdb", {
+    command = {"gdb", "-q", "-nx", "-i", "dap"},
+    languages = {"c", "cpp"},
+  })
+end)
 ```
 
 #### `settings.set(key, value)`

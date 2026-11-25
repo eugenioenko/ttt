@@ -73,6 +73,7 @@ func (a *App) applySidebarTabStyle(style string) {
 	a.Sidebar.SetPanelIcon("explorer", string(icons.Rune(icons.PanelExplorer)))
 	a.Sidebar.SetPanelIcon("search", string(icons.Rune(icons.PanelSearch)))
 	a.Sidebar.SetPanelIcon("changes", string(icons.Rune(icons.PanelChanges)))
+	a.Sidebar.SetPanelIcon("debug", string(icons.Rune(icons.PanelDebug)))
 	a.Sidebar.SetPanelIcon("outline", string(icons.Rune(icons.PanelOutline)))
 	a.Sidebar.SetPanelIcon("plugins", string(icons.Rune(icons.PanelPlugins)))
 	a.Sidebar.SetPanelIcon(appsPanelID, string(icons.Rune(icons.PanelApps)))
@@ -83,6 +84,7 @@ func (a *App) applyIcons(ap config.AppearanceSettings) {
 	for _, warning := range icons.Configure(ap.Icons, ap.Overrides) {
 		a.LogOutput("warn", "settings", warning)
 	}
+	a.refreshDebugPanel()
 	if a.Apps != nil {
 		a.Apps.mode = ap.Icons
 		a.Apps.Filter(a.Apps.SearchInput.Text())
@@ -135,6 +137,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.language.updates.Stop()
 	}
 	*a.Settings = s
+	a.refreshDebugControls()
 	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
 	if prev.Terminal.ForwardShortcuts != s.Terminal.ForwardShortcuts {
 		a.Root.SetForwardShortcuts(s.Terminal.ForwardShortcuts)

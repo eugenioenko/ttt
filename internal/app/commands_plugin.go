@@ -164,7 +164,7 @@ func (a *App) handlePluginInstallResult(result *pluginInstallResult) {
 
 func (a *App) resetPluginDetailButton(name string) {
 	if state, ok := a.pluginDetailWidgets[name]; ok {
-		state.installBtn.SetLabel(i18n.Text("general.install"))
+		state.installBtn.Config.Icon = icons.PluginInstall
 		state.installBtn.Disabled = false
 	}
 }
@@ -722,24 +722,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.RequestExecPath = func(path string, done func(bool)) error {
 		return a.ShowExecPathApproval(p, path, done)
 	}
-	p.ShowContextMenu = func(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
-		items := contextMenuItemsFromWidgetEntries(entries)
-		a.captureMenuFocus()
-		menu := ui.NewContextMenuWidget(items, x, y)
-		menu.Borders = a.Borders
-		menu.Icons = a.Settings.Appearance.Icons
-		menu.OnExec = func(cmd string) {
-			a.Root.PopOverlay()
-			a.restoreMenuFocus()
-			onCommand(cmd)
-		}
-		menu.OnDismiss = func() {
-			a.Root.PopOverlay()
-			a.restoreMenuFocus()
-		}
-		a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
-		a.Root.SetFocus(menu)
-	}
+	p.ShowContextMenu = a.showWidgetMenu
 
 	p.OpenDrawer = func(panel *plugin.PluginPanelWidget, width, minWidth int, side string) {
 		a.ClosePluginDrawer()

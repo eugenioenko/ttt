@@ -119,7 +119,6 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	totalLines := len(e.Buf.Lines)
 	gutterW := e.GutterWidth()
-
 	maxLineW := e.computeMaxLineWidth()
 	tabW := e.resolveTabSize()
 
@@ -305,9 +304,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
 				}
 			}
-			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
-				if b, ok := e.Bookmarks[lineIdx]; ok {
-					surface.SetCell(e.bookmarkColumn(), y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
+			if lineIdx < totalLines && !isWrapContinuation {
+				if b, ok := e.VisibleBookmark(lineIdx); ok {
+					surface.SetCell(bookmarkColumn, y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
 				}
 			}
 		}
@@ -739,6 +738,25 @@ func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int
 	if num > 0 {
 		digits = strconv.AppendInt(digits, int64(num), 10)
 	}
+	before, after := e.gutterNumberPadding(gutterW, len(digits))
+	x := 0
+	put := func(ch rune) {
+		cell.Ch = ch
+		surface.SetCell(x, y, cell)
+		x++
+	}
+	for range before {
+		put(' ')
+	}
+	for _, d := range digits {
+		put(rune(d))
+	}
+	for range after {
+		put(' ')
+	}
+}
+
+func (e *EditorPaneWidget) gutterNumberPadding(width, digits int) (int, int) {
 	lead, fixed, trail := 1, 3, 2
 	switch e.GutterStyle {
 	case "minimal":
@@ -746,19 +764,5 @@ func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int
 	case "extended":
 		lead, fixed, trail = 2, 5, 3
 	}
-	x := 0
-	put := func(ch rune) {
-		cell.Ch = ch
-		surface.SetCell(x, y, cell)
-		x++
-	}
-	for range lead + max(gutterW-fixed-len(digits), 0) {
-		put(' ')
-	}
-	for _, d := range digits {
-		put(rune(d))
-	}
-	for range trail {
-		put(' ')
-	}
+	return lead + max(width-fixed-digits, 0), trail
 }

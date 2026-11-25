@@ -1,0 +1,52 @@
+{
+  "name": "ts-js-debug",
+  "requires": ["install/js-debug.sh"],
+  "source": "fixtures/ts-counter/main.ts",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "pwa-node": {
+          "command": ["js-debug-adapter", "${socket}", "127.0.0.1"],
+          "transport": "listen",
+          "addressPattern": "^Debug server listening at (.+)$",
+          "provider": "jsdebug",
+          "languages": ["typescript", "javascript"],
+          "fileLaunch": {"program": "${file}"}
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "ts-js-debug",
+    "type": "pwa-node",
+    "request": "launch",
+    "program": "${workspaceFolder}/main.js",
+    "outFiles": ["${workspaceFolder}/*.js"]
+  },
+  "baseline": {
+    "breakpoint": {"line": 6, "locals": {"count": "41"}},
+    "afterOver": {"line": 7, "locals": {"count": "42"}},
+    "insideCall": {"line": 2, "locals": {"value": "42"}},
+    "afterOut": {"line": 8, "locals": {"count": "43"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {
+    "arguments": {"processId": "${pid}", "port": "${port}", "outFiles": ["${workspaceFolder}/*.js"]},
+    "picker": true,
+    "portFile": "port"
+  },
+  "lifecycle": {"program": "${workspaceFolder}/app.js", "outFiles": ["${workspaceFolder}/*.js"]},
+  "service": {
+    "source": "fixtures/ts-attach/app.ts",
+    "command": ["node", "--inspect=127.0.0.1:0", "app.js"],
+    "line": 10,
+    "nextLine": 11,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["node", "--inspect=127.0.0.1:0", "app.js"],
+    "portFile": "port",
+    "arguments": {"address": "127.0.0.1", "port": "${port}", "outFiles": ["${workspaceFolder}/*.js"]},
+    "externalAdapter": true
+  }
+}

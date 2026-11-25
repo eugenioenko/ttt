@@ -124,6 +124,8 @@ Below is a complete theme file showing every configurable section. Ordinary colo
     "indentGuide": {
       "fg": "#6a6656"
     },
+    "debugBreakpoint": { "fg": "#f14c4c" },
+    "debugExecution": { "fg": "#ffd700" },
     "activeLine": {
       "bg": "#3e3d32"
     },

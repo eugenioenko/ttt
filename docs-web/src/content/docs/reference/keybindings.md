@@ -173,11 +173,19 @@ For example, **Ctrl+K P** opens Quick Open, while **Ctrl+K Ctrl+P** sends Ctrl+P
 
 **Ctrl+F6** toggles forwarding for the current TTT session and shows a short status notification. It works in both modes so you can always switch back, and it leaves the saved `terminal.forwardShortcuts` default unchanged. Restarting restores that default. This binding follows the selected Ctrl/Mod/Super preference and can be changed in the keybindings editor.
 
+## Debugging
+
+| Shortcut | Command | Description |
+|----------|---------|-------------|
+| F10 | `debug.stepOver` | Step Over |
+| F11 | `debug.stepIn` | Step Into |
+| Shift+F11 | `debug.stepOut` | Step Out |
+
 ## Menu Bar
 
 | Shortcut | Command | Description |
 |----------|---------|-------------|
-| F10 / Alt+F | `menu.file` | File menu |
+| Alt+F | `menu.file` | File menu |
 | Alt+E | `menu.edit` | Edit menu |
 | Alt+S | `menu.selection` | Selection menu |
 | Alt+V | `menu.view` | View menu |

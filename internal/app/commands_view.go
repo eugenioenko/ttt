@@ -325,6 +325,12 @@ func registerViewCommands(app *App) {
 	})
 
 	reg.Register(command.Command{
+		ID: "sidebar.debug", Title: i18n.Text("command.showDebug"),
+		Keywords: []string{"view", "debugger", "breakpoints"},
+		Handler:  func() { app.ShowPanel("debug", app.Sidebar.PanelWidget("debug")) },
+	})
+
+	reg.Register(command.Command{
 		ID: "sidebar.apps", Title: i18n.Text("command.showApps"),
 		Keywords: []string{"view", "apps", "applications", "launch", "programs"},
 		Handler:  app.ShowApps,

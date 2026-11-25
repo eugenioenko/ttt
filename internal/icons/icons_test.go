@@ -47,7 +47,7 @@ func TestNerdGlyphsAreSingleRune(t *testing.T) {
 // ambiguousDefaults may render two columns in East Asian locales; they are
 // kept because no narrow glyph reads as well.
 var ambiguousDefaults = map[Name]bool{
-	Commit: true, Lock: true, Dirty: true,
+	Commit: true, Lock: true, Dirty: true, DebugExecution: true,
 	ArrowUp: true, ArrowDown: true,
 	Class: true, Interface: true, Module: true, Constant: true, Variable: true,
 	String: true, Keyword: true, Snippet: true, Symbol: true,

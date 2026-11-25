@@ -324,6 +324,8 @@ Use the editor tab bar’s **More** menu to split right or down (up to 16 groups
 
 Choose **Extended**, **Hidden**, or **Auto-hide** tab bars in **Settings > Appearance > Window** or **Options > Appearance > Tab Bar Style**. Hidden keeps a one-row divider; tab commands remain available. Auto-hide reveals the strip when the pointer reaches the editor’s top edge.
 
+While paused in the debugger, **F10** steps over, **F11** steps into a call, and **Shift+F11** steps out. **Alt+F** opens the File menu.
+
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
 ## Testing

@@ -1,0 +1,44 @@
+{
+  "name": "c-lldb-dap",
+  "requires": ["install/gdb.sh", "install/lldb-dap.sh"],
+  "source": "fixtures/c-counter/main.c",
+  "binary": "bin/linux-amd64/c-counter",
+  "settings": {"debug": {"adapters": {"lldb-dap": {"command": ["lldb-dap"], "languages": ["c"]}}}},
+  "launch": {
+    "name": "c-lldb-dap",
+    "type": "lldb-dap",
+    "request": "launch",
+    "program": "${workspaceFolder}/c-counter",
+    "sourcePath": "${workspaceFolder}"
+  },
+  "baseline": {
+    "breakpoint": {"line": 7, "locals": {"count": "41"}},
+    "afterOver": {"line": 8, "locals": {"count": "42"}},
+    "insideCall": {"line": 3, "locals": {"value": "42"}},
+    "afterOut": {"line": 8, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {
+    "arguments": {"pid": "${pid}", "program": "${workspaceFolder}/c-attach", "sourcePath": "${workspaceFolder}"},
+    "picker": {"skip": "ttt process picker requires a provider hook"}
+  },
+  "lifecycle": {"program": "${workspaceFolder}/c-attach"},
+  "service": {
+    "source": "fixtures/c-attach/main.c",
+    "binary": "bin/linux-amd64/c-attach",
+    "command": ["./c-attach"],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["gdbserver", "--once", "--attach", "127.0.0.1:0", "${pid}"],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/c-attach",
+      "sourcePath": "${workspaceFolder}",
+      "gdb-remote-port": "${port}",
+      "gdb-remote-host": "127.0.0.1"
+    }
+  }
+}

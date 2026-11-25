@@ -1,0 +1,40 @@
+{
+  "name": "python-debugpy",
+  "requires": ["install/debugpy.sh"],
+  "source": "fixtures/python-counter/main.py",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "debugpy": {"command": ["${python}", "-m", "debugpy.adapter"], "provider": "debugpy", "languages": ["python"]}
+      }
+    }
+  },
+  "launch": {
+    "name": "python-debugpy",
+    "type": "debugpy",
+    "request": "launch",
+    "program": "${workspaceFolder}/main.py",
+    "python": "dap-python"
+  },
+  "baseline": {
+    "breakpoint": {"line": 6, "locals": {"count": "41"}},
+    "afterOver": {"line": 7, "locals": {"count": "42"}},
+    "insideCall": {"line": 2, "locals": {"value": "42"}},
+    "afterOut": {"line": 7, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {"arguments": {"processId": "${pid}", "python": "dap-python"}, "picker": true},
+  "lifecycle": {"program": "${workspaceFolder}/example.py", "python": "dap-python"},
+  "service": {
+    "source": "fixtures/python-attach/example.py",
+    "command": ["dap-python", "example.py"],
+    "line": 15,
+    "nextLine": 16,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["dap-python", "example.py", "--listen"],
+    "portFile": "port",
+    "arguments": {"connect": {"host": "127.0.0.1", "port": "${port}"}}
+  }
+}

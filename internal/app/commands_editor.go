@@ -398,6 +398,9 @@ func (a *App) doSaveFile(onSaved func()) {
 }
 
 func (a *App) afterFileSave(path, lang string) {
+	if filepath.Base(path) == "launch.json" {
+		a.refreshDebugConfiguration()
+	}
 	if lang != "" {
 		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.ScheduleDiagnosticPull(true)
