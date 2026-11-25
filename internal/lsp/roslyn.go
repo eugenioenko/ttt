@@ -51,8 +51,7 @@ func (c *Client) OpenRoslynWorkspace(ctx context.Context, root string) error {
 	switch {
 	case solution != "":
 		if err := c.notify("solution/open", roslynSolutionParams{Solution: FileURI(solution)}); err != nil {
-			c.log("error", "solution/open: "+err.Error())
-			return nil
+			return fmt.Errorf("solution/open: %w", err)
 		}
 		c.log("info", "loading solution "+solution)
 	case len(projects) > 0:
@@ -61,8 +60,7 @@ func (c *Client) OpenRoslynWorkspace(ctx context.Context, root string) error {
 			uris[i] = FileURI(project)
 		}
 		if err := c.notify("project/open", roslynProjectsParams{Projects: uris}); err != nil {
-			c.log("error", "project/open: "+err.Error())
-			return nil
+			return fmt.Errorf("project/open: %w", err)
 		}
 		c.log("info", fmt.Sprintf("loading %d project(s)", len(projects)))
 	default:

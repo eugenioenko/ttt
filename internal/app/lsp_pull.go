@@ -181,25 +181,40 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			return nil, nil
 		}
 		// Each root has its own client; a document must be pulled through the
-		// server process that has its root registered.
-		clients := make(map[string]*lsp.Client)
+		// server process that has its root registered. A root that fails to
+		// initialize must not keep the other roots' documents from being pulled,
+		// so its error is reported per document instead of ending the task.
+		type rootClient struct {
+			client *lsp.Client
+			err    error
+		}
+		clients := make(map[string]rootClient)
 		for _, c := range candidates {
 			if _, ok := clients[c.workDir]; ok {
 				continue
 			}
 			client, err := a.LspManager.ClientForLanguage(server, c.workDir)
 			if err != nil {
-				return nil, err
-			}
-			if !client.SupportsPullDiagnostics() {
-				clients[c.workDir] = nil
+				clients[c.workDir] = rootClient{err: err}
 				continue
 			}
-			clients[c.workDir] = client
+			if !client.SupportsPullDiagnostics() {
+				clients[c.workDir] = rootClient{}
+				continue
+			}
+			clients[c.workDir] = rootClient{client: client}
 		}
 		var pulls []backgroundPull
 		for _, c := range candidates {
-			client := clients[c.workDir]
+			if err := ctx.Err(); err != nil {
+				return pulls, err
+			}
+			root := clients[c.workDir]
+			if root.err != nil {
+				pulls = append(pulls, backgroundPull{key: c.key, err: root.err})
+				continue
+			}
+			client := root.client
 			if client == nil {
 				continue
 			}

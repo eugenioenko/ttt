@@ -93,27 +93,41 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 				<-d.inFlight
 			}
 		}
-		// Reopen each document on the process rooted at its own project.
+		// Reopen each document on the process rooted at its own project. A root
+		// that fails must not keep the other roots' documents from reopening, so
+		// its remaining documents are skipped instead of ending the loop.
 		clients := make(map[string]*lsp.Client)
-		var err error
+		failed := make(map[string]bool)
+		var firstErr error
 		for _, d := range docs {
+			if failed[d.workDir] {
+				continue
+			}
 			client := clients[d.workDir]
 			if client == nil {
+				var err error
 				client, err = a.LspManager.ClientForLanguage(ev.Server, d.workDir)
 				if err != nil {
+					failed[d.workDir] = true
 					a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
-					break
+					if firstErr == nil {
+						firstErr = err
+					}
+					continue
 				}
 				clients[d.workDir] = client
 			}
-			if err = client.DidOpen(d.uri, d.langID, d.text); err != nil {
+			if err := client.DidOpen(d.uri, d.langID, d.text); err != nil {
 				err = fmt.Errorf("didOpen %s: %w", d.uri, err)
+				failed[d.workDir] = true
 				a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
-				break
+				if firstErr == nil {
+					firstErr = err
+				}
 			}
 		}
 		close(sent)
-		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerRestarted{Server: ev.Server, Err: firstErr}))
 	}()
 }
 
