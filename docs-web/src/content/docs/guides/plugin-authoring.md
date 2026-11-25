@@ -2520,8 +2520,8 @@ events.on("gutter.click", function(path, line)
 end)
 ```
 
-When the Debug sidebar is selected and visible, clicking the bookmark column
-in a source file toggles a breakpoint. On a shared line the breakpoint is drawn
+During a debug session or while the Debug sidebar is selected and visible, clicking
+the bookmark column toggles a breakpoint in files supported by a configured adapter. On a shared line the breakpoint is drawn
 over the bookmark. Plugins can still read and update the underlying bookmark,
 and removing the breakpoint reveals its current icon.
 

@@ -1,11 +1,16 @@
 package app
 
 import (
-	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"os"
+	"path/filepath"
 	"testing"
 	"weak"
 
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -108,4 +113,49 @@ func TestDebugEditPreservesRuntimeLocationAndClampsDeletedLastLine(t *testing.T)
 	if lines := a.debugLines(r, path); len(lines) != 1 || lines[0] != 1 {
 		t.Fatalf("runtime breakpoints %v", lines)
 	}
+}
+
+func TestGutterListenerDuringDebugSession(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Debug.Adapters = map[string]debugadapter.Config{"go": {Languages: []string{"go"}}}
+	a := buildTestApp(t, settings)
+	dir := t.TempDir()
+	path := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(path, []byte("package main\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	a.Sidebar.ActivePanel = "explorer"
+	a.Sidebar.Visible = true
+	a.wireDebuggerGutter(a.EditorGroup)
+	listener := &plugin.Plugin{Name: "listener", Enabled: true, Granted: plugin.PermissionSet{EditorBookmarks: true}}
+	if err := listener.InitFromSource(`clicks = 0
+		require("ttt.events").on("gutter.click", function() clicks = clicks + 1 end)`); err != nil {
+		t.Fatal(err)
+	}
+	defer listener.Destroy()
+	a.PluginManager = plugin.NewManager(dir, filepath.Join(dir, "plugins.json"))
+	a.PluginManager.RegisterDebugPlugin(listener)
+	click := func(wantBreakpoint bool, wantClicks string) {
+		t.Helper()
+		if !a.EditorGroup.OnGutterClick(path, 0) {
+			t.Fatal("unhandled gutter click")
+		}
+		if got := a.debugger.points[path][1] != nil; got != wantBreakpoint {
+			t.Fatalf("breakpoint = %v, want %v", got, wantBreakpoint)
+		}
+		if got := listener.State.GetGlobal("clicks").String(); got != wantClicks {
+			t.Fatalf("plugin received %s clicks, want %s", got, wantClicks)
+		}
+	}
+	click(false, "1")
+	a.debugger.run = &debugRun{}
+	click(true, "1")
+	thread := 1
+	a.debugger.run.thread = &thread
+	click(false, "1")
+	a.debugger.run = nil
+	click(false, "2")
 }

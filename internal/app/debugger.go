@@ -35,7 +35,7 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 	g.OnGutterClick = func(path string, line int) bool {
 		pluginHandlesClick := a.PluginManager != nil && a.PluginManager.HasEventListeners("gutter.click")
 		debugView := a.Sidebar.Visible && a.Sidebar.ActivePanel == "debug"
-		if (debugView || !pluginHandlesClick) && a.hasDebugAdapter(path) && g.ActiveBuffer() != nil && !g.IsActiveVirtual() && g.ActiveDiffWidget() == nil && filepath.IsAbs(path) {
+		if (a.debugger.run != nil || debugView || !pluginHandlesClick) && a.hasDebugAdapter(path) && g.ActiveBuffer() != nil && !g.IsActiveVirtual() && g.ActiveDiffWidget() == nil && filepath.IsAbs(path) {
 			a.toggleEditorBreakpoint(g, line+1)
 			return true
 		}
