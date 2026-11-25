@@ -1,0 +1,46 @@
+{
+  "name": "cpp-codelldb",
+  "requires": ["install/codelldb.sh", "install/gdb.sh"],
+  "source": "fixtures/cpp-counter/main.cpp",
+  "binary": "bin/linux-amd64/cpp-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb": {"command": ["codelldb", "--port", "${port}"], "transport": "server", "languages": ["cpp"]}
+      }
+    }
+  },
+  "launch": {
+    "name": "cpp-codelldb",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/cpp-counter"
+  },
+  "baseline": {
+    "breakpoint": {"line": 31, "locals": {"count": "41"}},
+    "afterOver": {"line": 32, "locals": {"count": "42"}},
+    "insideCall": {"line": 8, "locals": {"value": "42"}},
+    "afterOut": {"line": 32, "locals": {"count": "42"}},
+    "output": "count = 43"
+  },
+  "pidAttach": {"arguments": {"pid": "${pid}"}, "picker": {"skip": "ttt process picker requires a provider hook"}},
+  "lifecycle": {"program": "${workspaceFolder}/cpp-counter", "args": ["service"]},
+  "service": {
+    "source": "fixtures/cpp-counter/main.cpp",
+    "binary": "bin/linux-amd64/cpp-counter",
+    "command": ["./cpp-counter", "service"],
+    "line": 23,
+    "nextLine": 24,
+    "locals": {"value": "42"}
+  },
+  "addressAttach": {
+    "command": ["gdbserver", "--once", "--attach", "127.0.0.1:0", "${pid}"],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/cpp-counter",
+      "targetCreateCommands": ["target create ${workspaceFolder}/cpp-counter"],
+      "processCreateCommands": ["gdb-remote 127.0.0.1:${port}"]
+    },
+    "continueOnAttach": true
+  }
+}

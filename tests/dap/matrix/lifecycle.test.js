@@ -4,21 +4,30 @@ import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
 import * as tui from "../../functional/tui.js";
-import { cases, copyTarget, startEditor } from "./harness.js";
+import { cases, copyTarget, executionMarker, startEditor } from "./harness.js";
 
 for (const spec of cases) {
   for (const action of ["stop", "quit"]) {
-    it(`[${spec.name.replace("-", "/")}] pauses a launched program and terminates it on ${action}`, async () => {
+    const breakpoint = spec.service.stopAtBreakpoint;
+    it(`[${spec.name.replace("-", "/")}] ${breakpoint ? "hits a breakpoint" : "pauses a launched program"} and terminates it on ${action}`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "ttt-debug-cleanup-"));
       const pidfile = join(dir, "pid");
       let exited = false;
       try {
         const file = copyTarget(dir, spec.service);
         startEditor(dir, file, spec, {name: "Lifecycle", request: "launch", ...spec.lifecycle});
+        if (breakpoint) {
+          for (let line = 1; line < spec.service.line; line++) tui.press("down");
+          tui.exec("Toggle Breakpoint");
+        }
         tui.exec("Start Debugging");
         tui.panel("output");
         tui.waitFor("[debug:Lifecycle] TARGET_READY");
-        tui.exec("Debug: Pause");
+        if (breakpoint) {
+          tui.waitFor(executionMarker(dir, file)(spec.service.line));
+        } else {
+          tui.exec("Debug: Pause");
+        }
         tui.waitFor("⏵   ∎");
         if (action === "stop") {
           tui.exec("Stop Debugging");

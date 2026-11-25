@@ -14,9 +14,10 @@ import (
 func TestDebuggerPluginPackages(t *testing.T) {
 	packages := os.Getenv("TTT_TEST_DAP_PLUGINS")
 	if packages == "" {
-		t.Skip("set TTT_TEST_DAP_PLUGINS to a checkout containing the five debugger packages")
+		t.Skip("set TTT_TEST_DAP_PLUGINS to a checkout containing the debugger packages")
 	}
-	for name, adapter := range map[string]string{"dap-go": "go", "dap-js-debug": "node", "dap-debugpy": "debugpy", "dap-codelldb": "lldb", "dap-gdb": "gdb"} {
+	for name, adapter := range map[string]string{"dap-go": "go", "dap-js-debug": "node", "dap-debugpy": "debugpy", "dap-codelldb": "lldb", "dap-gdb": "gdb",
+		"dap-lldb-dap": "lldb-dap", "dap-netcoredbg": "coreclr", "dap-php": "php"} {
 		for _, scenario := range []string{"unchanged", "preexisting", "edited-on-disk", "disabled"} {
 			t.Run(name+"/"+scenario, func(t *testing.T) {
 				dir := t.TempDir()
@@ -48,7 +49,7 @@ func TestDebuggerPluginPackages(t *testing.T) {
 					t.Fatalf("missing installed %s", key)
 				}
 				if scenario == "unchanged" {
-					source := map[string]string{"go": "main.go", "node": "main.js", "debugpy": "main.py", "gdb": "main.c", "lldb": "main.c"}
+					source := map[string]string{"go": "main.go", "node": "main.js", "debugpy": "main.py", "gdb": "main.c", "lldb": "main.c", "lldb-dap": "main.c", "coreclr": "Example.cs", "php": "main.php"}
 					checkPluginFileRecipe(t, a, dir, adapter, source[adapter])
 					if adapter == "go" {
 						checkPluginFileRecipe(t, a, dir, adapter, "main_test.go")
@@ -96,7 +97,7 @@ func checkPluginFileRecipe(t *testing.T, a *App, dir, adapter, filename string) 
 	t.Helper()
 	file := filepath.Join(dir, "src", filename)
 	target, ok := dap.Adapter(a.Settings.Debug.Adapters[adapter]).FileTarget(dir, file, adapter)
-	if adapter == "gdb" || adapter == "lldb" {
+	if adapter == "gdb" || adapter == "lldb" || adapter == "lldb-dap" || adapter == "coreclr" {
 		if ok {
 			t.Fatal("unexpected source launch recipe for a native executable debugger")
 		}
