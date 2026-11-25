@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 
 it("starts a stdio child and honors a literal argv, cwd, and environment in an integrated terminal", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-dap-reverse-"));
@@ -11,7 +11,7 @@ it("starts a stdio child and honors a literal argv, cwd, and environment in an i
     const config = join(dir, "user-config");
     mkdirSync(config);
     mkdirSync(join(dir, ".ttt"));
-    const command = [process.execPath, fileURLToPath(new URL("./fixtures/reverse-adapter.cjs", import.meta.url))];
+    const command = [process.execPath, fileURLToPath(new URL("../fixtures/reverse-adapter.cjs", import.meta.url))];
     writeFileSync(join(config, "settings.json"), JSON.stringify({debug:{adapters:{go:{command,languages:["c"]}}}}));
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({inputs:[], compounds:[], configurations:[
       {name:"Reverse",type:"go",request:"launch",paths:["${workspaceFolder}"]}

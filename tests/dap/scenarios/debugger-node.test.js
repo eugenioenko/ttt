@@ -1,21 +1,15 @@
-import { execFileSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript source in a js-debug child session", () => {
+it("steps through original TypeScript source in a js-debug child session", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-ts-debug-"));
   try {
     const file = join(dir, "app.ts");
-    writeFileSync(file, [
-      "function report(arg: number) {", "  const local = arg + 1; const payload = {answer: local};",
-      '  console.log("TS_RESULT", local);', '  console.log("TS_DONE", local + 1);',
-      "}", "report(41);", 'console.log("AFTER_REPORT");', "",
-    ].join("\n"));
-    execFileSync("tsc", ["--target", "es2020", "--sourceMap", "--outDir", "dist", "app.ts"], { cwd: dir });
+    cpSync(new URL("../fixtures/ts-sourcemap/", import.meta.url), dir, { recursive: true });
     mkdirSync(join(dir, ".ttt"));
     writeFileSync(join(dir, ".ttt/launch.json"), JSON.stringify({
       configurations: [{ name: "TS", type: "pwa-node", request: "launch",
@@ -69,7 +63,7 @@ it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("steps through original TypeScript s
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 70000);
 
-it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("Debug File runs the active JavaScript file with or without a saved Go target", () => {
+it("Debug File runs the active JavaScript file with or without a saved Go target", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-debug-file-"));
   try {
     const file = join(dir, "test.js");

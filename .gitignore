@@ -36,3 +36,5 @@ result-*
 # Local editor state and debug dumps
 .ttt-notepad.json
 screenshot.txt
+!tests/dap/bin/
+!tests/dap/bin/**

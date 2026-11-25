@@ -1,0 +1,35 @@
+{
+  "name": "ts-js-debug",
+  "requires": ["install/js-debug.sh"],
+  "source": "fixtures/ts-counter/main.ts",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "pwa-node": {
+          "command": ["js-debug-adapter", "${socket}", "127.0.0.1"],
+          "transport": "listen",
+          "addressPattern": "^Debug server listening at (.+)$",
+          "provider": "jsdebug",
+          "languages": ["typescript", "javascript"],
+          "fileLaunch": {"program": "${file}"}
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "ts-js-debug",
+    "type": "pwa-node",
+    "request": "launch",
+    "program": "${workspaceFolder}/main.js",
+    "outFiles": ["${workspaceFolder}/*.js"]
+  },
+  "steps": [
+    {"breakpoint": {"line": 3}},
+    {"run": "launch"},
+    {"expectStopped": {"line": 3, "locals": {"count": "41"}}},
+    {"step": "over"},
+    {"expectStopped": {"line": 4, "locals": {"count": "42"}}},
+    {"continue": true},
+    {"expectExit": {"output": "count = 42"}}
+  ]
+}

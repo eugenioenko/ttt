@@ -3,11 +3,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
-it.skipIf(!python)("debugs a module with a dependency from its workspace virtual environment", () => {
+it("debugs a module with a dependency from its workspace virtual environment", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-python-debug-"));
   try {
     const adapterLib = execFileSync(python, ["-c", "import debugpy,pathlib;print(pathlib.Path(debugpy.__file__).resolve().parents[1])"], { encoding: "utf8" }).trim();

@@ -1,0 +1,32 @@
+{
+  "name": "c-codelldb",
+  "requires": ["install/codelldb.sh"],
+  "source": "fixtures/c-counter/main.c",
+  "binary": "bin/linux-amd64/c-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb": {
+          "command": ["codelldb", "--port", "${port}"],
+          "transport": "server",
+          "languages": ["c"]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "c-codelldb",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/c-counter"
+  },
+  "steps": [
+    {"breakpoint": {"line": 4}},
+    {"run": "launch"},
+    {"expectStopped": {"line": 4, "locals": {"count": "41"}}},
+    {"step": "over"},
+    {"expectStopped": {"line": 5, "locals": {"count": "42"}}},
+    {"continue": true},
+    {"expectExit": {"output": "count = 42"}}
+  ]
+}

@@ -1,15 +1,14 @@
-import { spawn, spawnSync, execFileSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
-const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
 
 async function waitFor(read, child) {
   const deadline = Date.now() + 10000;
@@ -101,8 +100,8 @@ async function checkAddressAttach(type, externalAdapter = false) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-it.skipIf(!hasDelve)("attaches to headless Delve, steps and detaches with the program running", () => checkAddressAttach("go"), 60000);
-it.skipIf(!python)("attaches to a debugpy listener, steps and detaches with the program running", () => checkAddressAttach("debugpy"), 60000);
+it("attaches to headless Delve, steps and detaches with the program running", () => checkAddressAttach("go"), 60000);
+it("attaches to a debugpy listener, steps and detaches with the program running", () => checkAddressAttach("debugpy"), 60000);
 
-it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("attaches to a Node inspector port and leaves the service running", () => checkAddressAttach("node"), 60000);
-it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("uses separate addresses for an external js-debug server and the Node inspector", () => checkAddressAttach("node", true), 60000);
+it("attaches to a Node inspector port and leaves the service running", () => checkAddressAttach("node"), 60000);
+it("uses separate addresses for an external js-debug server and the Node inspector", () => checkAddressAttach("node", true), 60000);

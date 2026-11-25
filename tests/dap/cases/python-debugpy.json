@@ -1,0 +1,32 @@
+{
+  "name": "python-debugpy",
+  "requires": ["install/debugpy.sh"],
+  "source": "fixtures/python-counter/main.py",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "debugpy": {
+          "command": ["${python}", "-m", "debugpy.adapter"],
+          "provider": "debugpy",
+          "languages": ["python"]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "python-debugpy",
+    "type": "debugpy",
+    "request": "launch",
+    "program": "${workspaceFolder}/main.py",
+    "python": "dap-python"
+  },
+  "steps": [
+    {"breakpoint": {"line": 3}},
+    {"run": "launch"},
+    {"expectStopped": {"line": 3, "locals": {"count": "41"}}},
+    {"step": "over"},
+    {"expectStopped": {"line": 4, "locals": {"count": "42"}}},
+    {"continue": true},
+    {"expectExit": {"output": "count = 42"}}
+  ]
+}

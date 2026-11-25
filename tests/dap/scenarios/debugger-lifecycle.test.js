@@ -1,25 +1,24 @@
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 const fixtures = [
-  { type: "go", file: "main.go", available: spawnSync("dlv", ["version"]).status === 0,
+  { type: "go", file: "main.go",
     source: 'package main\nimport ("fmt"; "time"; "os"; "strconv")\nfunc main() { os.WriteFile("pid", []byte(strconv.Itoa(os.Getpid())), 0600); fmt.Println("TARGET_READY"); for { time.Sleep(time.Millisecond) } }' },
-  { type: "node", file: "app.js", available: process.env.TTT_JS_DEBUG_SERVER,
+  { type: "node", file: "app.js",
     source: 'require("fs").writeFileSync("pid", String(process.pid)); console.log("TARGET_READY"); setInterval(()=>{},10)' },
-  { type: "debugpy", file: "app.py", available: python,
+  { type: "debugpy", file: "app.py",
     source: 'import os, time, pathlib\npathlib.Path("pid").write_text(str(os.getpid()))\nprint("TARGET_READY", flush=True)\nwhile True: time.sleep(0.01)' },
 ];
 
 for (const fixture of fixtures) {
   for (const action of ["stop", "quit"]) {
-    it.skipIf(!fixture.available)(`pauses a launched ${fixture.type} program and terminates it on ${action}`, async () => {
+    it(`pauses a launched ${fixture.type} program and terminates it on ${action}`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "ttt-debug-cleanup-"));
       const pidfile = join(dir, "pid");
       let exited = false;

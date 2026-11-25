@@ -1,0 +1,32 @@
+{
+  "name": "rust-codelldb",
+  "requires": ["install/codelldb.sh"],
+  "source": "fixtures/rust-counter/main.rs",
+  "binary": "bin/linux-amd64/rust-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb": {
+          "command": ["codelldb", "--port", "${port}"],
+          "transport": "server",
+          "languages": ["rust"]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "rust-codelldb",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/rust-counter"
+  },
+  "steps": [
+    {"breakpoint": {"line": 3}},
+    {"run": "launch"},
+    {"expectStopped": {"line": 3, "locals": {"count": "41"}}},
+    {"step": "over"},
+    {"expectStopped": {"line": 4, "locals": {"count": "42"}}},
+    {"continue": true},
+    {"expectExit": {"output": "count = 42"}}
+  ]
+}

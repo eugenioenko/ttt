@@ -1,14 +1,12 @@
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, it } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
 
-it.skipIf(!hasDelve)("saves, inspects, steps and reuses a gutter breakpoint with Delve", () => {
+it("saves, inspects, steps and reuses a gutter breakpoint with Delve", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-dap-"));
   try {
     const file = join(dir, "main.go");

@@ -1,0 +1,33 @@
+{
+  "name": "go-delve",
+  "requires": ["install/delve.sh"],
+  "source": "fixtures/go-counter/main.go",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "go": {
+          "command": ["dlv", "dap", "--listen=unix:${socket}"],
+          "transport": "listen",
+          "addressPattern": "^DAP server listening at: (.+)$",
+          "provider": "delve",
+          "languages": ["go"]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "go-delve",
+    "type": "go",
+    "request": "launch",
+    "program": "${workspaceFolder}/."
+  },
+  "steps": [
+    {"breakpoint": {"line": 7}},
+    {"run": "launch"},
+    {"expectStopped": {"line": 7, "locals": {"count": "41"}}},
+    {"step": "over"},
+    {"expectStopped": {"line": 8, "locals": {"count": "42"}}},
+    {"continue": true},
+    {"expectExit": {"output": "count = 42"}}
+  ]
+}

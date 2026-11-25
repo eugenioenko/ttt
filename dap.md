@@ -40,7 +40,7 @@ The Linux real-adapter run covers the following nine combinations. Each row uses
 | js-debug | Passed with compiled TypeScript and source maps | Both passed | Passed with an inspector endpoint and separately with an external DAP server |
 | debugpy | Passed with a module and a virtual-environment-only dependency | Both passed | Passed with an independent debugpy listener |
 
-To repeat the matrix, build ttt, place Delve, Node and tsc on PATH, set TTT_JS_DEBUG_SERVER to the standalone server script, and set TTT_TEST_DEBUGPY to a Python executable containing debugpy. From tests/functional run `pnpm exec vitest run debugger`. Check that the summary reports every test passed with zero skips. OS process-debugging permissions apply to attach.
+Run the [DAP compatibility suite](tests/dap/README.md) locally with the same case files, installers, and real editor used in PR CI. The dedicated suite also covers the Linux attach and lifecycle scenarios.
 
 The Linux release check runs 23 real-editor tests, including a controlled integrated-terminal and child-session exchange, the nine workflows, PID picker and configured PID cases, workspace selection, failed attach and cancellation, and Stop and editor quit with each adapter. The TypeScript launch test also expands a nested value. The Python launch test steps into a callee and back into the caller. The Go suite covers failed saves for both request types, split gutters, late inspection replies and both DAP startup reply orderings. Run `make test` and `make lint` for the repository gates.
 
@@ -138,7 +138,7 @@ Expose start, continue, pause, stop, stepping and toggle-breakpoint commands thr
 
 ## Native adapter verification
 
-The [Docker fixture](tests/debugger-native/README.md) builds a C executable with symbols and exercises CodeLLDB 1.12.3 and GDB 16.3 using the same source breakpoint, local variable, step and exit checks. GDB 14 can run past initial breakpoints during startup.
+The native compatibility cases exercise CodeLLDB with C and Rust and GDB with C. They use the checked-in Linux/amd64 executables and their matching sources.
 
 ## Release decisions
 

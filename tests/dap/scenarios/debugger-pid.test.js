@@ -1,16 +1,14 @@
-import { spawn, spawnSync, execFileSync } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { once } from "node:events";
 import { setTimeout as delay } from "node:timers/promises";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
-const linux = process.platform === "linux";
-const hasDelve = spawnSync("dlv", ["version"], { stdio: "ignore" }).status === 0;
 
 async function checkPID(type, picker) {
   const dir = mkdtempSync(join(tmpdir(), "ttt-pid-"));
@@ -71,8 +69,8 @@ async function checkPID(type, picker) {
   }
 }
 for (const picker of [true,false]) {
-  it.skipIf(!process.env.TTT_JS_DEBUG_SERVER)("attaches to Node by "+(picker ? "picker" : "configured PID"), () => checkPID("node",picker), 70000);
+  it("attaches to Node by "+(picker ? "picker" : "configured PID"), () => checkPID("node",picker), 70000);
   const via = picker ? "picker" : "configured PID";
-  it.skipIf(!linux || !hasDelve)("debugs a Go process via "+via, () => checkPID("go",picker), 70000);
-  it.skipIf(!linux || !python)("debugs a Python process via "+via, () => checkPID("debugpy",picker), 70000);
+  it("debugs a Go process via "+via, () => checkPID("go",picker), 70000);
+  it("debugs a Python process via "+via, () => checkPID("debugpy",picker), 70000);
 }

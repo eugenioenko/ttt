@@ -2,10 +2,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { it, expect } from "vitest";
-import * as tui from "./tui.js";
+import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-it.skipIf(!process.env.TTT_TEST_DEBUGPY)("uses the selected workspace folder with another folder's dirty editor focused", () => {
+it("uses the selected workspace folder with another folder's dirty editor focused", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-debug-folders-"));
   try {
     const names = ["left", "right"];
