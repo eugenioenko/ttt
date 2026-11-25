@@ -100,8 +100,8 @@ async function checkAddressAttach(type, externalAdapter = false) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
-it("attaches to headless Delve, steps and detaches with the program running", () => checkAddressAttach("go"), 60000);
-it("attaches to a debugpy listener, steps and detaches with the program running", () => checkAddressAttach("debugpy"), 60000);
+it("[go] attaches to headless Delve, steps and detaches with the program running", () => checkAddressAttach("go"), 60000);
+it("[python] attaches to a debugpy listener, steps and detaches with the program running", () => checkAddressAttach("debugpy"), 60000);
 
-it("attaches to a Node inspector port and leaves the service running", () => checkAddressAttach("node"), 60000);
-it("uses separate addresses for an external js-debug server and the Node inspector", () => checkAddressAttach("node", true), 60000);
+it("[js] attaches to a Node inspector port and leaves the service running", () => checkAddressAttach("node"), 60000);
+it("[js] uses separate addresses for an external js-debug server and the Node inspector", () => checkAddressAttach("node", true), 60000);

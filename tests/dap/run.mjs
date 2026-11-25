@@ -23,14 +23,15 @@ if (option === "--install") {
   }
 } else if (option === "--scenarios") {
   assert.equal(names.length, 0, "Scenario tests run as a suite");
-  execFileSync("pnpm", ["--dir", join(root, "../functional"), "exec", "vitest", "run", "--root", root, "scenarios"], {
+  execFileSync("pnpm", ["--dir", join(root, "../functional"), "exec", "vitest", "run", "--reporter=verbose", "--root", root, "scenarios"], {
     stdio: "inherit",
     env: {...process.env, TTT_TEST_DEBUGPY: process.env.TTT_TEST_DEBUGPY || join(tools, "debugpy/bin/python"),
       TTT_JS_DEBUG_SERVER: process.env.TTT_JS_DEBUG_SERVER || join(tools, "js-debug/src/dapDebugServer.js")},
   });
 } else {
   for (const spec of selected) {
-    console.log(`Running ${spec.name}`);
+    const label = `[${spec.name.replace("-", "/")}] ${spec.launch.name}`;
+    console.log(`Running ${label}`);
     const dir = mkdtempSync(join(tmpdir(), "ttt-dap-"));
     const workspace = join(dir, "workspace");
     const config = join(dir, "config");
@@ -42,7 +43,7 @@ if (option === "--install") {
       writeFileSync(join(workspace, ".ttt/launch.json"), JSON.stringify({configurations: [spec.launch]}));
       writeFileSync(join(config, "settings.json"), JSON.stringify(spec.settings));
       runCase(spec, workspace, config);
-      console.log(`PASS ${spec.name}`);
+      console.log(`PASS ${label}`);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }

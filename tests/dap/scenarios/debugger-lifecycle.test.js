@@ -8,17 +8,17 @@ import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
 const fixtures = [
-  { type: "go", file: "main.go",
+  { type: "go", language: "go", file: "main.go",
     source: 'package main\nimport ("fmt"; "time"; "os"; "strconv")\nfunc main() { os.WriteFile("pid", []byte(strconv.Itoa(os.Getpid())), 0600); fmt.Println("TARGET_READY"); for { time.Sleep(time.Millisecond) } }' },
-  { type: "node", file: "app.js",
+  { type: "node", language: "js", file: "app.js",
     source: 'require("fs").writeFileSync("pid", String(process.pid)); console.log("TARGET_READY"); setInterval(()=>{},10)' },
-  { type: "debugpy", file: "app.py",
+  { type: "debugpy", language: "python", file: "app.py",
     source: 'import os, time, pathlib\npathlib.Path("pid").write_text(str(os.getpid()))\nprint("TARGET_READY", flush=True)\nwhile True: time.sleep(0.01)' },
 ];
 
 for (const fixture of fixtures) {
   for (const action of ["stop", "quit"]) {
-    it(`pauses a launched ${fixture.type} program and terminates it on ${action}`, async () => {
+    it(`[${fixture.language}] pauses a launched program and terminates it on ${action}`, async () => {
       const dir = mkdtempSync(join(tmpdir(), "ttt-debug-cleanup-"));
       const pidfile = join(dir, "pid");
       let exited = false;

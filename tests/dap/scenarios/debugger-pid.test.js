@@ -69,8 +69,8 @@ async function checkPID(type, picker) {
   }
 }
 for (const picker of [true,false]) {
-  it("attaches to Node by "+(picker ? "picker" : "configured PID"), () => checkPID("node",picker), 70000);
+  it("[js] attaches to Node by "+(picker ? "picker" : "configured PID"), () => checkPID("node",picker), 70000);
   const via = picker ? "picker" : "configured PID";
-  it("debugs a Go process via "+via, () => checkPID("go",picker), 70000);
-  it("debugs a Python process via "+via, () => checkPID("debugpy",picker), 70000);
+  it("[go] debugs a Go process via "+via, () => checkPID("go",picker), 70000);
+  it("[python] debugs a Python process via "+via, () => checkPID("debugpy",picker), 70000);
 }

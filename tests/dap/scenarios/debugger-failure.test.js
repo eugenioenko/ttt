@@ -7,7 +7,7 @@ import { it, expect } from "vitest";
 import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-it("cancels a waiting attach, releases the connection and reports an unreachable endpoint on retry", async () => {
+it("[dap] cancels a waiting attach, releases the connection and reports an unreachable endpoint on retry", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-attach-cancel-"));
   let peer;
   try {
@@ -48,7 +48,7 @@ it("cancels a waiting attach, releases the connection and reports an unreachable
   }
 }, 25000);
 
-it("keeps an independent Python process alive after PID attach startup fails", async () => {
+it("[python] keeps an independent Python process alive after PID attach startup fails", async () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-attach-fail-"));
   const child = spawn(process.env.TTT_TEST_DEBUGPY, ["-u", "-c", 'import sys; print("ready"); print(input())'], {stdio:"pipe"});
   try {

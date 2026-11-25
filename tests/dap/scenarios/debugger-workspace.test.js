@@ -5,7 +5,7 @@ import { it, expect } from "vitest";
 import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-it("uses the selected workspace folder with another folder's dirty editor focused", () => {
+it("[python] uses the selected workspace folder with another folder's dirty editor focused", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-debug-folders-"));
   try {
     const names = ["left", "right"];

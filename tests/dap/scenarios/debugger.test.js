@@ -6,7 +6,7 @@ import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 
-it("saves, inspects, steps and reuses a gutter breakpoint with Delve", () => {
+it("[go] saves, inspects, steps and reuses a gutter breakpoint with Delve", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-dap-"));
   try {
     const file = join(dir, "main.go");

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 import * as tui from "../../functional/tui.js";
 
-it("starts a stdio child and honors a literal argv, cwd, and environment in an integrated terminal", () => {
+it("[dap] starts a stdio child and honors a literal argv, cwd, and environment in an integrated terminal", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-dap-reverse-"));
   try {
     const config = join(dir, "user-config");

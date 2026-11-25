@@ -5,7 +5,7 @@ import { it, expect } from "vitest";
 import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
-it("steps through original TypeScript source in a js-debug child session", () => {
+it("[ts] steps through original TypeScript source in a js-debug child session", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-ts-debug-"));
   try {
     const file = join(dir, "app.ts");
@@ -63,7 +63,7 @@ it("steps through original TypeScript source in a js-debug child session", () =>
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 70000);
 
-it("Debug File runs the active JavaScript file with or without a saved Go target", () => {
+it("[js] Debug File runs the active JavaScript file with or without a saved Go target", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-debug-file-"));
   try {
     const file = join(dir, "test.js");

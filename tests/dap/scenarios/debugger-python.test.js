@@ -7,7 +7,7 @@ import * as tui from "../../functional/tui.js";
 import { configureDebugAdapters } from "./debug-adapters.js";
 
 const python = process.env.TTT_TEST_DEBUGPY;
-it("debugs a module with a dependency from its workspace virtual environment", () => {
+it("[python] debugs a module with a dependency from its workspace virtual environment", () => {
   const dir = mkdtempSync(join(tmpdir(), "ttt-python-debug-"));
   try {
     const adapterLib = execFileSync(python, ["-c", "import debugpy,pathlib;print(pathlib.Path(debugpy.__file__).resolve().parents[1])"], { encoding: "utf8" }).trim();
