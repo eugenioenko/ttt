@@ -95,7 +95,7 @@ var table = map[Name]glyphs{
 	DebugStepIn:       {Plain: "⤓", Nerd: "\uead4"},
 	DebugStepOut:      {Plain: "⤒", Nerd: "\uead5"},
 	DebugExecution:    {Plain: "▶", Nerd: "\uf04b"},
-	Breakpoint:        {Plain: "⦁", Nerd: "\uf111"},
+	Breakpoint:        {Plain: "⦁", Nerd: "\U000f0765"},
 	PendingBreakpoint: {Plain: "◦", Nerd: "\uf1db"},
 	Branch:            {Plain: "⎇", Nerd: "\ue702"},
 	Commit:            {Plain: "●", Nerd: "\ueafc"},
