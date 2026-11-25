@@ -95,7 +95,7 @@ func (a *App) ensureDebugPanel() {
 	p.toolbar = widgets.NewHStackWidget()
 	p.toolbar.FixedHeight = 1
 	p.toolbar.Gap = 1
-	inspection := debugSectionSplit(p.variables, p.stack, 0.5, 2)
+	inspection := debugSectionSplit(p.variables, p.stack, 1.0/3, 2)
 	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, p.points), 0.25, 5)
 	a.refreshDebugConfiguration()
 	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
