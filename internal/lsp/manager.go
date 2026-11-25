@@ -188,6 +188,9 @@ func (m *Manager) startClient(ctx context.Context, key, lang, workDir string, se
 		m.log(key, "error", "initialize failed: "+err.Error())
 		return client, fmt.Errorf("initialize LSP for %s: %w", lang, err)
 	}
+	if isRoslynServer(key, serverCfg.Command) {
+		client.OpenRoslynWorkspace(workDir)
+	}
 
 	m.log(key, "info", "ready")
 	return client, nil

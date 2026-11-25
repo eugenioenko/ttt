@@ -41,7 +41,7 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 		return
 	}
 	key := pullKey{path: path, version: version, epoch: a.lspEpochs[serverKey]}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	a.diagPull.ScheduleKey(key, func(ctx context.Context) (pulledDiagnostics, error) {
 		// The server must have this version before it is asked about it.
 		if sent != nil {
@@ -154,7 +154,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			unchanged: a.lastPulled[d.Path] == k,
 		})
 		if workDir == "" {
-			workDir = a.lspWorkDir(d.Path)
+			workDir = a.lspWorkDirFor(d.Path, d.Language)
 		}
 	}
 	a.DocVersionsMu.Unlock()

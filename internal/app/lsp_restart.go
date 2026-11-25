@@ -36,7 +36,7 @@ func (a *App) RestartLSPServer() {
 		a.StatusWarn(i18n.Text("status.noLanguageServerForTheActiveFile"))
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	// Raised before the old server stops, since a change made while it stops
 	// would otherwise start the new server and reach it before the reopen.
 	a.DocVersionsMu.Lock()

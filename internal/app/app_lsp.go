@@ -382,7 +382,7 @@ func (a *App) RequestFormatting(path, lang string) {
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	tabSize, insertSpaces := a.editorTabSize()
 	version := a.editorBufferVersion()
 	buf := a.editorBuffer()
@@ -413,7 +413,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	tabSize, insertSpaces := a.editorTabSize()
 	version := a.editorBufferVersion()
 	buf := a.editorBuffer()
@@ -501,7 +501,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	lineCount := 0
 	if a.EditorGroup.Editor != nil {
 		lineCount = len(a.EditorGroup.Editor.Buf.Lines)
@@ -576,7 +576,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -696,7 +696,7 @@ func (a *App) RequestInteractiveCodeActions() {
 	openBuffers := a.snapshotCodeActionBuffers()
 	r := a.currentCodeActionRange(path)
 	diagnostics := a.codeActionDiagnostics(path, serverKey, r)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -853,7 +853,7 @@ func (a *App) codeActionClient(server, workDir string) (codeActionCommandClient,
 }
 
 func (a *App) executeCodeActionCommand(server, path string, command lsp.Command, notify bool) {
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirForServer(path, server)
 	go func() {
 		client, err := a.codeActionClient(server, workDir)
 		if err == nil {
@@ -872,7 +872,7 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -1143,7 +1143,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -1183,6 +1183,26 @@ func (a *App) lspWorkDir(path string) string {
 	return workDir
 }
 
+func (a *App) lspWorkDirFor(path, lang string) string {
+	serverKey, _, ok := a.lspResolve(path, lang)
+	if !ok {
+		return a.lspWorkDir(path)
+	}
+	return a.lspWorkDirForServer(path, serverKey)
+}
+
+func (a *App) lspWorkDirForServer(path, serverKey string) string {
+	workDir := a.lspWorkDir(path)
+	if path == "" || a.LspManager == nil {
+		return workDir
+	}
+	markers := a.LspManager.ServerConfig(serverKey).RootMarkers
+	if root := lsp.FindRoot(filepath.Dir(path), markers); root != "" {
+		return root
+	}
+	return workDir
+}
+
 func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	serverKey, langID, ok := a.lspResolve(path, lang)
 	if !ok {
@@ -1214,7 +1234,7 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	}
 
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path] = 1
@@ -1244,7 +1264,7 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 		return done
 	}
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
 	version := a.DocVersions[path]
@@ -1284,7 +1304,7 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 		return
 	}
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	previous := a.lspSent[path]
@@ -1310,7 +1330,7 @@ func (a *App) NotifyLSPClose(path, lang string) {
 	if !ok {
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	a.DocVersionsMu.Lock()
 	delete(a.DocVersions, path)
 	delete(a.lspSent, path)

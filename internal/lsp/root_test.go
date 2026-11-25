@@ -1,0 +1,50 @@
+package lsp
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func writeMarkerFile(t *testing.T, path string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestFindRootWalksUpToNearestMarker(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	deep := filepath.Join(project, "src", "deep")
+	if err := os.MkdirAll(deep, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeMarkerFile(t, filepath.Join(project, "package.json"))
+
+	if got := FindRoot(deep, []string{"package.json"}); got != project {
+		t.Errorf("root = %q, want %q", got, project)
+	}
+}
+
+func TestFindRootMatchesGlobMarkers(t *testing.T) {
+	root := t.TempDir()
+	project := filepath.Join(root, "project")
+	writeMarkerFile(t, filepath.Join(project, "App.sln"))
+
+	if got := FindRoot(filepath.Join(project, "src"), []string{"*.sln"}); got != project {
+		t.Errorf("root = %q, want %q", got, project)
+	}
+}
+
+func TestFindRootReturnsEmptyWithoutMatch(t *testing.T) {
+	if got := FindRoot(t.TempDir(), []string{".git"}); got != "" {
+		t.Errorf("root = %q, want no root", got)
+	}
+	if got := FindRoot(t.TempDir(), nil); got != "" {
+		t.Errorf("root = %q, want no root", got)
+	}
+}
