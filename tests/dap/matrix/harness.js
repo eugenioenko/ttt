@@ -10,7 +10,7 @@ export const cases = readdirSync(join(root, "cases")).map(entry =>
 
 export function copyTarget(dir, fixture) {
   cpSync(dirname(join(root, fixture.source)), dir, {recursive: true});
-  if (fixture.binary) cpSync(join(root, fixture.binary), join(dir, basename(fixture.binary)));
+  if (fixture.binary) cpSync(join(root, fixture.binary), join(dir, basename(fixture.binary)), {recursive: true});
   return basename(fixture.source);
 }
 

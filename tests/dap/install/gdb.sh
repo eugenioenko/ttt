@@ -7,6 +7,7 @@ archive="$scratch/micromamba.tar.bz2"
 curl -fsSL --retry 3 https://micro.mamba.pm/api/micromamba/linux-64/2.3.3 -o "$archive"
 echo "e7274528ceb9c20d048a428d6c22d7e02e268f8ffb762c4c365422347c8b8ba2  $archive" | sha256sum -c -
 tar -xjf "$archive" -C "$scratch" bin/micromamba
+install -m755 "$scratch/bin/micromamba" "$DAP_TOOLS/bin/micromamba"
 MAMBA_ROOT_PREFIX="$scratch/mamba" "$scratch/bin/micromamba" create -y \
   -p "$DAP_TOOLS/gdb" --override-channels -c conda-forge 'gdb=16.3'
 ln -sf "$DAP_TOOLS/gdb/bin/gdb" "$DAP_TOOLS/bin/gdb"
