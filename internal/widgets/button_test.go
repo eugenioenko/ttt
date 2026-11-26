@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -312,5 +313,26 @@ func TestButtonUnderlinesFullwidthAccelerator(t *testing.T) {
 	// The underline belongs on the third rune, which starts at column 5.
 	if !s.cells[0][5].Underline {
 		t.Error("the accelerator rune is not underlined")
+	}
+}
+
+func TestDropdownUsesCurrentIconAfterAppearanceChange(t *testing.T) {
+	d := NewDropdownWidget(DropdownConfig{})
+	defer icons.Configure("", nil)
+	for _, glyph := range []string{"!", "?"} {
+		icons.Configure("", map[string]string{"more": glyph})
+		if got := d.button.text(); got != glyph {
+			t.Fatalf("dropdown = %q, want %q", got, glyph)
+		}
+	}
+	d.UpdateConfig(DropdownConfig{Label: "Actions"})
+	if got := d.button.text(); got != "Actions" {
+		t.Fatal(got)
+	}
+}
+func TestButtonKeepsLiteralAmpersandBeforeAccelerator(t *testing.T) {
+	b := NewButtonWidget(ButtonConfig{Label: "Run & &Inspect"})
+	if b.label != "Run & Inspect" || b.accelRune != 'I' {
+		t.Fatalf("label %q, accelerator %q", b.label, b.accelRune)
 	}
 }

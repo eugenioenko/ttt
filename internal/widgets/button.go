@@ -1,9 +1,10 @@
 package widgets
 
 import (
-	"strings"
 	"unicode"
+	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -30,6 +31,7 @@ type ButtonSpan struct {
 }
 
 type ButtonConfig struct {
+	Icon    icons.Name    `json:"-"`
 	Label   string        `json:"label"`
 	Command string        `json:"command"`
 	Style   term.Style    `json:"-"`
@@ -64,20 +66,25 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 		b.Box.PaddingRight = 1
 	}
 	b.spans = append([]ButtonSpan(nil), config.Spans...)
-	idx := strings.IndexByte(config.Label, '&')
-	if idx >= 0 && idx < len(config.Label)-1 {
-		runes := []rune(config.Label)
-		runeIdx := len([]rune(config.Label[:idx]))
-		b.label = string(runes[:runeIdx]) + string(runes[runeIdx+1:])
-		b.accelIndex = runeIdx
-		b.accelRune = runes[runeIdx+1]
-	} else {
-		b.label = config.Label
+	b.label = config.Label
+	for i, ch := range config.Label {
+		if ch != '&' || i+1 == len(config.Label) {
+			continue
+		}
+		next, _ := utf8.DecodeRuneInString(config.Label[i+1:])
+		if unicode.IsSpace(next) {
+			continue
+		}
+		b.label = config.Label[:i] + config.Label[i+1:]
+		b.accelIndex = utf8.RuneCountInString(config.Label[:i])
+		b.accelRune = next
+		break
 	}
 	return b
 }
 
 func (b *ButtonWidget) SetLabel(label string) {
+	b.Config.Icon = ""
 	b.label = label
 	b.spans = nil
 	b.accelIndex = -1
@@ -87,6 +94,7 @@ func (b *ButtonWidget) SetLabel(label string) {
 // SetSpans replaces the styled runs and drops the plain label, keeping the
 // button focused state and callbacks untouched.
 func (b *ButtonWidget) SetSpans(spans []ButtonSpan) {
+	b.Config.Icon = ""
 	b.spans = append([]ButtonSpan(nil), spans...)
 	b.label = ""
 	b.accelIndex = -1
@@ -113,10 +121,14 @@ func (b *ButtonWidget) Width() int {
 }
 
 func (b *ButtonWidget) text() string {
-	if b.Config.Variant == ButtonBracket {
-		return "[" + b.label + "]"
+	label := b.label
+	if b.Config.Icon != "" {
+		label = string(icons.Rune(b.Config.Icon))
 	}
-	return b.label
+	if b.Config.Variant == ButtonBracket {
+		return "[" + label + "]"
+	}
+	return label
 }
 
 func (b *ButtonWidget) style() term.Style {
@@ -182,7 +194,7 @@ func (b *ButtonWidget) Render(surface Surface) {
 			break
 		}
 		cell := term.Cell{Ch: ch, Style: style}
-		if i == accel {
+		if i == accel && b.Config.Icon == "" {
 			cell.Underline = true
 		}
 		inner.SetCell(x, 0, cell)
