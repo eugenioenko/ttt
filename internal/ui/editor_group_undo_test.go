@@ -126,3 +126,34 @@ func TestEditorGroupUndoRedoWithoutCursorPreservesViewport(t *testing.T) {
 		})
 	}
 }
+
+func TestEditorGroupUndoDeleteRestoresCursor(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		key     tcell.Key
+		presses int
+		col     int
+	}{
+		{name: "delete once", key: tcell.KeyDelete, presses: 1, col: 1},
+		{name: "delete run", key: tcell.KeyDelete, presses: 3, col: 0},
+		{name: "backspace run", key: tcell.KeyBackspace2, presses: 3, col: 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			g.NewFile()
+			t.Cleanup(g.CloseAllTabs)
+			e := g.Editor
+			e.Buf.SetText("abcd")
+			e.SetRect(Rect{W: 30, H: 6})
+			e.Cursor.Line, e.Cursor.Col = 0, tc.col
+			for range tc.presses {
+				e.HandleEvent(tcell.NewEventKey(tc.key, "", tcell.ModNone))
+			}
+			g.Undo()
+			if e.Buf.Lines[0] != "abcd" {
+				t.Fatalf("line after undo = %q, want %q", e.Buf.Lines[0], "abcd")
+			}
+			assertCursor(t, e, 0, tc.col)
+		})
+	}
+}
