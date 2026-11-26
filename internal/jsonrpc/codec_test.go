@@ -225,3 +225,13 @@ func TestCodecHeaderLimitsAndLegacyCompatibility(t *testing.T) {
 		})
 	}
 }
+
+func TestRepeatedContentLength(t *testing.T) {
+	for _, second := range []string{"  2 ", "3", "-1"} {
+		var out map[string]any
+		err := NewCodec(strings.NewReader("Content-Length: 2\r\nContent-Length: "+second+"\r\n\r\n{}"), nil).ReceiveInto(&out)
+		if (err == nil) != (second == "  2 ") {
+			t.Fatalf("second length %q: %v", second, err)
+		}
+	}
+}
