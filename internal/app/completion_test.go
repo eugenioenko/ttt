@@ -247,3 +247,22 @@ func TestCompletionEditCoversCharactersTypedAfterTheRequest(t *testing.T) {
 		})
 	}
 }
+
+func TestCompletionEditClampsMultiLineRangeToCompletionLine(t *testing.T) {
+	a := completionTestApp(t, "a.tsx", "<Alert type=\"\n  <header className=\"h-16\">\n")
+	moveCursor(a, 0, 13)
+	a.insertCompletion(ui.CompletionItem{Label: "danger"}, &lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 13},
+			End:   lsp.Position{Line: 1, Character: 19},
+		},
+		NewText: "danger",
+	})
+	lines := a.EditorGroup.ActiveBuffer().Lines
+	if lines[0] != `<Alert type="danger` || lines[1] != `  <header className="h-16">` {
+		t.Fatalf("lines = %q", lines[:2])
+	}
+	if line, col := a.EditorGroup.ActiveCursor(); line != 0 || col != 19 {
+		t.Fatalf("cursor = %d:%d, want 0:19", line, col)
+	}
+}
