@@ -17,6 +17,18 @@ func (a *App) editorGroups() []*ui.EditorGroupWidget {
 	return a.EditorSplit.Groups()
 }
 
+func (a *App) editorTabGroupAt(x, y int) *ui.EditorGroupWidget {
+	if a.ContentSplit.Top != a.EditorSplit {
+		return nil
+	}
+	for _, group := range a.editorGroups() {
+		if group.TabBar.GetRect().Contains(x, y) {
+			return group
+		}
+	}
+	return nil
+}
+
 func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 	g.OnActivate = func() {
 		a.activateEditorGroup(g)
@@ -102,6 +114,8 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 	wasActive := closing == a.EditorGroup
 	if wasActive {
 		a.activateEditorGroup(keep)
+	} else if a.hover.tab.Group == closing {
+		a.DismissHover()
 	}
 	closing.OnEmpty = nil
 	if merge {
