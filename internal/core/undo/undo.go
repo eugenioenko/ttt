@@ -205,6 +205,9 @@ func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *InsertRuneCommand:
 		return &CursorPos{c.Line, c.Col}
 	case *DeleteRuneCommand:
+		if c.Forward {
+			return &CursorPos{c.Line, c.Col}
+		}
 		return &CursorPos{c.Line, c.Col + 1}
 	case *InsertStringCommand:
 		return &CursorPos{c.Line, c.Col}
@@ -303,6 +306,7 @@ func (c *InsertRuneCommand) Undo(b *buffer.Buffer) {
 type DeleteRuneCommand struct {
 	Line, Col int
 	Rune      rune
+	Forward   bool // the Delete key: the cursor sat on Col, not after it
 }
 
 func (c *DeleteRuneCommand) Apply(b *buffer.Buffer) {
