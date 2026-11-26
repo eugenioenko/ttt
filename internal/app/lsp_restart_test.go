@@ -124,6 +124,21 @@ func TestDiagnosticsFromAnotherRootAreRejected(t *testing.T) {
 	}
 }
 
+func TestPulledDiagnosticsFromAnotherRootAreRejected(t *testing.T) {
+	a, path := missingGoServerApp(t)
+	a.DocVersions[path] = 1
+	a.pinLSPRoot(path, "go", "/new")
+	key := pullKey{path: path, version: 1}
+	diags := []lsp.Diagnostic{{Message: "stale"}}
+
+	if a.setPulledDiagnostics("go", key, pulledDiagnostics{diags: diags, replace: true, root: "/old"}) {
+		t.Fatal("applied a pull from a root the document left")
+	}
+	if !a.setPulledDiagnostics("go", key, pulledDiagnostics{diags: diags, replace: true, root: "/new"}) {
+		t.Fatal("rejected a pull from the document's own root")
+	}
+}
+
 // fakeRestartApp opens a.go on the fake server, which records every did* it
 // receives, so a reopen can be observed.
 func fakeRestartApp(t *testing.T) (*App, string, string) {

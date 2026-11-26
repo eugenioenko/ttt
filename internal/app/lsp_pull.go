@@ -194,7 +194,13 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			if _, ok := clients[c.workDir]; ok {
 				continue
 			}
-			client, err := a.LspManager.ClientForLanguage(server, c.workDir)
+			client, err := a.LspManager.ClientForLanguageCurrent(server, c.workDir, func() bool {
+				return ctx.Err() == nil && a.lspEpochIsCurrent(server, epoch)
+			})
+			if errors.Is(err, context.Canceled) {
+				clients[c.workDir] = rootClient{}
+				continue
+			}
 			if err != nil {
 				clients[c.workDir] = rootClient{err: err}
 				continue
@@ -281,7 +287,7 @@ func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnos
 	a.DocVersionsMu.Lock()
 	version, open := a.DocVersions[key.path]
 	a.DocVersionsMu.Unlock()
-	if !open || version != key.version || a.lspEpochs[server] != key.epoch {
+	if !open || version != key.version || a.lspEpochs[server] != key.epoch || !a.lspDiagnosticsStillCurrent(key.path, res.root) {
 		return false
 	}
 	a.lastPulled[key.path] = key
