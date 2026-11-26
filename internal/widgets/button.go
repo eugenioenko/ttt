@@ -123,7 +123,9 @@ func (b *ButtonWidget) Width() int {
 func (b *ButtonWidget) text() string {
 	label := b.label
 	if b.Config.Icon != "" {
-		label = string(icons.Rune(b.Config.Icon))
+		if glyph := icons.Active(b.Config.Icon); glyph != "" {
+			label = glyph
+		}
 	}
 	if b.Config.Variant == ButtonBracket {
 		return "[" + label + "]"
