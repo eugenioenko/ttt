@@ -131,37 +131,6 @@ func TestManagerStopKillsHungServer(t *testing.T) {
 	}
 }
 
-// A startup notification blocked on a server that stopped reading stdin must
-// not hold Stop past start.done: the write is only released by closing the
-// client, which stopStart has to do before waiting.
-func TestStopStartReleasesBlockedStartupWrite(t *testing.T) {
-	_, clientW := io.Pipe() // no reader, so every frame write blocks
-	client := newClient(blockingReader(t), clientW, ClientHooks{})
-	start := &serverStart{done: make(chan struct{}), cancel: func() {}}
-	start.starting.Store(client)
-
-	writeDone := make(chan struct{})
-	go func() {
-		_ = client.notify("solution/open", roslynSolutionParams{Solution: "file:///App.sln"})
-		close(writeDone)
-	}()
-	go func() {
-		<-writeDone
-		close(start.done)
-	}()
-
-	stopped := make(chan struct{})
-	go func() {
-		stopStart("roslyn", start)
-		close(stopped)
-	}()
-	select {
-	case <-stopped:
-	case <-time.After(2 * time.Second):
-		t.Fatal("stopStart waited on a startup write blocked on stdin")
-	}
-}
-
 func TestManagerStopWithoutClient(t *testing.T) {
 	m := managerFor("/nonexistent")
 	if m.Stop("plaintext") {

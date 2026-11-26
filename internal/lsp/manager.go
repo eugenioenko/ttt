@@ -272,14 +272,6 @@ func (m *Manager) startClient(ctx context.Context, server, key, lang, workDir st
 		m.log(server, "error", "initialize failed: "+err.Error())
 		return client, fmt.Errorf("initialize LSP for %s: %w", lang, err)
 	}
-	if isRoslynServer(server, serverCfg.Command) {
-		// Discovery walks the whole tree, so a stop during startup must end it
-		// rather than wait for the walk to finish.
-		if err := client.OpenRoslynWorkspace(ctx, workDir); err != nil {
-			m.log(server, "error", "open workspace: "+err.Error())
-			return client, fmt.Errorf("open Roslyn workspace for %s: %w", lang, err)
-		}
-	}
 
 	m.log(server, "info", "ready")
 	return client, nil
