@@ -946,11 +946,21 @@ func (n *PluginNetworkAPI) Post(url string, headers map[string]string, body stri
 }
 
 type PluginSettingsAPI struct {
-	app *App
+	app   *App
+	saved *config.Settings
 }
 
 func NewPluginSettingsAPI(app *App) *PluginSettingsAPI {
 	return &PluginSettingsAPI{app: app}
+}
+
+// Ownership checks must see edits made on disk since the plugin was installed.
+func (s *PluginSettingsAPI) SavedSettings() (plugin.SettingsAPI, error) {
+	settings, err := config.ReadSettingsFile(s.app.settingsFilePath())
+	if err != nil && !os.IsNotExist(err) {
+		return nil, err
+	}
+	return &PluginSettingsAPI{app: s.app, saved: &settings}, nil
 }
 
 func (s *PluginSettingsAPI) Get(key string) (any, bool) {
@@ -972,14 +982,23 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, s.app.Settings); err != nil {
+	var updated config.Settings
+	if err := json.Unmarshal(data, &updated); err != nil {
 		return err
 	}
-	return s.app.saveSettings(*s.app.Settings)
+	if err := s.app.saveSettings(updated); err != nil {
+		return err
+	}
+	*s.app.Settings = updated
+	return nil
 }
 
 func (s *PluginSettingsAPI) settingsMap() map[string]any {
-	data, err := json.Marshal(s.app.Settings)
+	settings := s.app.Settings
+	if s.saved != nil {
+		settings = s.saved
+	}
+	data, err := json.Marshal(settings)
 	if err != nil {
 		return nil
 	}
