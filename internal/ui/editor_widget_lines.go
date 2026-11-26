@@ -665,6 +665,18 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				commentCol = indent
 			}
 		}
+		if commentCol > 0 && commentCol%tabW != 0 {
+			// A tab crossing the shallowest indent ends at the next tab stop.
+			// Align before the earliest such tab to preserve every indent byte.
+			shallowest := commentCol
+			for _, line := range e.Buf.Lines[startLine : endLine+1] {
+				if leadingWhitespace(line) == line {
+					continue
+				}
+				col := visualColToBufCol(line, shallowest, tabW)
+				commentCol = min(commentCol, bufColToVisualCol(line, col, tabW))
+			}
+		}
 	}
 
 	selected := e.Selection != nil && e.Selection.Active
@@ -759,27 +771,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					cmds = append(cmds, replace)
 				}
 			}
-			line := e.Buf.Lines[l]
-			col := visualColToBufCol(line, commentCol, tabW)
-			visualCol := bufColToVisualCol(line, col, tabW)
-			if visualCol < commentCol {
-				// Split only a tab crossing the insertion column; undo restores it.
-				width := tabW - visualCol%tabW
-				text := []rune(line)
-				replace := &undo.ReplaceLinesCommand{
-					Start: l, OldLines: []string{line},
-					NewLines: []string{string(text[:col]) + strings.Repeat(" ", width) + string(text[col+1:])},
-				}
-				replace.Apply(e.Buf)
-				cmds = append(cmds, replace)
-				mapColumns(l, func(c int, _ bool) int {
-					if c > col {
-						return c + width - 1
-					}
-					return c
-				})
-				col += commentCol - visualCol
-			}
+			col := visualColToBufCol(e.Buf.Lines[l], commentCol, tabW)
 			cmd := &undo.InsertStringCommand{Line: l, Col: col, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
