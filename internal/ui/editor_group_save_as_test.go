@@ -226,3 +226,76 @@ func TestSameSaveTarget(t *testing.T) {
 		})
 	}
 }
+
+func TestEditorGroupSaveAsError(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	var errMsg string
+	g.OnError = func(msg string) { errMsg = msg }
+
+	g.SaveAs("/nonexistent/dir/file.txt")
+
+	if errMsg == "" {
+		t.Fatal("expected OnError to be called for save-as failure")
+	}
+	if g.tabs[0].FilePath != "untitled" {
+		t.Fatal("FilePath should not change on failed SaveAs")
+	}
+}
+
+func TestEditorGroupSaveAsSuccess(t *testing.T) {
+	tmp := t.TempDir()
+	path := filepath.Join(tmp, "saved.go")
+
+	g := NewEditorGroupWidget(nil, 4, false, "extended")
+	var errMsg string
+	g.OnError = func(msg string) { errMsg = msg }
+
+	g.tabs[0].Buf.Lines = []string{"package main"}
+	g.SaveAs(path)
+
+	if errMsg != "" {
+		t.Fatalf("unexpected error: %s", errMsg)
+	}
+	if g.tabs[0].FilePath != path {
+		t.Fatalf("expected FilePath to be %s, got %s", path, g.tabs[0].FilePath)
+	}
+	if g.tabs[0].Virtual {
+		t.Fatal("SaveAs should clear Virtual flag")
+	}
+}
+
+func TestEditorGroupSaveAsNewFileUsesSaveSettings(t *testing.T) {
+	for _, tc := range []struct {
+		name, editorconfig, want string
+	}{
+		{"settings", "", "hello\n"},
+		{"editorconfig", "root = true\n[*]\ninsert_final_newline = false\n", "hello"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if tc.editorconfig != "" {
+				if err := os.WriteFile(filepath.Join(dir, ".editorconfig"), []byte(tc.editorconfig), 0644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			path := filepath.Join(dir, "new.txt")
+
+			g := NewEditorGroupWidget(nil, 4, false, "extended")
+			g.InsertFinalNewline = true
+			g.TrimTrailingWhitespace = true
+			g.NewFile()
+			g.activeTab().Buf.Lines = []string{"hello  "}
+			if !g.SaveAs(path) {
+				t.Fatal("SaveAs failed")
+			}
+
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(data) != tc.want {
+				t.Fatalf("saved %q, want %q", data, tc.want)
+			}
+		})
+	}
+}
