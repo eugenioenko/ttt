@@ -56,7 +56,7 @@ func TestFindRootPrefersEarlierMarkers(t *testing.T) {
 }
 
 func TestFindRootReturnsEmptyWithoutMatch(t *testing.T) {
-	if got := FindRoot(t.TempDir(), []string{".git"}); got != "" {
+	if got := FindRoot(t.TempDir(), []string{"ttt-root-test-missing-marker"}); got != "" {
 		t.Errorf("root = %q, want no root", got)
 	}
 	if got := FindRoot(t.TempDir(), nil); got != "" {

@@ -13,11 +13,14 @@ import (
 const pullDiagnosticsDelay = 500 * time.Millisecond
 
 // pullKey identifies the document state a pull answers for. epoch is needed
-// because a server restart resets document versions to 1.
+// because a server restart resets document versions to 1, and root because a
+// document reopened on another root starts over at version 1 on a server that
+// was never asked.
 type pullKey struct {
 	path    string
 	version int
 	epoch   int
+	root    string
 }
 
 type pulledDiagnostics struct {
@@ -41,8 +44,8 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 	if !opened {
 		return
 	}
-	key := pullKey{path: path, version: version, epoch: a.lspEpochs[serverKey]}
 	workDir := a.lspWorkDirFor(path, lang)
+	key := pullKey{path: path, version: version, epoch: a.lspEpochs[serverKey], root: workDir}
 	a.diagPull.ScheduleKey(key, func(ctx context.Context) (pulledDiagnostics, error) {
 		// The server must have this version before it is asked about it.
 		if sent != nil {
@@ -160,7 +163,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		if !opened {
 			continue
 		}
-		k := pullKey{path: d.Path, version: version, epoch: epoch}
+		k := pullKey{path: d.Path, version: version, epoch: epoch, root: workDirs[d.Path]}
 		candidates = append(candidates, pullCandidate{
 			key:       k,
 			sent:      a.lspSent[d.Path],

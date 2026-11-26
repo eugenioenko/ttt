@@ -164,12 +164,14 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 	}()
 }
 
+// A failed root does not stop the refresh: other roots may have restarted, and
+// a failed one answers at once with its cached startup error.
 func (a *App) handleLSPServerRestarted(ev *LSPServerRestarted) {
 	if ev.Err != nil {
 		a.StatusWarn(i18n.Format("status.failedToRestart", i18n.Args{"server": ev.Server, "err": ev.Err}))
-		return
+	} else {
+		a.StatusNotify(i18n.Format("status.restarted", i18n.Args{"server": ev.Server}))
 	}
-	a.StatusNotify(i18n.Format("status.restarted", i18n.Args{"server": ev.Server}))
 	a.SyncLanguageSegment()
 	a.RefreshSymbols()
 	a.ScheduleDiagnosticPull(true)
