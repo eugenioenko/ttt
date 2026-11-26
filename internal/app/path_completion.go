@@ -59,8 +59,13 @@ func (a *App) currentPathCompletionTarget() pathCompletionTarget {
 		}
 	} else {
 		root := a.Workspace.Primary()
-		if folder := a.Workspace.FolderForFile(a.EditorGroup.ActiveFilePath()); folder != nil {
+		path := a.EditorGroup.ActiveFilePath()
+		if folder := a.Workspace.FolderForFile(path); folder != nil {
 			root = folder.Path
+		} else if root == "" && path != "" && !a.EditorGroup.IsActiveVirtual() {
+			if abs, err := filepath.Abs(path); err == nil {
+				root = filepath.Dir(abs)
+			}
 		}
 		if root == "" {
 			return pathCompletionTarget{}
