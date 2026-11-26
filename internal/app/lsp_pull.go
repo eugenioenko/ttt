@@ -25,6 +25,7 @@ type pulledDiagnostics struct {
 	// replace is false when the existing diagnostics stand: an "unchanged"
 	// report, or a server that only pushes.
 	replace bool
+	root    string
 }
 
 func (a *App) ScheduleDiagnosticPull(immediate bool) {
@@ -59,7 +60,7 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 			return pulledDiagnostics{}, nil
 		}
 		diags, replace, err := client.Diagnostic(ctx, FileURI(path))
-		return pulledDiagnostics{diags: diags, replace: replace}, err
+		return pulledDiagnostics{diags: diags, replace: replace, root: workDir}, err
 	}, func(res pulledDiagnostics, err error) {
 		a.applyPulledDiagnostics(serverKey, key, res, err)
 	})
@@ -232,7 +233,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			if ctx.Err() != nil {
 				return pulls, ctx.Err()
 			}
-			pulls = append(pulls, backgroundPull{key: c.key, res: pulledDiagnostics{diags: diags, replace: replace}, err: err})
+			pulls = append(pulls, backgroundPull{key: c.key, res: pulledDiagnostics{diags: diags, replace: replace, root: c.workDir}, err: err})
 		}
 		return pulls, nil
 	}, func(pulls []backgroundPull, err error) {
@@ -284,8 +285,10 @@ func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnos
 		return false
 	}
 	a.lastPulled[key.path] = key
+	source := lspPullDiagnosticsSource(server)
+	a.recordLSPDiagRoot(server, source, key.path, res.root, len(res.diags) > 0)
 	for _, group := range a.editorGroups() {
-		group.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
+		group.SetDiagnosticsSource(source, key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
 	}
 	return true
 }

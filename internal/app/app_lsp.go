@@ -1213,11 +1213,16 @@ type lspPin struct {
 }
 
 func (a *App) pinLSPRoot(path, server, root string) {
+	pin := lspPin{server: server, root: root}
 	a.lspDocRootsMu.Lock()
 	if a.lspDocRoots == nil {
 		a.lspDocRoots = make(map[string]lspPin)
 	}
-	a.lspDocRoots[path] = lspPin{server: server, root: root}
+	a.lspDocRoots[path] = pin
+	if stop := a.lspIdleStops[pin]; stop != nil {
+		stop()
+		delete(a.lspIdleStops, pin)
+	}
 	a.lspDocRootsMu.Unlock()
 }
 
@@ -1247,18 +1252,36 @@ func (a *App) lspRootInUse(server, root string) bool {
 
 // lspIdleTimeout is how long a root's server outlives its last open document,
 // so closing and reopening a file does not pay for a cold start.
-var lspIdleTimeout = time.Minute
+const lspIdleTimeout = time.Minute
+
+// lspAfterFunc schedules idle stops; tests replace it to fire them on demand.
+var lspAfterFunc = func(d time.Duration, f func()) (stop func() bool) {
+	return time.AfterFunc(d, f).Stop
+}
 
 type LSPRootStopped struct {
 	Server, Root string
 }
 
+// scheduleLSPIdleStop starts the root's idle period. Reopening a document on
+// the root cancels it, so only the latest idle period can stop the server.
 func (a *App) scheduleLSPIdleStop(server, root string) {
-	if a.lspRootInUse(server, root) {
-		return
-	}
+	pin := lspPin{server: server, root: root}
 	manager := a.LspManager
-	time.AfterFunc(lspIdleTimeout, func() {
+	a.lspDocRootsMu.Lock()
+	defer a.lspDocRootsMu.Unlock()
+	for _, p := range a.lspDocRoots {
+		if p == pin {
+			return
+		}
+	}
+	if a.lspIdleStops == nil {
+		a.lspIdleStops = make(map[lspPin]func() bool)
+	}
+	if stop := a.lspIdleStops[pin]; stop != nil {
+		stop()
+	}
+	a.lspIdleStops[pin] = lspAfterFunc(lspIdleTimeout, func() {
 		idle := func() bool { return !a.lspRootInUse(server, root) }
 		if manager.StopIdle(server, root, idle) {
 			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPRootStopped{Server: server, Root: root}))
@@ -1275,33 +1298,39 @@ func (a *App) handleLSPRootStopped(ev *LSPRootStopped) {
 		}
 		delete(a.lspDiagRoots, key)
 		for _, group := range a.editorGroups() {
-			group.SetDiagnosticsSource(lspDiagnosticsSource(ev.Server), key.path, nil)
-			group.SetDiagnosticsSource(lspPullDiagnosticsSource(ev.Server), key.path, nil)
+			group.SetDiagnosticsSource(key.source, key.path, nil)
 		}
 	}
 }
 
 type lspDiagKey struct {
-	server, path string
+	server, source, path string
+}
+
+func (a *App) recordLSPDiagRoot(server, source, path, root string, has bool) {
+	key := lspDiagKey{server: server, source: source, path: path}
+	if !has {
+		delete(a.lspDiagRoots, key)
+		return
+	}
+	if a.lspDiagRoots == nil {
+		a.lspDiagRoots = make(map[lspDiagKey]string)
+	}
+	a.lspDiagRoots[key] = root
 }
 
 func (a *App) applyLSPDiagnostics(v *DiagnosticsResult) {
 	if !a.lspDiagnosticsStillCurrent(v.Path, v.Root) {
 		return
 	}
-	key := lspDiagKey{server: v.Server, path: v.Path}
+	source := lspDiagnosticsSource(v.Server)
+	a.recordLSPDiagRoot(v.Server, source, v.Path, v.Root, len(v.Diagnostics) > 0)
 	var lines []string
 	if len(v.Diagnostics) > 0 {
 		lines = a.lspLines(v.Path)
-		if a.lspDiagRoots == nil {
-			a.lspDiagRoots = make(map[lspDiagKey]string)
-		}
-		a.lspDiagRoots[key] = v.Root
-	} else {
-		delete(a.lspDiagRoots, key)
 	}
 	for _, group := range a.editorGroups() {
-		group.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+		group.SetDiagnosticsSource(source, v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
 	}
 }
 
@@ -1485,11 +1514,14 @@ func (a *App) NotifyLSPClose(path, lang string) {
 	a.DocVersionsMu.Unlock()
 	// Reopening starts the version over at 1, which would match this entry.
 	delete(a.lastPulled, path)
+	// A server that is not running has nothing to close; starting one here
+	// would also revive a root whose idle server was stopped. An open still
+	// waiting for startup sees the pin gone and skips its didOpen.
+	client := a.LspManager.ReadyClient(serverKey, workDir)
+	if client == nil {
+		return
+	}
 	go func() {
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-		if err != nil {
-			return
-		}
 		if err := client.DidClose(FileURI(path)); err != nil {
 			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didClose %s: %v", path, err))
 		}

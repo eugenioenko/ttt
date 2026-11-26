@@ -214,6 +214,10 @@ type App struct {
 	// close or an explicit server restart drops the pin.
 	lspDocRootsMu sync.Mutex
 	lspDocRoots   map[string]lspPin
+	// lspIdleStops cancels each idle root's pending stop. Guarded by
+	// lspDocRootsMu, so a stop is scheduled or cancelled atomically with the
+	// pins it depends on.
+	lspIdleStops map[lspPin]func() bool
 	// lspDiagRoots records which root published each path's diagnostics, so
 	// an idle root's stop can clear them. UI goroutine only.
 	lspDiagRoots map[lspDiagKey]string
