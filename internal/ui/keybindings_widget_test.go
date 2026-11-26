@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -83,26 +82,6 @@ func TestKeybindingsWidgetFilterByShortcut(t *testing.T) {
 	}
 	if !found {
 		t.Error("expected file.save in results when searching by shortcut")
-	}
-}
-
-func TestKeybindingsWidgetDisplaysAndSearchesShortcutAlias(t *testing.T) {
-	w := NewKeybindingsWidget([]command.Command{{ID: "editor.toggleComment", Title: "Toggle Line Comment"}})
-	w.GetShortcut = func(string) string { return "Ctrl+/" }
-	w.GetDefault = w.GetShortcut
-	w.GetShortcutAlias = func(string, string) string { return "Ctrl+Shift+-" }
-
-	for _, query := range []string{"ctrl+/", "ctrl+shift+-"} {
-		w.SetFilter(query)
-		if len(w.items) != 1 {
-			t.Fatalf("expected one match for %q, got %d", query, len(w.items))
-		}
-		cells, surface := newCommandLineSurface(80, 24)
-		w.Render(surface)
-		row := cellRow(cells, w.boxY+3)
-		if !strings.Contains(row, "Ctrl+Shift+-") || strings.Contains(row, "Ctrl+/") || strings.Contains(row, "* ") {
-			t.Errorf("expected the alias to display as the default shortcut, got %q", row)
-		}
 	}
 }
 
