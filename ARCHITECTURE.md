@@ -44,9 +44,9 @@ Packages: `internal/core/*`.
 Owns editor algorithms and state: buffers, cursors, selections, undo, folds,
 multicursors, and diff algorithms. Domain code must not start processes, access
 terminal state, render widgets, or coordinate application lifecycle.
-`internal/core/architecture_test.go` enforces that core imports no presentation
-package or tcell. `core/clipboard` starts processes and is an existing
-exception, not a pattern.
+`internal/core/architecture_test.go` enforces part of this: core must not import
+`highlight`, `term`, `render`, `view`, `ui`, `widgets`, or tcell.
+`core/clipboard` starts processes and is an existing exception, not a pattern.
 
 ### Shared foundations
 
@@ -91,8 +91,6 @@ Git.
 - `RepositoryState` in `internal/app` owns async lifecycle: repository objects
   are captured on the main thread, and background reads keep cancellation,
   coalescing, and stale-result guards.
-- jj commands pass `--ignore-working-copy` except the change list, single-change
-  patch, and ignored-file check, which must see current files.
 
 Remaining work:
 
