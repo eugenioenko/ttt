@@ -58,10 +58,6 @@ imported by services (`lsp`), presentation, and the application.
 `internal/filewrite` owns atomic file replacement (temp-file staging, sync,
 replace, cleanup) for buffer and config, using only the standard library.
 Callers own serialization, symlink resolution, metadata, retries, and recovery.
-Settings saves keep Windows DACL preservation and sharing-error retries through
-the extended-path `MoveFileEx` wrapper (plain `os.Rename` exhausted retries
-under concurrent readers). Document saves keep Unix owner/group preservation and
-an in-place fallback, but do not get the Windows guarantees settings have.
 
 ### Services
 
@@ -230,35 +226,3 @@ A subsystem owner must establish:
 
 `RepositoryState` is the reference direction, not a template to copy
 mechanically.
-
-### Refactors and UX
-
-User-facing work starts from the intended interaction and presentation.
-Refactors start from characterization tests and preserve existing UX unless the
-PR declares a behavior change.
-
-## Verification strategy
-
-Choose the smallest deterministic layer that proves the invariant:
-
-- Unit tests: pure algorithms, state models, parsers, lifecycle helpers.
-- Go E2E tests: composed App/UI behavior on `term.SimScreen`.
-- Functional tests: real-binary behavior through `--exec`.
-- PTY integration tests: terminal byte encoding, terminal modes, and
-  external-process behavior simulation cannot establish.
-- Real language-server tests prove vendor compatibility; fake servers prove
-  protocol and application semantics.
-
-Do not duplicate the same assertion at every layer. CI is the broad regression
-gate before merge.
-
-## Structural review
-
-`go list` gives the package graph; pair it with source inspection for
-same-package coupling and runtime lifecycle.
-
-```sh
-go list -f '{{.ImportPath}} -> {{join .Imports " "}}' ./internal/... |
-  grep ttt/internal
-go test ./internal/core/   # core import boundary
-```
