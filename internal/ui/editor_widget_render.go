@@ -158,6 +158,13 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if e.DiffOverlay.wrapNotes(editorW, false) {
 		e.SetDiffOverlay(e.DiffOverlay)
 	}
+	if e.Viewport.TopLine >= totalLines {
+		// A restored scroll position can outlive the lines it referred to.
+		layout := e.layout()
+		caretRow, _ := layout.rowOf(e.Cursor.Line, e.Cursor.Col)
+		lastPageTop := max(layout.total()-h, 0)
+		e.setTopRow(layout, min(lastPageTop, caretRow))
+	}
 	if e.hScrollPending {
 		e.hScrollPending = false
 		e.scrollViewport()
