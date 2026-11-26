@@ -475,18 +475,3 @@ func RunEventLoop(
 		}
 	}
 }
-
-func resizeTerminals(app *App) {
-	app.resizeEditorTerminals()
-	if !app.ContentSplit.ShowBottom {
-		return
-	}
-	r := app.ContentSplit.BottomRect()
-	for _, tt := range app.Terminals {
-		tt.Term.AckUpdate()
-		content := app.TerminalPanel.ContentRectFor(tt.Widget, ui.Rect{W: r.W, H: r.H - 2}, tt.Widget.ScrollbarVisible())
-		if content.W > 0 && content.H > 0 {
-			tt.Term.Resize(content.W, content.H)
-		}
-	}
-}
