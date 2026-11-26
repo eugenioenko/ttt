@@ -191,6 +191,13 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 		startCol = textEdit.Range.Start.Character
 		endLine = textEdit.Range.End.Line
 		endCol = textEdit.Range.End.Character
+		// LSP requires a single-line range, but TypeScript sends a multi-line
+		// one for an unterminated JSX attribute string, which would delete the
+		// following lines. VS Code clamps too.
+		if endLine > startLine && startLine < len(lines) {
+			endLine = startLine
+			endCol = len([]rune(lines[startLine]))
+		}
 		if startLine == endLine && startCol == endCol {
 			_, identCol, cursorCol := a.identStart()
 			if identCol < endCol || endCol <= cursorCol {
