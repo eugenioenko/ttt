@@ -17,7 +17,13 @@ hero:
 
 import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 
-<video src="/demo/demo.webm" autoplay loop muted playsinline style="width:100%;border-radius:8px;margin-bottom:2rem;"></video>
+<div class="demo-window">
+  <div class="demo-titlebar" aria-hidden="true">
+    <span class="demo-window-dots"></span>
+    ttt
+  </div>
+  <video src="/demo/demo.webm" aria-label="TTT editor demo" autoplay loop muted playsinline></video>
+</div>
 
 ## Features
 
