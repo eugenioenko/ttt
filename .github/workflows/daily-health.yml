@@ -15,7 +15,6 @@ concurrency:
 
 env:
   GO_VERSION: "1.25"
-  SIZE_BUDGET_MB: "20"
   SIZE_HEADROOM_WARN_MB: "1"
 
 jobs:
@@ -83,7 +82,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          budget_bytes=$((SIZE_BUDGET_MB * 1000000))
+          read -r budget_mb < .github/binary-size-budget-mb
+          budget_bytes=$((budget_mb * 1000000))
           warn_bytes=$((SIZE_HEADROOM_WARN_MB * 1000000))
           mb() { awk "BEGIN { printf \"%.2f MB\", $1 / 1000000 }"; }
           kb() { awk "BEGIN { printf \"%+.0f KB\", $1 / 1000 }"; }
@@ -91,7 +91,7 @@ jobs:
           {
             echo "## Binary size"
             echo
-            echo "\`main\` built with the release flags, compared with the binaries published in $TAG. Budget: **${SIZE_BUDGET_MB} MB**."
+            echo "\`main\` built with the release flags, compared with the binaries published in $TAG. Budget: **${budget_mb} MB**."
             echo
             echo "| Target | $TAG | main | Change | % | Headroom |"
             echo "| --- | ---: | ---: | ---: | ---: | ---: |"
@@ -131,7 +131,7 @@ jobs:
 
           if [[ "$low" == "true" ]]; then
             echo >> "$RUNNER_TEMP/size.md"
-            echo "> :warning: **At least one target is within ${SIZE_HEADROOM_WARN_MB} MB of the ${SIZE_BUDGET_MB} MB budget.**" >> "$RUNNER_TEMP/size.md"
+            echo "> :warning: **At least one target is within ${SIZE_HEADROOM_WARN_MB} MB of the ${budget_mb} MB budget.**" >> "$RUNNER_TEMP/size.md"
           fi
 
           cat "$RUNNER_TEMP/size.md" >> "$GITHUB_STEP_SUMMARY"

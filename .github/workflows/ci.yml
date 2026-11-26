@@ -293,6 +293,8 @@ jobs:
     if: github.event_name == 'pull_request' && needs.classify.outputs.runtime == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      THRESHOLD_KB: "256"
     steps:
       - name: Check out PR head
         uses: actions/checkout@v7
@@ -317,7 +319,6 @@ jobs:
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          THRESHOLD_KB: "256"
         run: |
           set -euo pipefail
 
@@ -344,14 +345,17 @@ jobs:
           build_targets . .size-out/head
 
           marker="<!-- ttt-binary-size -->"
+          read -r budget_mb < .github/binary-size-budget-mb
+          budget_bytes=$((budget_mb * 1000000))
           threshold_bytes=$((THRESHOLD_KB * 1024))
+          over_budget=false
           exceeded=false
 
           {
             echo "$marker"
             echo "## Binary size"
             echo ""
-            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Threshold: **${THRESHOLD_KB} KB**."
+            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Budget: **${budget_mb} MB**. Growth threshold: **${THRESHOLD_KB} KB**."
             echo ""
             echo "| Target | Base | PR | Delta | % |"
             echo "| --- | ---: | ---: | ---: | ---: |"
@@ -375,6 +379,10 @@ jobs:
 
             fmt_base=$(awk "BEGIN { printf \"%.2f MB\", $base_size / 1000000 }")
             fmt_head=$(awk "BEGIN { printf \"%.2f MB\", $head_size / 1000000 }")
+            if [ "$head_size" -gt "$budget_bytes" ]; then
+              fmt_head+=" :warning:"
+              over_budget=true
+            fi
             if [ "$delta" -ge 0 ]; then
               fmt_delta="+$(awk "BEGIN { printf \"%.0f KB\", $delta / 1000 }")"
             else
@@ -393,6 +401,11 @@ jobs:
             echo "| ${os}/${arch} | $fmt_base | $fmt_head | ${fmt_delta}${warn} | ${pct}% |" >> "$RUNNER_TEMP/size-report.md"
           done
 
+          if [ "$over_budget" = true ]; then
+            echo "" >> "$RUNNER_TEMP/size-report.md"
+            echo "> :warning: **At least one PR binary exceeds the ${budget_mb} MB budget.**" >> "$RUNNER_TEMP/size-report.md"
+          fi
+
           if [ "$exceeded" = true ]; then
             echo "" >> "$RUNNER_TEMP/size-report.md"
             echo "> :warning: **Binary size increased by more than ${THRESHOLD_KB} KB on at least one target.** If this is expected (new dependency, embedded asset), note it in the PR description." >> "$RUNNER_TEMP/size-report.md"
@@ -401,7 +414,11 @@ jobs:
           cat "$RUNNER_TEMP/size-report.md" >> "$GITHUB_STEP_SUMMARY"
           cat "$RUNNER_TEMP/size-report.md"
 
-          echo "exceeded=$exceeded" >> "$GITHUB_OUTPUT"
+          {
+            echo "budget_mb=$budget_mb"
+            echo "over_budget=$over_budget"
+            echo "exceeded=$exceeded"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Upload binary size report
         uses: actions/upload-artifact@v7
@@ -411,10 +428,19 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-      - name: Fail on threshold breach
-        if: steps.size.outputs.exceeded == 'true'
+      - name: Fail on size budget or growth threshold breach
+        if: steps.size.outputs.over_budget == 'true' || steps.size.outputs.exceeded == 'true'
+        env:
+          SIZE_BUDGET_MB: ${{ steps.size.outputs.budget_mb }}
+          OVER_BUDGET: ${{ steps.size.outputs.over_budget }}
+          EXCEEDED: ${{ steps.size.outputs.exceeded }}
         run: |
-          echo "::warning::Binary size increased by more than ${{ env.THRESHOLD_KB || '256' }} KB. This job is informational and does not block merge."
+          if [ "$OVER_BUDGET" = true ]; then
+            echo "::warning::At least one PR binary exceeds the ${SIZE_BUDGET_MB} MB budget. This job is informational and does not block merge."
+          fi
+          if [ "$EXCEEDED" = true ]; then
+            echo "::warning::Binary size increased by more than ${THRESHOLD_KB} KB. This job is informational and does not block merge."
+          fi
           exit 1
 
   docs:
