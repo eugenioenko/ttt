@@ -71,7 +71,7 @@ func (c *Client) OpenRoslynWorkspace(ctx context.Context, root string) error {
 
 // FindRoslynWorkspace prefers a solution next to root or in one of its
 // ancestors, then a single solution discovered below it, then every project.
-// It returns the walk error when ctx is canceled while searching.
+// It returns ctx.Err() when ctx is canceled while searching.
 func FindRoslynWorkspace(ctx context.Context, root string) (solution string, projects []string, err error) {
 	if err := ctx.Err(); err != nil {
 		return "", nil, err
@@ -83,7 +83,16 @@ func FindRoslynWorkspace(ctx context.Context, root string) (solution string, pro
 	if err != nil {
 		return "", nil, nil
 	}
-	if solution := solutionAtOrAbove(abs); solution != "" {
+	// WalkDir does not descend into a symlinked root, and walking up a symlink
+	// path reaches the link's parent rather than the target's ancestors.
+	if resolved, err := filepath.EvalSymlinks(abs); err == nil {
+		abs = resolved
+	}
+	solution, err = solutionAtOrAbove(ctx, abs)
+	if err != nil {
+		return "", nil, err
+	}
+	if solution != "" {
 		return solution, nil, nil
 	}
 	solutions, err := findProjectFiles(ctx, abs, isSolutionFile, 2)
@@ -97,18 +106,21 @@ func FindRoslynWorkspace(ctx context.Context, root string) (solution string, pro
 	return "", projects, err
 }
 
-func solutionAtOrAbove(dir string) string {
+func solutionAtOrAbove(ctx context.Context, dir string) (string, error) {
 	for {
+		if err := ctx.Err(); err != nil {
+			return "", err
+		}
 		solutions := directProjectFiles(dir, isSolutionFile)
 		if len(solutions) == 1 {
-			return solutions[0]
+			return solutions[0], nil
 		}
 		if len(solutions) > 1 {
-			return ""
+			return "", nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return ""
+			return "", nil
 		}
 		dir = parent
 	}

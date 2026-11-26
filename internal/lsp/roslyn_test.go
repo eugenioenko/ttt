@@ -12,12 +12,24 @@ import (
 	"time"
 )
 
+// resolvedTempDir returns a temp directory with symlinks resolved, matching the
+// root normalization discovery applies before walking.
+func resolvedTempDir(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	resolved, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resolved
+}
+
 // roslynBoundary returns a directory holding two solutions, which discovery
 // reads as ambiguous and stops at, so a search never ascends into directories
 // outside the fixture.
 func roslynBoundary(t *testing.T) string {
 	t.Helper()
-	boundary := t.TempDir()
+	boundary := resolvedTempDir(t)
 	writeMarkerFile(t, filepath.Join(boundary, "One.sln"))
 	writeMarkerFile(t, filepath.Join(boundary, "Two.sln"))
 	return boundary
@@ -33,7 +45,7 @@ func roslynFixtureRoot(t *testing.T) string {
 }
 
 func TestFindRoslynWorkspacePrefersRootSolution(t *testing.T) {
-	root := t.TempDir()
+	root := resolvedTempDir(t)
 	writeMarkerFile(t, filepath.Join(root, "App.sln"))
 	writeMarkerFile(t, filepath.Join(root, "src", "App.csproj"))
 
@@ -50,7 +62,7 @@ func TestFindRoslynWorkspacePrefersRootSolution(t *testing.T) {
 }
 
 func TestFindRoslynWorkspaceFindsSolutionInAncestor(t *testing.T) {
-	root := t.TempDir()
+	root := resolvedTempDir(t)
 	writeMarkerFile(t, filepath.Join(root, "App.sln"))
 	start := filepath.Join(root, "src", "App")
 
@@ -103,7 +115,7 @@ func TestFindRoslynWorkspaceFallsBackToProjects(t *testing.T) {
 }
 
 func TestOpenRoslynWorkspaceSendsSolutionOpen(t *testing.T) {
-	root := t.TempDir()
+	root := resolvedTempDir(t)
 	solution := filepath.Join(root, "App.sln")
 	writeMarkerFile(t, solution)
 	c, server := pipeClient(t)
@@ -216,10 +228,42 @@ func TestFindRoslynWorkspaceEmptyRoot(t *testing.T) {
 	}
 }
 
+func TestFindRoslynWorkspaceFollowsSymlinkedRoot(t *testing.T) {
+	real := resolvedTempDir(t)
+	writeMarkerFile(t, filepath.Join(real, "App.sln"))
+	writeMarkerFile(t, filepath.Join(real, "src", "App.csproj"))
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(filepath.Join(real, "src"), link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	solution, _, err := FindRoslynWorkspace(context.Background(), link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if solution != filepath.Join(real, "App.sln") {
+		t.Errorf("solution = %q, want %q", solution, filepath.Join(real, "App.sln"))
+	}
+}
+
 func TestFindRoslynWorkspaceMissingRoot(t *testing.T) {
 	root := filepath.Join(roslynBoundary(t), "nonexistent-ttt-root")
 	if solution, projects, err := FindRoslynWorkspace(context.Background(), root); solution != "" || len(projects) != 0 || err != nil {
 		t.Errorf("got %q, %v, %v", solution, projects, err)
+	}
+}
+
+func TestSolutionAtOrAboveStopsWhenCanceled(t *testing.T) {
+	root := roslynFixtureRoot(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	solution, err := solutionAtOrAbove(ctx, root)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("err = %v, want context.Canceled", err)
+	}
+	if solution != "" {
+		t.Errorf("solution = %q, want none", solution)
 	}
 }
 
