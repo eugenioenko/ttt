@@ -120,7 +120,7 @@ func waitFakeGitExit(t *testing.T, pid int) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 	t.Fatalf("fake git process %d is still alive", pid)
 }
 

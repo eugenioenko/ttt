@@ -122,7 +122,7 @@ func (c *rpcConn) dial(callback *lua.LFunction, dialRPC func(context.Context, st
 	c.mu.Lock()
 	if c.closed {
 		c.mu.Unlock()
-		transport.Close()
+		_ = transport.Close()
 		return
 	}
 	c.transport = transport
@@ -276,7 +276,7 @@ func (c *rpcConn) handleClose(err error) {
 			outbox.stop()
 		}
 		if transport != nil {
-			transport.Close()
+			_ = transport.Close()
 		}
 		c.p.unregisterRPCConn(c)
 		if c.onClose == nil {
@@ -310,7 +310,7 @@ func (c *rpcConn) close() {
 		outbox.stop()
 	}
 	if transport != nil {
-		transport.Close()
+		_ = transport.Close()
 	}
 }
 

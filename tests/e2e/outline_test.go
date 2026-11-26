@@ -33,7 +33,7 @@ func TestOutlineMarkdownFallback(t *testing.T) {
 	defer h.stop()
 
 	path := writeOutlineFile(t, h)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("sidebar.outline")
 
 	if h.app.Sidebar.ActivePanel != "outline" {
@@ -55,7 +55,7 @@ func TestOutlineKeyboardNavigationAndJump(t *testing.T) {
 	defer h.stop()
 
 	path := writeOutlineFile(t, h)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("sidebar.outline")
 
 	if h.app.Root.Focused != h.app.Symbols.Adapter {
@@ -88,7 +88,7 @@ func TestOutlineClickJump(t *testing.T) {
 	defer h.stop()
 
 	path := writeOutlineFile(t, h)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("sidebar.outline")
 
 	// Tree content starts below the tab row and divider.
@@ -109,7 +109,7 @@ func TestOutlineEmptyState(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.exec("sidebar.outline")
 	h.assertContains("No symbols")
 }
@@ -119,7 +119,7 @@ func TestOutlineFollowsCursor(t *testing.T) {
 	defer h.stop()
 
 	path := writeOutlineFile(t, h)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("sidebar.outline")
 
 	h.app.EditorGroup.Editor.Cursor.Line = 4

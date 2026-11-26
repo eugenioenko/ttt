@@ -96,6 +96,7 @@ func isWindowsRenameRetryable(err error) bool {
 	return errors.Is(err, windows.ERROR_ACCESS_DENIED) || errors.Is(err, windows.ERROR_SHARING_VIOLATION)
 }
 
+// os.Rename exhausted the retries under concurrent readers; keep MoveFileEx.
 func renameSettingsFile(oldPath, newPath string) error {
 	settingsFileMu.Lock()
 	defer settingsFileMu.Unlock()

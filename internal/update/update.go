@@ -49,7 +49,7 @@ func (s Service) get(ctx context.Context, url string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 		return nil, fmt.Errorf("GET %s: %s", url, resp.Status)
 	}
 	return resp.Body, nil
@@ -66,7 +66,7 @@ func (s Service) Latest(ctx context.Context) (Release, error) {
 	if err != nil {
 		return Release{}, err
 	}
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 	var release Release
 	if err := json.NewDecoder(io.LimitReader(body, 2<<20)).Decode(&release); err != nil {
 		return Release{}, err

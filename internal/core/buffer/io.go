@@ -19,7 +19,7 @@ func (b *Buffer) LoadFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, statErr := f.Stat()
 	var sb strings.Builder
@@ -181,19 +181,19 @@ func writeInPlace(target, src string) error {
 	if err != nil {
 		return err
 	}
-	defer in.Close()
+	defer func() { _ = in.Close() }()
 	out, err := os.OpenFile(target, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
 	recovery, err := copyToTemp(out, filepath.Dir(target), "."+filepath.Base(target)+".ttt-recovery-*")
 	if err != nil {
-		out.Close()
+		_ = out.Close()
 		return err
 	}
 	if err := checkSameFile(out, target); err != nil {
-		out.Close()
-		os.Remove(recovery)
+		_ = out.Close()
+		_ = os.Remove(recovery)
 		return err
 	}
 	err = out.Truncate(0)
@@ -212,7 +212,7 @@ func writeInPlace(target, src string) error {
 	if err != nil {
 		return &RecoveryError{Path: recovery, Err: err}
 	}
-	os.Remove(recovery)
+	_ = os.Remove(recovery)
 	return nil
 }
 
@@ -252,7 +252,7 @@ func copyToTemp(in *os.File, dir, pattern string) (string, error) {
 		err = closeErr
 	}
 	if err != nil {
-		os.Remove(out.Name())
+		_ = os.Remove(out.Name())
 		return "", err
 	}
 	return out.Name(), nil

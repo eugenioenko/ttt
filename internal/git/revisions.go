@@ -3,7 +3,6 @@ package git
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/eugenioenko/ttt/internal/scm"
 )
@@ -29,20 +28,9 @@ func (r repository) ReadRevisionPatch(ctx context.Context, ref string, change sc
 	return CommitFileDiffContext(ctx, r.root, ref, FromChange(change))
 }
 func (r repository) ReadRevisionContent(ctx context.Context, ref, path, oldPath string) (scm.RevisionContent, error) {
-	out, err := gitCommandContext(ctx, "-C", r.root, "rev-list", "--parents", "-n", "1", ref, "--").Output()
-	if ctx.Err() != nil {
-		return scm.RevisionContent{}, ctx.Err()
-	}
+	commit, parent, err := commitIdentityAndFirstParent(ctx, r.root, ref)
 	if err != nil {
 		return scm.RevisionContent{}, err
-	}
-	refs := strings.Fields(string(out))
-	if len(refs) == 0 {
-		return scm.RevisionContent{}, fmt.Errorf("revision has no identity")
-	}
-	parent := ""
-	if len(refs) > 1 {
-		parent = refs[1]
 	}
 	if oldPath == "" {
 		oldPath = path
@@ -51,7 +39,7 @@ func (r repository) ReadRevisionContent(ctx context.Context, ref, path, oldPath 
 	if err != nil {
 		return scm.RevisionContent{}, err
 	}
-	after, err := r.revisionContentAt(ctx, refs[0], path)
+	after, err := r.revisionContentAt(ctx, commit, path)
 	if err != nil {
 		return scm.RevisionContent{}, err
 	}

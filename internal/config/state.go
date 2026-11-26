@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"time"
 )
 
 type State struct {
@@ -15,6 +16,7 @@ type State struct {
 	PanelWidth          int      `json:"panelWidth,omitempty"`
 	RecentFolders       []string `json:"recentFolders,omitempty"`
 	RecentCommands      []string `json:"recentCommands,omitempty"`
+	LastUpdateCheckAt   string   `json:"lastUpdateCheckAt,omitempty"`
 }
 
 func LoadState() State {
@@ -36,4 +38,26 @@ func SaveState(s State) error {
 	}
 	data = append(data, '\n')
 	return os.WriteFile(path, data, 0644)
+}
+
+func (s State) LastUpdateCheckTime() time.Time {
+	if s.LastUpdateCheckAt == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, s.LastUpdateCheckAt)
+	if err != nil {
+		parsed, err = time.Parse(time.RFC3339, s.LastUpdateCheckAt)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return parsed
+}
+
+func (s *State) SetLastUpdateCheckTime(t time.Time) {
+	if t.IsZero() {
+		s.LastUpdateCheckAt = ""
+		return
+	}
+	s.LastUpdateCheckAt = t.UTC().Format(time.RFC3339Nano)
 }

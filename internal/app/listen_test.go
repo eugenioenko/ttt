@@ -28,7 +28,7 @@ func TestListenServerReleasesPortBeforeRestart(t *testing.T) {
 	if err != nil {
 		t.Fatalf("listener retained restart port: %v", err)
 	}
-	next.Close()
+	requireNoError(t, next.Close())
 }
 
 func newListenTestApp(t *testing.T) *App {
@@ -97,7 +97,7 @@ func execHandlerRequest(t *testing.T, a *App, method, path, body string) *http.R
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
 

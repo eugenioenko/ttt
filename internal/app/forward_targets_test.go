@@ -33,7 +33,7 @@ func TestForwardTargetsProtocol(t *testing.T) {
 			}
 			received := make(chan receivedRequest, 1)
 			client, server := net.Pipe()
-			defer server.Close()
+			defer func() { _ = server.Close() }()
 			jsonrpc.NewConn(server, server, jsonrpc.Options{
 				OnRequest: func(method string, params json.RawMessage) (any, error) {
 					received <- receivedRequest{method, params}
@@ -83,7 +83,7 @@ func TestForwardTargetsProtocol(t *testing.T) {
 
 func TestForwardTargetsUnsupportedReceiver(t *testing.T) {
 	client, server := net.Pipe()
-	defer server.Close()
+	defer func() { _ = server.Close() }()
 	jsonrpc.NewConn(server, server, jsonrpc.Options{
 		OnRequest: func(method string, _ json.RawMessage) (any, error) {
 			return nil, &jsonrpc.Error{Code: jsonrpc.CodeMethodNotFound, Message: "method not supported: " + method}

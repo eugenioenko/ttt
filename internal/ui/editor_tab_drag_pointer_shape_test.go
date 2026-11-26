@@ -11,11 +11,11 @@ import (
 
 func TestEditorTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 	group := NewEditorGroupWidget(nil, 4, true, "relative")
-	group.OpenFile("alpha.go")
+	requireNoError(t, group.OpenFile("alpha.go"))
 	group.CommitActiveTab()
-	group.OpenFile("beta.go")
+	requireNoError(t, group.OpenFile("beta.go"))
 	group.CommitActiveTab()
-	group.OpenFile("gamma.go")
+	requireNoError(t, group.OpenFile("gamma.go"))
 	group.CommitActiveTab()
 
 	group.TabBar.OnTabReorder = func(from, to int) {
@@ -189,9 +189,9 @@ func TestEditorTabDragPointerGrabbingAcrossPanels(t *testing.T) {
 
 func TestEditorTabDragPointerOverHoverAndAutocomplete(t *testing.T) {
 	group := NewEditorGroupWidget(nil, 4, true, "relative")
-	group.OpenFile("one.go")
+	requireNoError(t, group.OpenFile("one.go"))
 	group.CommitActiveTab()
-	group.OpenFile("two.go")
+	requireNoError(t, group.OpenFile("two.go"))
 	group.CommitActiveTab()
 
 	root := NewRoot(group)
@@ -244,9 +244,9 @@ func TestEditorTabDragPointerOverHoverAndAutocomplete(t *testing.T) {
 
 func TestEditorTabReleaseWithoutDragDoesNotClickEditor(t *testing.T) {
 	group := NewEditorGroupWidget(nil, 4, true, "relative")
-	group.OpenFile("one.go")
+	requireNoError(t, group.OpenFile("one.go"))
 	group.CommitActiveTab()
-	group.OpenFile("two.go")
+	requireNoError(t, group.OpenFile("two.go"))
 	group.CommitActiveTab()
 
 	root := NewRoot(group)

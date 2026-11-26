@@ -10,8 +10,11 @@ import (
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
+
+const hoverGraceMargin = 3
 
 type hoverKey struct {
 	Path, Language, Server, WorkDir, Diagnostic string
@@ -68,7 +71,7 @@ func (a *App) scheduleHover(path, lang string, line, col, anchorX, anchorY int, 
 	}
 	a.ensureHoverTask()
 	server, _, _ := a.lspResolve(path, lang)
-	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDir(path),
+	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDirFor(path, lang),
 		Line: line, Col: a.lspColumn(path, line, col), AnchorX: anchorX, AnchorY: anchorY, Diagnostic: diagText,
 		Version: a.EditorGroup.ActiveBuffer().Version(), Manager: a.LspManager}
 	a.hover.task.ScheduleKey(key, func(ctx context.Context) (string, error) {
@@ -123,6 +126,36 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	} else if !a.isMouseOverHover(mx, my) && !a.EditorGroup.Hover.IsDragging() {
 		a.DismissHover()
 	}
+}
+
+func (a *App) checkMouseHover(mx, my int) {
+	if a.EditorGroup.Editor == nil || !a.Settings.LSP.IsHoverEnabled() {
+		a.DismissHover()
+		return
+	}
+	line, col, ok := a.EditorGroup.Editor.TextPosAt(mx, my)
+	if !ok {
+		a.DismissHover()
+		return
+	}
+	path, lang := a.editorPathLang()
+	a.scheduleHover(path, lang, line, col, mx, my, a.hoverDiagnostic(line, col))
+}
+
+func (a *App) ShowHover(text string, anchorX, anchorY int) {
+	if text != "" {
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
+	}
+}
+
+func (a *App) isMouseOverHover(mx, my int) bool {
+	h := a.EditorGroup.Hover
+	if h == nil {
+		return false
+	}
+	r := h.GetRect()
+	m := hoverGraceMargin
+	return mx >= r.X-m && mx < r.X+r.W+m && my >= r.Y-m && my < r.Y+r.H+m
 }
 
 // checkTabHover handles pointer motion for cut tab names and reports whether

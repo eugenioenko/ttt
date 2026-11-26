@@ -78,6 +78,83 @@ func TestEditorGroupRenderDropPreview(t *testing.T) {
 	}
 }
 
+func TestRenderDropPreviewClearsFullwidthAtBorders(t *testing.T) {
+	vertical := term.SingleBorderSet().Vertical
+
+	// A 40-cell surface previews EditorDropLeft as a 20-cell rect, so a '界'
+	// head at column 18 occupies columns 18-19 and its continuation lands on
+	// the preview's right border at column 19. Continuation cells are zero
+	// cells, as the editor render leaves them.
+	t.Run("glyph spanning right border", func(t *testing.T) {
+		group := NewEditorGroupWidget(nil, 4, true, "relative")
+		group.SetDropZone(EditorDropLeft)
+		cells := makeGrid(40, 15)
+		cells[1][18] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[1][19] = term.Cell{}
+		group.renderDropPreview(NewRenderSurface(cells, Rect{W: 40, H: 15}))
+
+		if got := cells[1][18]; got.Ch != ' ' {
+			t.Fatalf("glyph head at column 18 not cleared: %+v", got)
+		}
+		if got := cells[1][19]; got.Ch != vertical || got.Style != term.StyleBorderActive {
+			t.Fatalf("right border at column 19 overwritten by glyph: %+v", got)
+		}
+	})
+
+	// EditorDropRight previews the right half of a 40-cell surface starting at
+	// column 20, so a '界' head at column 19 continues onto the left border.
+	t.Run("glyph spanning left border", func(t *testing.T) {
+		group := NewEditorGroupWidget(nil, 4, true, "relative")
+		group.SetDropZone(EditorDropRight)
+		cells := makeGrid(40, 15)
+		cells[1][19] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[1][20] = term.Cell{}
+		group.renderDropPreview(NewRenderSurface(cells, Rect{W: 40, H: 15}))
+
+		if got := cells[1][19]; got.Ch != ' ' {
+			t.Fatalf("glyph head at column 19 not cleared: %+v", got)
+		}
+		if got := cells[1][20]; got.Ch != vertical || got.Style != term.StyleBorderActive {
+			t.Fatalf("left border at column 20 overwritten by glyph: %+v", got)
+		}
+	})
+
+	// A '界' head on the border column leaves an orphaned continuation inside
+	// the preview once the border replaces the head.
+	t.Run("glyph head on border", func(t *testing.T) {
+		group := NewEditorGroupWidget(nil, 4, true, "relative")
+		group.SetDropZone(EditorDropLeft)
+		cells := makeGrid(40, 15)
+		cells[1][19] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[1][20] = term.Cell{}
+		group.renderDropPreview(NewRenderSurface(cells, Rect{W: 40, H: 15}))
+
+		if got := cells[1][19]; got.Ch != vertical {
+			t.Fatalf("right border at column 19 overwritten by glyph: %+v", got)
+		}
+		if got := cells[1][20]; got.Ch != ' ' {
+			t.Fatalf("orphaned continuation at column 20 not cleared: %+v", got)
+		}
+	})
+
+	// A '界' fully inside the preview stays and only gains the preview tint.
+	t.Run("glyph inside preview preserved", func(t *testing.T) {
+		group := NewEditorGroupWidget(nil, 4, true, "relative")
+		group.SetDropZone(EditorDropLeft)
+		cells := makeGrid(40, 15)
+		cells[1][5] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[1][6] = term.Cell{}
+		group.renderDropPreview(NewRenderSurface(cells, Rect{W: 40, H: 15}))
+
+		if got := cells[1][5]; got.Ch != '界' || got.BgStyle != term.StyleHighlightStrong {
+			t.Fatalf("interior glyph at column 5 altered: %+v", got)
+		}
+		if got := cells[1][6]; got.Ch != 0 || got.BgStyle != term.StyleHighlightStrong {
+			t.Fatalf("interior continuation at column 6 altered: %+v", got)
+		}
+	})
+}
+
 func TestEditorLayoutSplitGroupAt(t *testing.T) {
 	tests := []struct {
 		name  string

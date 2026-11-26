@@ -16,7 +16,7 @@ func TestEditorTabDragReordersThroughRootAndKeepsActiveFile(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
 	for _, name := range []string{"alpha.txt", "beta.txt", "gamma.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	h.redraw()
@@ -58,7 +58,7 @@ func TestEditorRemovedDragSourceDoesNotRetargetSameIndex(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
 	for _, name := range []string{"alpha.txt", "beta.txt", "gamma.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	h.redraw()
@@ -81,7 +81,7 @@ func TestEditorRemovedDragSourceDoesNotRetargetSameIndex(t *testing.T) {
 	if h.app.Root.PointerCaptureActive() || h.app.EditorGroup.TabBar.OwnsPointerCapture() {
 		t.Fatal("removing beta retained pointer capture")
 	}
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "beta.txt"))
+	h.openFile(filepath.Join(h.dir, "beta.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	postReopen := editorTabPaths(h)
 	h.app.Root.HandleEvent(tcell.NewEventMouse(betaX+20, tabsY, tcell.ButtonNone, 0))
@@ -99,7 +99,7 @@ func TestEditorFullscreenHideCancelsQueuedAutoScrollGeneration(t *testing.T) {
 		if err := os.WriteFile(path, []byte(name), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		h.app.EditorGroup.OpenFile(path)
+		h.openFile(path)
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	first := filepath.Join(h.dir, "overflow-00.txt")
@@ -157,7 +157,7 @@ func TestEditorPendingTabDragOwnsCrossContentSplitRelease(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
 	for _, name := range []string{"alpha.txt", "beta.txt", "gamma.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	h.app.ShowBottomPanel()

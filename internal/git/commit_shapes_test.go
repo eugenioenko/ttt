@@ -108,6 +108,57 @@ func TestCommitShapesRootRenameMergeUnicodeAndBinary(t *testing.T) {
 	if err != nil || len(mergeFiles) != 1 || mergeFiles[0].Path != "topic.txt" {
 		t.Fatalf("first-parent merge files=%+v err=%v", mergeFiles, err)
 	}
+	if text, err := CommitFileDiff(dir, mergeRef, mergeFiles[0]); err != nil || !strings.Contains(text, "\n+topic\n") {
+		t.Fatalf("merge diff err=%v\n%s", err, text)
+	}
+}
+
+func TestCommitFileDiffMergeModifyRenameAndDelete(t *testing.T) {
+	dir := t.TempDir()
+	commitShapeGit(t, dir, "init", "-q", "-b", "main")
+	commitShapeWrite(t, filepath.Join(dir, "a.txt"), []byte("1\n2\n3\n"))
+	commitShapeWrite(t, filepath.Join(dir, "b.txt"), []byte("1\n2\n3\n"))
+	commitShapeWrite(t, filepath.Join(dir, "move.txt"), []byte("move line 1\nmove line 2\n"))
+	commitShapeWrite(t, filepath.Join(dir, "drop.txt"), []byte("gone\n"))
+	commitShapeGit(t, dir, "add", "-A")
+	commitShapeGit(t, dir, "commit", "-qm", "init")
+
+	commitShapeGit(t, dir, "checkout", "-qb", "feat")
+	commitShapeWrite(t, filepath.Join(dir, "a.txt"), []byte("1\n2\n3\nfeat\n"))
+	commitShapeGit(t, dir, "mv", "move.txt", "moved.txt")
+	commitShapeGit(t, dir, "rm", "-q", "drop.txt")
+	commitShapeGit(t, dir, "commit", "-qam", "feat changes")
+
+	commitShapeGit(t, dir, "checkout", "-q", "main")
+	commitShapeWrite(t, filepath.Join(dir, "b.txt"), []byte("1\n2\n3\nmain\n"))
+	commitShapeGit(t, dir, "commit", "-qam", "main change")
+	commitShapeGit(t, dir, "merge", "-q", "--no-edit", "feat")
+	mergeRef := commitShapeGit(t, dir, "rev-parse", "HEAD")
+
+	files, err := CommitFiles(dir, mergeRef)
+	if err != nil {
+		t.Fatalf("CommitFiles err=%v", err)
+	}
+	byPath := make(map[string]FileStatus, len(files))
+	for _, f := range files {
+		byPath[f.Path] = f
+	}
+	if len(byPath) != 3 {
+		t.Fatalf("merge files=%+v, want 3 entries", files)
+	}
+
+	modDiff, err := CommitFileDiff(dir, mergeRef, byPath["a.txt"])
+	if err != nil || !strings.Contains(modDiff, "\n+feat\n") {
+		t.Fatalf("modified merge diff err=%v\n%s", err, modDiff)
+	}
+	renDiff, err := CommitFileDiff(dir, mergeRef, byPath["moved.txt"])
+	if err != nil || !strings.Contains(renDiff, "rename from move.txt") || !strings.Contains(renDiff, "rename to moved.txt") {
+		t.Fatalf("renamed merge diff err=%v\n%s", err, renDiff)
+	}
+	delDiff, err := CommitFileDiff(dir, mergeRef, byPath["drop.txt"])
+	if err != nil || !strings.Contains(delDiff, "\n-gone\n") {
+		t.Fatalf("deleted merge diff err=%v\n%s", err, delDiff)
+	}
 }
 
 func TestCommitLogUnbornAndNonRepo(t *testing.T) {

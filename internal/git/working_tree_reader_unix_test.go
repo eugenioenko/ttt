@@ -46,7 +46,7 @@ func TestReadWorkingTreeFileReturnsTypedSocketDirectoryAndDeviceErrors(t *testin
 	if err != nil {
 		t.Skipf("unix sockets unavailable: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 	_, err = readWorkingTreeFileContext(context.Background(), dir, "socket")
 	var pathErr *workingTreePathError
 	if !errors.As(err, &pathErr) || pathErr.Kind != workingTreePathSocket {
@@ -213,7 +213,7 @@ func TestReadWorkingTreeLargeRegularFileHonorsCancellation(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := file.Truncate(64 << 20); err != nil {
-		file.Close()
+		_ = file.Close()
 		t.Fatal(err)
 	}
 	if err := file.Close(); err != nil {

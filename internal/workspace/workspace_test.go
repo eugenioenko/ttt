@@ -54,8 +54,8 @@ func TestNew(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
 	dir2 := filepath.Join(tmp, "repo2")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 	if len(ws.Folders) != 2 {
@@ -69,7 +69,7 @@ func TestNew(t *testing.T) {
 func TestAddFolderDedup(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
-	os.Mkdir(dir1, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
 
 	ws := New([]string{dir1})
 	ws.AddFolder(dir1)
@@ -82,8 +82,8 @@ func TestRemoveFolder(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
 	dir2 := filepath.Join(tmp, "repo2")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 	ws.RemoveFolder(dir1)
@@ -98,7 +98,7 @@ func TestRemoveFolder(t *testing.T) {
 func TestRemoveFolderNotFound(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
-	os.Mkdir(dir1, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
 
 	ws := New([]string{dir1})
 	ws.RemoveFolder("/nonexistent")
@@ -111,8 +111,8 @@ func TestPaths(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "a")
 	dir2 := filepath.Join(tmp, "b")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 	paths := ws.Paths()
@@ -125,8 +125,8 @@ func TestPrimary(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "first")
 	dir2 := filepath.Join(tmp, "second")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 	if ws.Primary() != dir1 {
@@ -145,9 +145,9 @@ func TestIsRepo(t *testing.T) {
 	tmp := t.TempDir()
 	repo := filepath.Join(tmp, "repo")
 	plain := filepath.Join(tmp, "plain")
-	os.Mkdir(repo, 0755)
-	os.Mkdir(plain, 0755)
-	os.Mkdir(filepath.Join(repo, ".git"), 0755)
+	requireNoError(t, os.Mkdir(repo, 0755))
+	requireNoError(t, os.Mkdir(plain, 0755))
+	requireNoError(t, os.Mkdir(filepath.Join(repo, ".git"), 0755))
 
 	ws := New([]string{repo, plain})
 	if !ws.Folders[0].IsRepo {
@@ -162,8 +162,8 @@ func TestFolderForFile(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
 	dir2 := filepath.Join(tmp, "repo2")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 
@@ -187,7 +187,7 @@ func TestFolderForFileNestedPaths(t *testing.T) {
 	tmp := t.TempDir()
 	parent := filepath.Join(tmp, "monorepo")
 	child := filepath.Join(parent, "packages", "frontend")
-	os.MkdirAll(child, 0755)
+	requireNoError(t, os.MkdirAll(child, 0755))
 
 	ws := New([]string{parent, child})
 
@@ -206,8 +206,8 @@ func TestSaveAndLoadFile(t *testing.T) {
 	tmp := t.TempDir()
 	dir1 := filepath.Join(tmp, "repo1")
 	dir2 := filepath.Join(tmp, "repo2")
-	os.Mkdir(dir1, 0755)
-	os.Mkdir(dir2, 0755)
+	requireNoError(t, os.Mkdir(dir1, 0755))
+	requireNoError(t, os.Mkdir(dir2, 0755))
 
 	ws := New([]string{dir1, dir2})
 	wsFile := filepath.Join(tmp, "test.ttt")

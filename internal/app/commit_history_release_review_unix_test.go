@@ -56,7 +56,7 @@ func TestClosingCommitDetailCancelsItsGitProcess(t *testing.T) {
 	if pid == 0 {
 		t.Fatal("fake git did not start")
 	}
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 
 	group.ClosePluginTab(tabID)
 	waitReviewProcessExit(t, pid)
@@ -86,7 +86,7 @@ func TestClosingCommitDetailCancelsItsFullFileGitProcess(t *testing.T) {
 	group.OpenPluginTab(tabID, "Commit ccccccc", detail)
 	detail.SetContextMode(ui.DiffContextFullFile)
 	pid := waitReviewPID(t, pidPath)
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 
 	group.ClosePluginTab(tabID)
 	waitReviewProcessExit(t, pid)
@@ -121,7 +121,7 @@ func TestSupersededCommitHistoryCancelsItsGitProcess(t *testing.T) {
 	panel.groups = []changesGroup{{Dir: "/repo"}}
 	panel.refreshCommitLog()
 	pid := waitReviewPID(t, pidPath)
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 
 	panel.groups = nil
 	panel.lastLogDir = ""
@@ -164,7 +164,7 @@ func TestCanceledCommitHistoryPageReapsItsGitProcess(t *testing.T) {
 	panel.CommitLog.SetItems([]*widgets.TreeNode{historyLoadOlderNode(false, false)})
 	panel.loadOlderHistory()
 	pid := waitReviewPID(t, pidPath)
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 
 	panel.CancelHistoryRead()
 	waitReviewProcessExit(t, pid)

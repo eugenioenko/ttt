@@ -2600,6 +2600,8 @@ end
 
 Write content to a file. Requires `fs.write` permission.
 
+Missing parent directories are created only within a granted write path, including the granted directory itself if its parent already exists. Symlinks do not extend the grant.
+
 **Returns:** `true` on success, or `nil, error_string` on failure.
 
 ```lua

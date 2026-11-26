@@ -22,6 +22,7 @@ import (
 type Client struct {
 	cmd      *exec.Cmd
 	conn     *jsonrpc.Conn
+	stdin    io.Closer
 	closing  atomic.Bool
 	waitOnce sync.Once
 
@@ -82,6 +83,11 @@ func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, er
 
 func newClient(r io.Reader, w io.Writer, hooks ClientHooks) *Client {
 	c := &Client{hooks: hooks}
+	// Closing stdin is the only way to release a write blocked on a server
+	// that stopped reading, so keep it when the transport supports it.
+	if closer, ok := w.(io.Closer); ok {
+		c.stdin = closer
+	}
 	c.conn = jsonrpc.NewConn(r, w, jsonrpc.Options{
 		OnNotification: c.handleNotification,
 		OnRequest:      c.answer,
@@ -638,10 +644,15 @@ func (c *Client) Shutdown() error {
 
 func (c *Client) Close() {
 	c.closing.Store(true)
-	c.cmd.Process.Kill()
-	c.wait()
+	if c.stdin != nil {
+		_ = c.stdin.Close()
+	}
+	if c.cmd != nil {
+		_ = c.cmd.Process.Kill()
+		c.wait()
+	}
 }
 
 func (c *Client) wait() {
-	c.waitOnce.Do(func() { c.cmd.Wait() })
+	c.waitOnce.Do(func() { _ = c.cmd.Wait() })
 }

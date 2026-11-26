@@ -39,6 +39,7 @@ func TestEditorLinkNavigationThroughApp(t *testing.T) {
 		h := newTestHarness(t, 100, 25)
 		defer h.stop()
 		g := h.app.EditorGroup
+		g.NativeLinks = false
 		target := filepath.Join(h.dir, "subdir", "nested.txt")
 		if untitled {
 			g.NewFile()
@@ -115,6 +116,7 @@ func TestEditorFileLinksInSecondaryRepositoryDiff(t *testing.T) {
 			}
 			h.ctrlClickText("target.txt:2:3")
 			g := h.app.EditorGroup
+			g.NativeLinks = false
 			if g.ActiveFilePath() != target || g.Editor.Cursor.Line != 1 || g.Editor.Cursor.Col != 2 {
 				t.Fatalf("diff link navigation failed: %q at %+v", g.ActiveFilePath(), g.Editor.Cursor)
 			}
@@ -140,6 +142,7 @@ func TestEditorPRDiffLinksUseWorkspace(t *testing.T) {
 			h.app.OpenPRDiff(&groups[len(groups)-1], status, false)
 		}
 		g := h.app.EditorGroup
+		g.NativeLinks = false
 		view := g.ActiveDiffWidget()
 		if view == nil {
 			t.Fatal("PR diff did not open")
@@ -159,6 +162,7 @@ func TestEditorLinksInReadOnlyDiffTabs(t *testing.T) {
 		h := newTestHarness(t, 120, 25)
 		defer h.stop()
 		g := h.app.EditorGroup
+		g.NativeLinks = false
 		g.DiffMode = mode
 		g.OpenDiff(filepath.Join(h.dir, "links.txt"), diff.FileDiff{}, []string{"https://old.test"}, []string{"https://new.test"}, true)
 		opened := ""
@@ -193,6 +197,7 @@ func TestEditorLinksInCommitDetails(t *testing.T) {
 				"--- a/src/change.txt\n+++ b/src/change.txt\n@@ -1,1 +1,2 @@\n-https://old.test\n+https://new.test\n+target.txt:2:3\n",
 			)}}, "")
 			g := h.app.EditorGroup
+			g.NativeLinks = false
 			g.DiffMode = mode
 			g.ApplyDiffDefaults(detail)
 			g.OpenPluginTab("detail", "Details", detail)

@@ -202,3 +202,52 @@ func TestPanelDockedRightKeepsEditorAndCorner(t *testing.T) {
 		t.Errorf("right edge of row 1 = %q, want '╮'\n%s", row[len(row)-1], h.screenText())
 	}
 }
+
+func TestPanelDockedRightWithHiddenSidebarKeepsEditorCorner(t *testing.T) {
+	h := newTestHarness(t, 80, 14)
+	defer h.stop()
+
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.toggle")
+	h.exec("panel.dockRight")
+	h.exec("sidebar.toggle")
+	h.redraw()
+	for _, tt := range h.app.Terminals {
+		defer tt.Term.Close()
+	}
+
+	b := h.app.Borders
+	top := h.app.SplitPanel.GetRect().Y
+	if got := []rune(h.screenRow(top))[0]; got == b.TopLeft {
+		t.Errorf("editor left border starts above its tab bar\n%s", h.screenText())
+	}
+	if got := []rune(h.screenRow(top + 2))[0]; got != b.TopLeft {
+		t.Errorf("editor left corner = %q, want %q\n%s", got, b.TopLeft, h.screenText())
+	}
+	if got := []rune(h.screenRow(top))[79]; got != b.TopRight {
+		t.Errorf("panel right corner = %q, want %q\n%s", got, b.TopRight, h.screenText())
+	}
+}
+
+func TestPanelDockedRightKeepsSidebarCorner(t *testing.T) {
+	h := newTestHarness(t, 80, 14)
+	defer h.stop()
+
+	h.app.Settings.Terminal.Shell = "/bin/cat"
+	h.exec("terminal.toggle")
+	h.exec("panel.dockRight")
+	h.redraw()
+	for _, tt := range h.app.Terminals {
+		defer tt.Term.Close()
+	}
+
+	b := h.app.Borders
+	x := h.app.SplitPanel.DividerScreenX()
+	top := h.app.SplitPanel.GetRect().Y
+	if got := []rune(h.screenRow(top))[x]; got != b.TopRight {
+		t.Errorf("sidebar top corner = %q, want %q\n%s", got, b.TopRight, h.screenText())
+	}
+	if got := []rune(h.screenRow(top + 2))[x]; got != b.LeftTee {
+		t.Errorf("sidebar header junction = %q, want %q\n%s", got, b.LeftTee, h.screenText())
+	}
+}

@@ -5,10 +5,25 @@
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
+[data-has-hero] body {
+  background-color: #141414;
+}
+
+[data-has-hero][data-theme='light'] body {
+  background-color: #fafafa;
+}
+
 /* Make hero full-width single column */
 .hero {
+  padding-block: 0 0.5rem;
   grid-template-columns: 1fr !important;
   text-align: center;
+}
+
+@media (min-width: 50rem) {
+  .hero {
+    padding-block: 72px;
+  }
 }
 
 .hero > .stack {
@@ -171,4 +186,85 @@
   border-radius: 8px;
   position: relative;
   z-index: 999999;
+}
+
+.homepage-footer {
+  padding-block-start: clamp(2rem, 5vw, 4rem);
+}
+
+.homepage-footer .footer-install,
+.homepage-footer .footer-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.25rem;
+}
+
+.homepage-footer .footer-install {
+  background: var(--sl-color-gray-6);
+  border-inline-start: 4px solid var(--sl-color-text-accent);
+  padding: clamp(1.5rem, 4vw, 3rem);
+}
+
+.homepage-footer .footer-links {
+  padding: 1rem 0;
+  font-size: var(--sl-text-sm);
+}
+
+.homepage-footer .footer-links :is(strong, nav) {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.homepage-footer .footer-links nav {
+  gap: 1.25rem;
+}
+
+.sl-markdown-content .homepage-footer :is(h2, nav, a.sl-link-button, nav a) {
+  margin: 0;
+}
+
+.card .terminal-card-icon {
+  display: inline-block;
+  width: 1.333em;
+  margin-inline-end: 0.5rem;
+  vertical-align: middle;
+}
+
+.demo-window {
+  overflow: hidden;
+  margin-bottom: 2rem;
+  border: 2px solid #303030;
+  border-radius: 0.75rem;
+}
+
+.demo-titlebar {
+  position: relative;
+  padding: 0.3rem 4rem;
+  border-bottom: 1px solid var(--sl-color-gray-4);
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-gray-2);
+  font-size: var(--sl-text-sm);
+  text-align: center;
+}
+
+.demo-window-dots {
+  position: absolute;
+  inset-inline-start: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  color: var(--sl-color-gray-3);
+  background: currentColor;
+  box-shadow: 0.9rem 0, 1.8rem 0;
+}
+
+.demo-window video {
+  display: block;
+  width: 100%;
+  margin: 0;
 }

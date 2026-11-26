@@ -662,7 +662,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		startCol, leftCol = row.startCol, 0
 	}
 	offset := runeByteOffset(old.Text, startCol)
-	cells := e.renderLineSegmentToScreen(rowText(old.Text, offset, row), spans, false, "", startCol, tabW, leftCol, editorW, ghostText{})
+	cells, _ := e.renderLineSegmentToScreen(rowText(old.Text, offset, row), spans, "", startCol, tabW, leftCol, editorW, ghostText{})
 	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
 	for x := 0; x < editorW; x++ {
 		cell := term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted}

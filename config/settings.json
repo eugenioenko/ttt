@@ -1,6 +1,9 @@
 {
   "version": 1,
   "theme": "default-dark",
+  "links": {
+    "native": false
+  },
   "appearance": {
     "icons": "none",
     "scrollbarGlyphs": "blocks",
@@ -51,6 +54,7 @@
     "gutterStyle": "compact",
     "borderStyle": "default",
     "bracketPairColorization": false,
+    "fullLineSelection": false,
     "transparentBackground": false,
     "saveAllOnQuit": false,
     "saveAllOnQuitExceptUnnamed": false,

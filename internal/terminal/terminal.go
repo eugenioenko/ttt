@@ -2,6 +2,7 @@ package terminal
 
 import (
 	"io"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -84,7 +85,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	}
 	pollable, err := makePtyPollable(pt)
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	pt = pollable
@@ -96,7 +97,9 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	)
 	t.watchPromptMarks()
 	t.term.OnData(func(s string) {
-		io.WriteString(pt, s)
+		if _, err := io.WriteString(pt, s); err != nil {
+			slog.Debug("terminal response write", "error", err)
+		}
 	})
 
 	cmd := pt.Command(shell, args...)
@@ -111,7 +114,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	if err := pt.Resize(cols, rows); err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 
@@ -119,7 +122,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	err = cmd.Start()
 	restoreHangup()
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	t.pt = pt
@@ -178,7 +181,7 @@ func (t *Terminal) waitLoop() {
 		close(t.waited)
 		return
 	}
-	t.cmd.Wait()
+	_ = t.cmd.Wait()
 
 	t.mu.Lock()
 	t.exited = true
@@ -186,7 +189,7 @@ func (t *Terminal) waitLoop() {
 	if isUnix {
 		// go-pty retains the parent's slave fd. Release it so the reader can
 		// drain to EOF without closing the master and discarding queued output.
-		unixPty.Slave().Close()
+		_ = unixPty.Slave().Close()
 		t.lastRead = time.Now()
 	}
 	t.mu.Unlock()
@@ -236,7 +239,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.mu.Lock()
 			if !t.closed {
-				t.term.Write(buf[:n])
+				_, _ = t.term.Write(buf[:n])
 				t.appendRawTail(buf[:n])
 			}
 			t.lastRead = time.Now()
@@ -257,7 +260,9 @@ func (t *Terminal) readLoop() {
 }
 
 func (t *Terminal) WriteString(s string) {
-	io.WriteString(t.pt, s)
+	if _, err := io.WriteString(t.pt, s); err != nil {
+		slog.Debug("terminal input write", "error", err)
+	}
 }
 
 func (t *Terminal) Resize(cols, rows int) {
@@ -267,9 +272,16 @@ func (t *Terminal) Resize(cols, rows int) {
 	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.resizeEmulator(cols, rows) {
-		t.pt.Resize(cols, rows)
+	if cols == t.cols && rows == t.rows {
+		return
 	}
+	if !t.exited && !t.closed {
+		if err := t.pt.Resize(cols, rows); err != nil {
+			slog.Warn("resize terminal", "cols", cols, "rows", rows, "error", err)
+			return
+		}
+	}
+	t.resizeEmulator(cols, rows)
 }
 
 // resizeEmulator reports whether the size changed. An unchanged size must not
@@ -377,7 +389,7 @@ func (t *Terminal) closePty() {
 		return
 	}
 	t.ptyClosed = true
-	t.pt.Close()
+	_ = t.pt.Close()
 }
 
 func (t *Terminal) signalShell(sig shellSignal, started bool) {

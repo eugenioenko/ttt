@@ -52,6 +52,12 @@ func (a *App) ExplorerRename() {
 	a.FileOpRename(a.explorerNodePath(), a.explorerReload)
 }
 
+func (a *App) ExplorerDuplicate() {
+	path := a.explorerNodePath()
+	a.ExplorerContextNode = nil
+	a.FileOpDuplicate(path, a.explorerReload)
+}
+
 func (a *App) ExplorerDelete() {
 	path := a.explorerNodePath()
 	if a.Explorer.isRootPath(path) {
@@ -110,7 +116,7 @@ func (a *App) ExplorerOpenInTerminal() {
 	if info, err := os.Stat(path); err == nil && !info.IsDir() {
 		path = filepath.Dir(path)
 	}
-	a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
+	_, _ = a.SpawnTerminalSpec(TerminalSpec{Cwd: path})
 }
 
 func (a *App) ExplorerRevealActiveFile() {
@@ -239,6 +245,12 @@ func registerExplorerCommands(app *App) {
 		Keywords:      []string{"view", "file"},
 		PaletteHidden: true,
 		Handler:       app.ExplorerRename,
+	})
+
+	reg.Register(command.Command{
+		ID: "explorer.duplicate", Title: i18n.Text("command.explorerDuplicate"),
+		Keywords: []string{"view", "file", "copy", "duplicate"},
+		Handler:  app.ExplorerDuplicate,
 	})
 
 	reg.Register(command.Command{

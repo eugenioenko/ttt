@@ -22,7 +22,7 @@ type PanelProxy struct {
 func (pp *PanelProxy) wrapSimpleCallback(fn *lua.LFunction) func() {
 	p := pp.plugin
 	return func() {
-		p.CallLuaFunc(fn)
+		_ = p.CallLuaFunc(fn)
 	}
 }
 
@@ -30,7 +30,7 @@ func (pp *PanelProxy) wrapBoolCallback(fn *lua.LFunction) func(bool) {
 	p := pp.plugin
 	return func(b bool) {
 		if p.State != nil {
-			p.CallLuaFunc(fn, lua.LBool(b))
+			_ = p.CallLuaFunc(fn, lua.LBool(b))
 		}
 	}
 }
@@ -39,7 +39,7 @@ func (pp *PanelProxy) wrapStringCallback(fn *lua.LFunction) func(string) {
 	p := pp.plugin
 	return func(s string) {
 		if p.State != nil {
-			p.CallLuaFunc(fn, lua.LString(s))
+			_ = p.CallLuaFunc(fn, lua.LString(s))
 		}
 	}
 }
@@ -49,7 +49,7 @@ func (pp *PanelProxy) wrapNodeCallback(fn *lua.LFunction) func(*widgets.TreeNode
 	return func(node *widgets.TreeNode) {
 		if p.State != nil {
 			tbl := TreeNodeToLua(p.State, node)
-			p.CallLuaFunc(fn, tbl)
+			_ = p.CallLuaFunc(fn, tbl)
 		}
 	}
 }
@@ -59,7 +59,7 @@ func (pp *PanelProxy) wrapCommandCallback(fn *lua.LFunction) func(string, *widge
 	return func(command string, node *widgets.TreeNode) {
 		if p.State != nil {
 			tbl := TreeNodeToLua(p.State, node)
-			p.CallLuaFunc(fn, lua.LString(command), tbl)
+			_ = p.CallLuaFunc(fn, lua.LString(command), tbl)
 		}
 	}
 }
@@ -870,7 +870,7 @@ func panelTableWidget(L *lua.LState) int {
 		luaFn := fn
 		desc.OnSelectIndex = func(rowIndex int) {
 			if proxy.plugin != nil && proxy.plugin.State != nil {
-				proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
+				_ = proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
 			}
 		}
 	}
@@ -878,7 +878,7 @@ func panelTableWidget(L *lua.LState) int {
 		luaFn := fn
 		desc.OnActivateIndex = func(rowIndex int) {
 			if proxy.plugin != nil && proxy.plugin.State != nil {
-				proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
+				_ = proxy.plugin.CallLuaFunc(luaFn, lua.LNumber(rowIndex+1))
 			}
 		}
 	}
@@ -886,7 +886,7 @@ func panelTableWidget(L *lua.LState) int {
 		luaFn := fn
 		desc.OnCommandStr = func(command string, rowIndex int) {
 			if proxy.plugin != nil && proxy.plugin.State != nil {
-				proxy.plugin.CallLuaFunc(luaFn, lua.LString(command), lua.LNumber(rowIndex+1))
+				_ = proxy.plugin.CallLuaFunc(luaFn, lua.LString(command), lua.LNumber(rowIndex+1))
 			}
 		}
 	}
@@ -998,7 +998,7 @@ func panelPagerWidget(L *lua.LState) int {
 		p := proxy.plugin
 		desc.OnPage = func(offset int) {
 			if p != nil && p.State != nil {
-				p.CallLuaFunc(fn, lua.LNumber(offset))
+				_ = p.CallLuaFunc(fn, lua.LNumber(offset))
 			}
 		}
 	}

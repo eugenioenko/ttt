@@ -56,18 +56,18 @@ func (a *App) FetchAndOpenPR(url string) {
 	go func() {
 		info, err := github.FetchPRInfo(owner, repo, number)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
 			return
 		}
 
 		diffText, err := github.FetchPRDiff(owner, repo, number)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
 			return
 		}
 
 		diffs := github.SplitMultiFileDiff(diffText)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Info: info, Diffs: diffs}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Info: info, Diffs: diffs}))
 	}()
 }
 

@@ -50,7 +50,7 @@ func readEditorSession(key string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, maxEditorSessionBytes+1))
 	if err != nil {
 		return nil, err
@@ -101,7 +101,7 @@ func writeEditorSession(key string, data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(f.Name())
+	defer func() { _ = os.Remove(f.Name()) }()
 	_, writeErr := f.Write(data)
 	if err := errors.Join(writeErr, f.Close()); err != nil {
 		return err

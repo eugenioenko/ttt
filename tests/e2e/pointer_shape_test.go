@@ -13,7 +13,7 @@ import (
 func TestPointerShapesAcrossComposedApp(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.app.ShowBottomPanel()
 	h.redraw()
@@ -48,7 +48,7 @@ func TestPointerShapeFollowsTabDragAndEndsOnRelease(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
 	for _, name := range []string{"alpha.txt", "beta.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	h.redraw()
@@ -87,7 +87,7 @@ func TestPointerShapeFollowsTabDragAndEndsOnRelease(t *testing.T) {
 func TestPointerShapeIgnoresEditorBeneathOverlay(t *testing.T) {
 	h := newTestHarness(t, 120, 30)
 	defer h.stop()
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -122,7 +122,7 @@ func TestMouseInteractionsWorkWithPointerShapesDisabled(t *testing.T) {
 
 		f := filepath.Join(h.dir, "test.txt")
 		_ = os.WriteFile(f, []byte("hello world\nline 2\nline 3\n"), 0644)
-		h.app.EditorGroup.OpenFile(f)
+		h.openFile(f)
 		h.app.EditorGroup.CommitActiveTab()
 		h.redraw()
 
@@ -147,7 +147,7 @@ func TestMouseInteractionsWorkWithPointerShapesDisabled(t *testing.T) {
 		h.app.ApplySettings(s)
 
 		for _, name := range []string{"alpha.txt", "beta.txt", "gamma.txt"} {
-			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+			h.openFile(filepath.Join(h.dir, name))
 			h.app.EditorGroup.CommitActiveTab()
 		}
 		h.redraw()

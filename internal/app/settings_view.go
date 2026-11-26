@@ -75,6 +75,12 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("session.restoreTabs"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Editor.RestoreTabs },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.RestoreTabs = v }},
+			{Label: i18n.Text("settings.checkForUpdatesOnStartup"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Update.StartupCheck },
+				SetBool: func(s *config.Settings, v bool) { s.Update.StartupCheck = v }},
+			{Label: i18n.Text("settings.updateCheckFrequency"), Kind: settingEnum, Options: fixedOptions(updateCheckFrequencyItems),
+				GetString: func(s *config.Settings) string { return s.Update.Interval() },
+				SetString: func(s *config.Settings, v string) { s.Update.StartupCheckInterval = v }},
 			{Label: i18n.Text("settings.displayLanguage"), Kind: settingEnum, Restart: true, Options: languageItems,
 				GetString: func(s *config.Settings) string {
 					if s.Language.Locale == "" {
@@ -95,6 +101,10 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.recentFolderHistory"), Kind: settingBool,
 				GetBool: func(s *config.Settings) bool { return s.Welcome.IsRecentFoldersEnabled() },
 				SetBool: func(s *config.Settings, v bool) { s.Welcome.RecentFolders = boolPtr(v) }},
+			section(i18n.Text("settings.links")),
+			{Label: i18n.Text("settings.nativeLinks"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Links.Native },
+				SetBool: func(s *config.Settings, v bool) { s.Links.Native = v }},
 			section(i18n.Text("settings.keyboard")),
 			{Label: i18n.Text("settings.shortcutModifier"), Kind: settingEnum, Options: fixedOptions(keyboardModifierItems),
 				GetString: func(s *config.Settings) string { return s.Keyboard.ModifierKey },
@@ -263,6 +273,9 @@ func settingsCategories() []settingsCategory {
 			{Label: i18n.Text("settings.selectionStyle"), Kind: settingEnum, Options: fixedOptions(selectionStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.SelectionStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.SelectionStyle = v }},
+			{Label: i18n.Text("settings.fullLineSelection"), Kind: settingBool,
+				GetBool: func(s *config.Settings) bool { return s.Editor.FullLineSelection },
+				SetBool: func(s *config.Settings, v bool) { s.Editor.FullLineSelection = v }},
 			{Label: i18n.Text("settings.gutterStyle"), Kind: settingEnum, Options: fixedOptions(gutterStyleItems),
 				GetString: func(s *config.Settings) string { return s.Editor.GutterStyle },
 				SetString: func(s *config.Settings, v string) { s.Editor.GutterStyle = v }},
@@ -387,6 +400,13 @@ func settingsCategories() []settingsCategory {
 				GetBool: func(s *config.Settings) bool { return s.Editor.DiffScrollbarGitMarks },
 				SetBool: func(s *config.Settings, v bool) { s.Editor.DiffScrollbarGitMarks = v }},
 		}},
+	}
+}
+
+func updateCheckFrequencyItems() []widgets.SelectItem {
+	return []widgets.SelectItem{
+		{ID: config.UpdateCheckEveryLaunch, Label: i18n.Text("settings.updateCheckEveryLaunch")},
+		{ID: config.UpdateCheckDaily, Label: i18n.Text("settings.updateCheckDaily")},
 	}
 }
 

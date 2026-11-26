@@ -44,6 +44,7 @@ type EditorPaneWidget struct {
 	UseTabs                 bool
 	LineNumbers             bool
 	IndentGuides            bool
+	FullLineSelection       bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool
@@ -104,6 +105,7 @@ type EditorPaneWidget struct {
 	links                   editorLinks
 	LinkWorkDir             string
 	ControlModifiers        *tcell.ModMask
+	NativeLinks             bool
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)

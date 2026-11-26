@@ -6,6 +6,7 @@ export default defineConfig({
   image: { service: passthroughImageService() },
   integrations: [
     starlight({
+      components: { Footer: './src/components/Footer.astro' },
       customCss: ['./src/styles/custom.css'],
       title: 'TTT Editor',
       favicon: '/favicon.svg',

@@ -175,6 +175,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.FileHandler = left.FileHandler
 	right.OnFileHandled = left.OnFileHandled
 	right.LinkWorkDir = left.LinkWorkDir
+	right.NativeLinks = left.NativeLinks
 	right.OnOpenURL = left.OnOpenURL
 	right.OnOpenFileLink = left.OnOpenFileLink
 	right.OnLinkHover = left.OnLinkHover
@@ -220,10 +221,10 @@ func (a *App) openEditorDocuments() []ui.OpenDocument {
 
 func (a *App) wireEditorAutoScroll(group *ui.EditorGroupWidget) {
 	group.TabBar.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
 	}
 	group.Editor.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
 	}
 }
 

@@ -11,8 +11,8 @@ func TestJoinLines_Basic(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "join.txt")
-	os.WriteFile(f, []byte("hello\n    world\nfoo\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n    world\nfoo\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Cursor starts on line 0
@@ -33,8 +33,8 @@ func TestJoinLines_LastLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "joinlast.txt")
-	os.WriteFile(f, []byte("only line"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("only line"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.joinLines")
@@ -53,8 +53,8 @@ func TestJoinLines_Undo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "joinundo.txt")
-	os.WriteFile(f, []byte("aaa\n    bbb\nccc\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("aaa\n    bbb\nccc\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.joinLines")
@@ -78,8 +78,8 @@ func TestJoinLines_CurrentLineEndsWithSpace(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "joinspace.txt")
-	os.WriteFile(f, []byte("hello \n    world\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello \n    world\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.joinLines")
@@ -95,8 +95,8 @@ func TestJoinLines_NextLineEmpty(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "joinempty.txt")
-	os.WriteFile(f, []byte("hello\n\nworld\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n\nworld\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.joinLines")
@@ -115,8 +115,8 @@ func TestJoinLines_Selection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "joinsel.txt")
-	os.WriteFile(f, []byte("aaa\n  bbb\n  ccc\nddd\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("aaa\n  bbb\n  ccc\nddd\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Select lines 0-2

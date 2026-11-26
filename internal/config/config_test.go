@@ -73,7 +73,7 @@ func TestLoadThemeSetting(t *testing.T) {
 
 func TestReadFirst(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "test.json"), []byte(`{"ok":true}`), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "test.json"), []byte(`{"ok":true}`), 0644))
 
 	data, err := readFirst([]string{"/nonexistent", dir}, "test.json")
 	if err != nil {
@@ -87,8 +87,8 @@ func TestReadFirst(t *testing.T) {
 func TestReadFirstPriority(t *testing.T) {
 	dir1 := t.TempDir()
 	dir2 := t.TempDir()
-	os.WriteFile(filepath.Join(dir1, "test.json"), []byte(`"first"`), 0644)
-	os.WriteFile(filepath.Join(dir2, "test.json"), []byte(`"second"`), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir1, "test.json"), []byte(`"first"`), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir2, "test.json"), []byte(`"second"`), 0644))
 
 	data, err := readFirst([]string{dir1, dir2}, "test.json")
 	if err != nil {

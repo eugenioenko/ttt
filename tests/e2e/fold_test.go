@@ -16,7 +16,7 @@ func TestFoldOpenClose_Commands(t *testing.T) {
 	if err := os.WriteFile(path, []byte("def outer():\n    if ready:\n        run()\n    done()\n\noutside()\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 	e := h.app.EditorGroup.Editor
 	for _, title := range []string{"Open Fold", "Close Fold"} {
@@ -78,11 +78,11 @@ func TestFoldOpenClose_Commands(t *testing.T) {
 func TestFoldToggle_HidesLines(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644))
 	h.exec("sidebar.explorer")
 	h.redraw()
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.assertContains("fmt.Println(\"hello\")")
@@ -99,9 +99,9 @@ func TestFoldToggle_HidesLines(t *testing.T) {
 func TestFoldToggle_ShowsLines(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -117,9 +117,9 @@ func TestFoldToggle_ShowsLines(t *testing.T) {
 func TestFoldAll_CollapsesAllRanges(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "funcs.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc a() {\n\tx()\n}\n\nfunc b() {\n\ty()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc a() {\n\tx()\n}\n\nfunc b() {\n\ty()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.assertContains("x()")
@@ -134,9 +134,9 @@ func TestFoldAll_CollapsesAllRanges(t *testing.T) {
 func TestExpandAll_ShowsAllLines(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "funcs.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc a() {\n\tx()\n}\n\nfunc b() {\n\ty()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc a() {\n\tx()\n}\n\nfunc b() {\n\ty()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.exec("fold.collapseAll")
@@ -150,9 +150,9 @@ func TestExpandAll_ShowsAllLines(t *testing.T) {
 func TestFoldAnnotation(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n\tc()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n\tc()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -164,9 +164,9 @@ func TestFoldAnnotation(t *testing.T) {
 func TestFoldLineNumbers(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("line1\n  line2\n  line3\nline4\nline5\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("line1\n  line2\n  line3\nline4\nline5\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -187,9 +187,9 @@ func TestFoldLineNumbers(t *testing.T) {
 func TestCursorDown_SkipsFold(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -205,9 +205,9 @@ func TestCursorDown_SkipsFold(t *testing.T) {
 func TestCursorUp_SkipsFold(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -226,9 +226,9 @@ func TestCursorUp_SkipsFold(t *testing.T) {
 func TestFoldAnnotation_Ellipsis(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -240,9 +240,9 @@ func TestFoldAnnotation_Ellipsis(t *testing.T) {
 func TestTypingOnCollapsedFold_ExpandsFold(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -260,9 +260,9 @@ func TestTypingOnCollapsedFold_ExpandsFold(t *testing.T) {
 func TestUndoAfterEdit_ExpandsFoldContainingCursor(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("line0\n  line1\n  line2\nline3\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 1
@@ -283,9 +283,9 @@ func TestUndoAfterEdit_ExpandsFoldContainingCursor(t *testing.T) {
 func TestScrollDown_FoldAware(t *testing.T) {
 	h := newTestHarness(t, 80, 10)
 	goFile := filepath.Join(h.dir, "scroll.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n\tc()\n\td()\n\te()\n}\n\nfunc other() {\n\tx()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\ta()\n\tb()\n\tc()\n\td()\n\te()\n}\n\nfunc other() {\n\tx()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.exec("fold.collapseAll")
@@ -314,8 +314,8 @@ func TestOpenBuffer_HasFoldState(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 
 	path := filepath.Join(h.dir, "test.go")
-	os.WriteFile(path, []byte("func main() {\n\ta()\n\tb()\n}"), 0644)
-	h.app.EditorGroup.OpenFile(path)
+	requireNoError(t, os.WriteFile(path, []byte("func main() {\n\ta()\n\tb()\n}"), 0644))
+	h.openFile(path)
 	h.redraw()
 
 	folds := h.app.EditorGroup.Editor.Folds
@@ -331,9 +331,9 @@ func TestOpenBuffer_HasFoldState(t *testing.T) {
 func TestGoToLine_ExpandsFoldContaining(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -349,9 +349,9 @@ func TestGoToLine_ExpandsFoldContaining(t *testing.T) {
 func TestFindNext_ExpandsFoldContaining(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n\tfmt.Println(\"world\")\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -372,10 +372,10 @@ func TestFoldStatePreservedAcrossTabs(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	file1 := filepath.Join(h.dir, "a.go")
 	file2 := filepath.Join(h.dir, "b.go")
-	os.WriteFile(file1, []byte("package a\n\nfunc f() {\n\tx()\n}\n"), 0644)
-	os.WriteFile(file2, []byte("package b\n"), 0644)
+	requireNoError(t, os.WriteFile(file1, []byte("package a\n\nfunc f() {\n\tx()\n}\n"), 0644))
+	requireNoError(t, os.WriteFile(file2, []byte("package b\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(file1)
+	h.openFile(file1)
 	h.app.EditorGroup.CommitActiveTab()
 	h.redraw()
 
@@ -383,10 +383,10 @@ func TestFoldStatePreservedAcrossTabs(t *testing.T) {
 	h.exec("fold.toggle")
 	h.assertNotContains("x()")
 
-	h.app.EditorGroup.OpenFile(file2)
+	h.openFile(file2)
 	h.redraw()
 
-	h.app.EditorGroup.OpenFile(file1)
+	h.openFile(file1)
 	h.redraw()
 
 	h.assertNotContains("x()")
@@ -396,13 +396,13 @@ func TestFoldChevronFollowsSetting(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	defer h.stop()
 	goFile := filepath.Join(h.dir, "main.go")
-	os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(goFile, []byte("package main\n\nfunc main() {\n\tfmt.Println(\"hello\")\n}\n"), 0644))
 
 	s := *h.app.Settings
 	s.Appearance.Overrides = map[string]string{"chevron-right": "»"}
 	h.app.ApplySettings(s)
 
-	h.app.EditorGroup.OpenFile(goFile)
+	h.openFile(goFile)
 	h.redraw()
 	h.app.EditorGroup.Editor.Cursor.Line = 2
 	h.exec("fold.toggle")

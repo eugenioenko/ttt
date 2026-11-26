@@ -38,7 +38,9 @@ func (a *App) OpenCommandPalette(fileMode bool, initialText ...string) {
 	}
 	palette.OnOpenFile = func(absPath string) {
 		a.DismissDialog()
-		a.EditorGroup.OpenFile(absPath)
+		if err := a.EditorGroup.OpenFile(absPath); err != nil {
+			return
+		}
 		a.FocusEditor()
 	}
 	palette.OnGoToLine = func(line int) {
@@ -291,8 +293,11 @@ func registerPaletteCommands(app *App) {
 		Keywords: []string{"preferences", "settings", "hotkeys", "keymap"},
 		Handler: func() {
 			path := config.ConfigFilePath("keybindings.json")
-			config.EnsureConfigFile(path, "{}\n")
-			app.EditorGroup.OpenFile(path)
+			if err := config.EnsureConfigFile(path, "{}\n"); err != nil {
+				app.StatusError(err.Error())
+				return
+			}
+			_ = app.EditorGroup.OpenFile(path)
 		},
 	})
 }

@@ -98,7 +98,7 @@ func newUpdatablePluginHarness(t *testing.T, extraPermissions string) (*testHarn
 	if err := os.WriteFile(pdf, []byte("%PDF-1.7\n\x00\x01\x02\xff"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	h.assertContains("pdf sidebar 1.0.0")
 	h.assertContains("pdf page 1.0.0")
@@ -131,9 +131,9 @@ func (h *testHarness) awaitPluginUpdate(name, pdf string) {
 		case <-deadline:
 			h.t.Fatal("timed out waiting for the update")
 		default:
-			h.app.EditorGroup.OpenFile(other)
+			h.openFile(other)
 			h.redraw()
-			h.app.EditorGroup.OpenFile(pdf)
+			h.openFile(pdf)
 			h.redraw()
 		}
 	}
@@ -178,7 +178,7 @@ func TestDisabledPluginUpdateRefreshesActiveTheme(t *testing.T) {
 	}
 	writeVersion("1.0.0", "#123456")
 	pluginsDir := filepath.Join(config.OverrideConfigDir, "plugins")
-	os.MkdirAll(pluginsDir, 0755)
+	requireNoError(t, os.MkdirAll(pluginsDir, 0755))
 	gitIn(t, pluginsDir, "clone", "-q", upstream, "theme-pack")
 	m := plugin.NewManager(pluginsDir, filepath.Join(config.OverrideConfigDir, "plugins.ttt.json"))
 	h.app.PluginManager = m

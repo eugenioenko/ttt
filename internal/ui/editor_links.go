@@ -69,6 +69,7 @@ func (g *EditorGroupWidget) configurePaneLinks(e *EditorPaneWidget, path string)
 		dir = g.LinkWorkDir()
 	}
 	e.LinkWorkDir = dir
+	e.NativeLinks = g.NativeLinks
 	e.ControlModifiers = g.ControlModifiers
 	e.OnOpenURL, e.OnOpenFile, e.OnLinkHover = g.OnOpenURL, g.OnOpenFileLink, g.OnLinkHover
 	e.ResolveFileLinks = g.ResolveFileLinks
@@ -197,6 +198,33 @@ func (e *EditorPaneWidget) linksForWindow(window editorLinkWindow) []linkSpan {
 	return complete
 }
 
+func (e *EditorPaneWidget) nativeLinksForRow(line, segmentByte int, cells []screenCell) []linkSpan {
+	if !e.NativeLinks {
+		return nil
+	}
+	first, last := 0, len(cells)-1
+	for first <= last && (cells[first].byteLen == 0 || cells[first].width == 0) {
+		first++
+	}
+	for last >= first && (cells[last].byteLen == 0 || cells[last].width == 0) {
+		last--
+	}
+	if first > last {
+		return nil
+	}
+	window := editorLinkWindow{line: line, col: cells[first].bufCol,
+		start: segmentByte + cells[first].byteCol,
+		end:   segmentByte + cells[last].byteCol + cells[last].byteLen}
+	text := e.Buf.Lines[line]
+	// Include every possible URL prefix in the bounded rune lookaround without scanning a whole long line.
+	start := max(0, window.start-editorLinkLookaround*utf8.UTFMax)
+	end := min(len(text), window.end+editorLinkLookaround*utf8.UTFMax)
+	if !strings.Contains(text[start:end], "http") {
+		return nil
+	}
+	return e.linksForWindow(window)
+}
+
 func (e *EditorPaneWidget) renderLinks(surface Surface) {
 	l := &e.links
 	e.resolveVisibleFileLinks()
@@ -209,7 +237,7 @@ func (e *EditorPaneWidget) renderLinks(surface Surface) {
 			for i := range spans {
 				span := &spans[i]
 				if c.col >= span.StartCol && c.col < span.EndCol &&
-					((span.IsFile && e.OnOpenFile != nil) || (!span.IsFile && e.OnOpenURL != nil)) {
+					((span.IsFile && e.OnOpenFile != nil) || (!span.IsFile && !e.NativeLinks && e.OnOpenURL != nil)) {
 					if span.IsFile {
 						path := l.resolved[span.FilePath]
 						if path == "" {
@@ -289,7 +317,7 @@ func (e *EditorPaneWidget) resolveVisibleFileLinks() {
 func (e *EditorPaneWidget) editorLinkAt(mx, my int) (linkSpan, bool) {
 	r := e.GetRect()
 	span := e.links.hits[linkPoint{mx - r.X, my - r.Y}]
-	if span != nil {
+	if span != nil && (span.IsFile || !e.NativeLinks) {
 		return *span, true
 	}
 	return linkSpan{}, false
@@ -313,10 +341,6 @@ func (e *EditorPaneWidget) handleLinkMouse(ev *tcell.EventMouse) bool {
 		return false
 	}
 	e.links.pressed = true
-	if span.IsFile && e.OnOpenFile != nil {
-		e.OnOpenFile(span.FilePath, span.Line, span.Col)
-	} else if !span.IsFile && e.OnOpenURL != nil {
-		e.OnOpenURL(span.URL)
-	}
+	openLink(span, e.OnOpenURL, e.OnOpenFile)
 	return true
 }

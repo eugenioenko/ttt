@@ -103,6 +103,38 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 const findRefreshDelay = 150 * time.Millisecond
 
 // Find Next/Prev refresh first if the debounced update has not run yet.
+func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
+	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
+	findBar.Borders = a.Borders
+	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
+		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)
+		if err != nil {
+			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
+			return nil
+		}
+		rightMatches, _ := ui.FindInLines(dv.RightLines(), query, opts)
+		return dv.SetSearchMatches(leftMatches, rightMatches)
+	}
+	findBar.OnNavigate = func(match ui.FindMatch) {
+		dv.SetActiveMatch(findBar.Current)
+		dv.ScrollToLine(match.Line)
+	}
+	findBar.OnDismiss = func() {
+		dv.OnRecompute = nil
+		a.DismissDialog()
+		dv.ClearSearch()
+	}
+	dv.OnRecompute = func() {
+		findBar.Refresh()
+		if len(findBar.Matches) > 0 {
+			dv.SetActiveMatch(findBar.Current)
+		}
+	}
+	a.prefillFindBar(findBar)
+	a.ShowFindBar(findBar)
+}
+
 func (a *App) scheduleFindRefresh() {
 	if a.findBar() == nil && a.EditorGroup.Editor.SearchQuery == "" {
 		return

@@ -19,18 +19,18 @@ func TestPreviewTabsGatesTabReplacement(t *testing.T) {
 	if !g.PreviewTabs {
 		t.Fatal("preview tabs must default to enabled")
 	}
-	g.OpenFile(a)
-	g.OpenFile(b) // replaces the preview tab
+	requireNoError(t, g.OpenFile(a))
+	requireNoError(t, g.OpenFile(b)) // replaces the preview tab
 	if len(g.tabs) != 1 {
 		t.Fatalf("with preview enabled: tabs = %d, want 1", len(g.tabs))
 	}
 	g.PreviewTabs = false
-	g.OpenFile(a) // must NOT replace the open tab anymore
+	requireNoError(t, g.OpenFile(a)) // must NOT replace the open tab anymore
 	if len(g.tabs) != 2 {
 		t.Fatalf("with preview disabled: tabs = %d, want 2", len(g.tabs))
 	}
 	g.PreviewTabs = true
-	g.OpenFile(filepath.Join(tmp, "c.txt")) // the active tab is not a preview: c appends, nothing is replaced
+	requireNoError(t, g.OpenFile(filepath.Join(tmp, "c.txt"))) // the active tab is not a preview: c appends, nothing is replaced
 	if len(g.tabs) != 3 {
 		t.Fatalf("after re-enabling: tabs = %d, want 3", len(g.tabs))
 	}

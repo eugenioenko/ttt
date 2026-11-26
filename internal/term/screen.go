@@ -150,6 +150,7 @@ const (
 
 // Cell represents a single character cell on the screen.
 type Cell struct {
+	Link      Hyperlink
 	Ch        rune
 	Text      string // when non-empty, the complete grapheme starting with Ch
 	Style     Style

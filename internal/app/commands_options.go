@@ -22,6 +22,36 @@ func (a *App) persistSettings() bool {
 	return true
 }
 
+func (a *App) ToggleExplorerShowHiddenFiles() {
+	a.Settings.Explorer.ShowHidden = !a.Settings.Explorer.ShowHidden
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleExplorerShowGitIgnoredFiles() {
+	a.Settings.Explorer.ShowGitIgnored = !a.Settings.Explorer.ShowGitIgnored
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleExplorerCompactFolders() {
+	a.Settings.Explorer.CompactFolders = !a.Settings.Explorer.CompactFolders
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleExplorerAutoReveal() {
+	a.Settings.Explorer.AutoReveal = !a.Settings.Explorer.AutoReveal
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleExplorerGitStatusColors() {
+	a.Settings.Explorer.GitStatusColors = !a.Settings.Explorer.GitStatusColors
+	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleExplorerDimStagedGitColors() {
+	a.Settings.Explorer.DimStagedGitColors = !a.Settings.Explorer.DimStagedGitColors
+	a.SaveAndApplySettings()
+}
+
 func (a *App) ToggleLineNumbers() {
 	a.Settings.Editor.LineNumbers = !a.Settings.Editor.LineNumbers
 	a.SaveAndApplySettings()
@@ -224,6 +254,14 @@ func (a *App) ToggleScrollbarGitMarks() {
 	enabled := !a.Settings.Editor.IsScrollbarGitMarksEnabled()
 	a.Settings.Editor.ScrollbarGitMarks = &enabled
 	a.SaveAndApplySettings()
+}
+
+func (a *App) ToggleTerminalForwardShortcuts() {
+	enabled := !a.Root.ForwardShortcuts
+	a.Settings.Terminal.ForwardShortcuts = enabled
+	a.SaveAndApplySettings()
+	// Ctrl+F6 can leave a session override that matches neither the old nor the new saved value.
+	a.Root.SetForwardShortcuts(enabled)
 }
 
 func (a *App) SetGutterStyle(style string) {
@@ -501,6 +539,15 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.gitGutter"), Command: "options.toggleGitGutter", Checked: gitGutterChecked},
 			{Label: i18n.Text("menu.scrollbarGitMarks"), Command: "options.toggleScrollbarGitMarks", Checked: menuChecked(a.Settings.Editor.IsScrollbarGitMarksEnabled())},
 		}},
+		{Label: i18n.Text("settings.explorer"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.showHiddenFiles"), Command: "options.toggleExplorerShowHiddenFiles", Checked: menuChecked(a.Settings.Explorer.ShowHidden)},
+			{Label: i18n.Text("menu.showGitIgnoredFiles"), Command: "options.toggleExplorerShowGitIgnoredFiles", Checked: menuChecked(a.Settings.Explorer.ShowGitIgnored)},
+			{Label: i18n.Text("menu.compactFolders"), Command: "options.toggleExplorerCompactFolders", Checked: menuChecked(a.Settings.Explorer.CompactFolders)},
+			{Label: i18n.Text("menu.autoRevealActiveFile"), Command: "options.toggleExplorerAutoReveal", Checked: menuChecked(a.Settings.Explorer.AutoReveal)},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.gitStatusColors"), Command: "options.toggleExplorerGitStatusColors", Checked: menuChecked(a.Settings.Explorer.GitStatusColors)},
+			{Label: i18n.Text("menu.dimStagedGitColors"), Command: "options.toggleExplorerDimStagedGitColors", Checked: menuChecked(a.Settings.Explorer.DimStagedGitColors)},
+		}},
 		{Label: i18n.Text("menu.codeAssist"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("menu.lSPCodeAssist"), Command: "options.toggleLSP", Checked: lspChecked},
 			{Label: i18n.Text("menu.lSPHover"), Command: "options.toggleLSPHover", Checked: menuChecked(a.Settings.LSP.IsHoverEnabled())},
@@ -510,6 +557,11 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 		{Label: i18n.Text("settings.markdown"), Submenu: []ui.ContextMenuItem{
 			{Label: i18n.Text("markdown.wordWrapMenu"), Command: "options.markdownWordWrap"},
 			{Label: i18n.Text("markdown.wrapWidthMenu"), Command: "options.markdownWrapWidth"},
+		}},
+		{Label: i18n.Text("settings.terminal"), Submenu: []ui.ContextMenuItem{
+			{Label: i18n.Text("menu.forwardShortcuts"), Command: "options.toggleTerminalForwardShortcuts", Checked: menuChecked(a.Root.ForwardShortcuts)},
+			ui.MenuSep(),
+			{Label: i18n.Text("menu.selectionStyle"), Command: "options.terminalSelectionStyle"},
 		}},
 		ui.MenuSep(),
 		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
@@ -565,6 +617,42 @@ func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.Co
 
 func registerOptionsCommands(app *App) {
 	reg := app.Reg
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerShowHiddenFiles", Title: i18n.Text("command.toggleExplorerShowHiddenFiles"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerShowHiddenFiles,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerShowGitIgnoredFiles", Title: i18n.Text("command.toggleExplorerShowGitIgnoredFiles"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerShowGitIgnoredFiles,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerCompactFolders", Title: i18n.Text("command.toggleExplorerCompactFolders"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerCompactFolders,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerAutoReveal", Title: i18n.Text("command.toggleExplorerAutoReveal"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerAutoReveal,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerGitStatusColors", Title: i18n.Text("command.toggleExplorerGitStatusColors"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerGitStatusColors,
+	})
+
+	reg.Register(command.Command{
+		ID: "options.toggleExplorerDimStagedGitColors", Title: i18n.Text("command.toggleExplorerDimStagedGitColors"),
+		Keywords: []string{"preferences", "settings", "explorer", "files"},
+		Handler:  app.ToggleExplorerDimStagedGitColors,
+	})
+
 	reg.Register(command.Command{
 		ID: "options.markdownWordWrap", Title: i18n.Text("markdown.wordWrapTitle"),
 		Keywords: []string{"preferences", "settings", "editor", "override"},
@@ -753,6 +841,11 @@ func registerOptionsCommands(app *App) {
 		ID: "options.toggleScrollbarGitMarks", Title: i18n.Text("command.toggleScrollbarGitMarks"),
 		Keywords: []string{"preferences", "settings", "editor", "view", "git", "scrollbar", "marks", "changes"},
 		Handler:  app.ToggleScrollbarGitMarks,
+	})
+	reg.Register(command.Command{
+		ID: "options.toggleTerminalForwardShortcuts", Title: i18n.Text("command.toggleTerminalForwardShortcuts"),
+		Keywords: []string{"preferences", "settings", "terminal", "shortcuts", "forward", "keys"},
+		Handler:  app.ToggleTerminalForwardShortcuts,
 	})
 
 	reg.Register(command.Command{

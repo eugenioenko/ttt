@@ -270,7 +270,7 @@ func fetchRawReadme(ctx context.Context, rawURL string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("fetch readme: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return "", &readmeFetchError{status: resp.StatusCode}

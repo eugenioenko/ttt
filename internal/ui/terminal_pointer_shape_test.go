@@ -29,7 +29,7 @@ func TestTerminalWidgetPointerShape_LinksAndModifiers(t *testing.T) {
 		{"plain text without ctrl", 12, 6, false, term.PointerDefault},
 		{"plain text with ctrl", 12, 6, true, term.PointerDefault},
 		{"url link without ctrl", 16, 6, false, term.PointerDefault},
-		{"url link with ctrl", 16, 6, true, term.PointerHand},
+		{"url link with ctrl", 16, 6, true, term.PointerDefault},
 		{"file link without ctrl", 39, 6, false, term.PointerDefault},
 		{"file link with ctrl", 39, 6, true, term.PointerHand},
 		{"between links with ctrl", 36, 6, true, term.PointerDefault},
@@ -118,7 +118,7 @@ func TestTerminalPanelWidgetPointerShape_Routing(t *testing.T) {
 	tw.scrollbar.TotalItems = 30
 	tw.scrollbar.TopItem = 0
 	tw.linkCache = map[int][]linkSpan{
-		3: {{StartCol: 4, EndCol: 24, URL: "https://github.com"}},
+		3: {{StartCol: 4, EndCol: 24, IsFile: true, FilePath: "main.go"}},
 	}
 
 	tp.AddTerminal(tw)
@@ -196,7 +196,7 @@ func TestRootPointerShapeWithTerminalPanelAndOverlay(t *testing.T) {
 	tw := NewTerminalWidget(nil, nil)
 	tw.SetRect(Rect{X: 6, Y: 0, W: 50, H: 20})
 	tw.linkCache = map[int][]linkSpan{
-		2: {{StartCol: 5, EndCol: 25, URL: "https://example.com"}},
+		2: {{StartCol: 5, EndCol: 25, IsFile: true, FilePath: "main.go"}},
 	}
 	tw.linkModifierHeld = true
 	tp.AddTerminal(tw)

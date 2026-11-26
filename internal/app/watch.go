@@ -31,12 +31,12 @@ func (a *App) StartWatcher() {
 	w, err := watcher.New(
 		func(path string) {
 			if a.Screen != nil {
-				a.Screen.PostEvent(tcell.NewEventInterrupt(&FileChangedResult{Path: path}))
+				_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&FileChangedResult{Path: path}))
 			}
 		},
 		func(dir string) {
 			if a.Screen != nil {
-				a.Screen.PostEvent(tcell.NewEventInterrupt(&ExplorerDirChangedResult{Dir: dir}))
+				_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ExplorerDirChangedResult{Dir: dir}))
 			}
 		},
 	)

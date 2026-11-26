@@ -47,6 +47,7 @@ func ParseKeyBindings(bindings []KeyBinding) error {
 	for i := range bindings {
 		steps, err := ParseKeyString(bindings[i].Key)
 		if err != nil {
+			bindings[i].Steps = nil
 			if firstErr == nil {
 				firstErr = fmt.Errorf("keybinding %q: %w", bindings[i].Key, err)
 			}
@@ -225,7 +226,9 @@ func SaveKeybindings(bindings []KeyBinding) error {
 
 	if len(out) == 0 {
 		path := ConfigFilePath("keybindings.json")
-		os.Remove(path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		return nil
 	}
 
@@ -236,7 +239,7 @@ func SaveKeybindings(bindings []KeyBinding) error {
 	}
 	data = append(data, '\n')
 	path := ConfigFilePath("keybindings.json")
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0644)
 }
 
 func stringSliceEqual(a, b []string) bool {
