@@ -197,25 +197,6 @@ func (c *Client) notify(method string, params any) error {
 	return c.conn.Notify(method, params)
 }
 
-// notifyContext sends a notification unless ctx ends first. A server that stops
-// reading stdin leaves the write blocked on a full pipe, which no context can
-// interrupt, so cancellation closes the client to release it.
-func (c *Client) notifyContext(ctx context.Context, method string, params any) error {
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	sent := make(chan error, 1)
-	go func() { sent <- c.notify(method, params) }()
-	select {
-	case err := <-sent:
-		return err
-	case <-ctx.Done():
-		c.Close()
-		<-sent
-		return ctx.Err()
-	}
-}
-
 func isNullResult(result json.RawMessage) bool {
 	return len(result) == 0 || string(result) == "null"
 }
