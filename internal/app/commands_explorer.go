@@ -55,6 +55,10 @@ func (a *App) ExplorerRename() {
 func (a *App) ExplorerDuplicate() {
 	path := a.explorerNodePath()
 	a.ExplorerContextNode = nil
+	if a.Explorer.isRootPath(path) {
+		a.StatusWarn(i18n.Text("status.cannotDuplicateWorkspaceRoot"))
+		return
+	}
 	a.FileOpDuplicate(path, a.explorerReload)
 }
 
@@ -249,8 +253,9 @@ func registerExplorerCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID: "explorer.duplicate", Title: i18n.Text("command.explorerDuplicate"),
-		Keywords: []string{"view", "file", "copy", "duplicate"},
-		Handler:  app.ExplorerDuplicate,
+		Keywords:      []string{"view", "file", "copy", "duplicate"},
+		PaletteHidden: true,
+		Handler:       app.ExplorerDuplicate,
 	})
 
 	reg.Register(command.Command{
