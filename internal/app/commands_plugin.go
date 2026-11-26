@@ -614,13 +614,15 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		decos := make([]ui.Decoration, len(items))
 		for i, it := range items {
 			decos[i] = ui.Decoration{
-				StartLine: it.StartLine,
-				StartCol:  it.StartCol,
-				EndLine:   it.EndLine,
-				EndCol:    it.EndCol,
-				Text:      it.Text,
-				Note:      it.Note,
-				Style:     it.Style,
+				StartLine:  it.StartLine,
+				StartCol:   it.StartCol,
+				EndLine:    it.EndLine,
+				EndCol:     it.EndCol,
+				Text:       it.Text,
+				Note:       it.Note,
+				GhostText:  it.GhostText,
+				GhostAtCol: it.GhostAtCol,
+				Style:      it.Style,
 			}
 		}
 		for _, group := range a.editorGroups() {

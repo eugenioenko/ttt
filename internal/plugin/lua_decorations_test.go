@@ -30,6 +30,8 @@ func TestDecorationsSet(t *testing.T) {
 			{ line = 11, style = "hide" },
 			{ line = 12, col = 2, end_col = 5, style = "hide" },
 			{ line = 13, note = "Parsed once." },
+			{ line = 14, ghost_text = " + 1" },
+			{ line = 15, col = 3, ghost_text = " + 2" },
 		})
 	`)
 	if err != nil {
@@ -47,6 +49,8 @@ func TestDecorationsSet(t *testing.T) {
 		{StartLine: 10, EndLine: 10, Style: term.StyleHide},
 		{StartLine: 11, StartCol: 1, EndLine: 11, EndCol: 4, Text: true, Style: term.StyleHide},
 		{StartLine: 12, EndLine: 12, Note: "Parsed once.", Style: term.StyleNote},
+		{StartLine: 13, EndLine: 13, GhostText: " + 1"},
+		{StartLine: 14, EndLine: 14, StartCol: 2, GhostAtCol: true, GhostText: " + 2"},
 	}
 	if !reflect.DeepEqual(gotItems, want) {
 		t.Errorf("items =\n%+v\nwant\n%+v", gotItems, want)
@@ -55,6 +59,8 @@ func TestDecorationsSet(t *testing.T) {
 
 func TestDecorationsSetRejectsBadItems(t *testing.T) {
 	cases := map[string]string{
+		`{ { line = 1, ghost_text = "a\nb" } }`:                "ghost_text must be nonempty single-line text",
+		`{ { line = 1, ghost_text = "x", note = "y" } }`:       "ghost_text cannot be combined with note",
 		"{ { col = 1, end_col = 2 } }":                         "line is required",
 		"{ { line = 1.5 } }":                                   "line must be a whole number",
 		"{ { line = 2, col = \"3\", end_col = 6 } }":           "col must be a whole number",

@@ -81,6 +81,7 @@ type DiffOverlay struct {
 	// move with its edits so they can be merged again later.
 	LineBg     map[int]term.Style
 	Spans      map[int][]ColSpan
+	GhostText  map[int]ghostText
 	NoteTexts  map[int][]NoteText
 	Notes      map[int][]NoteRow
 	noteWidth  int
@@ -118,7 +119,7 @@ type ColSpan struct {
 // diff overlay it keeps the editor's own gutter, git change bars and
 // scrollbar marks.
 func NewAnnotationOverlay() *DiffOverlay {
-	return &DiffOverlay{LineBg: map[int]term.Style{}, Spans: map[int][]ColSpan{}, NoteTexts: map[int][]NoteText{}, annotate: true}
+	return &DiffOverlay{LineBg: map[int]term.Style{}, Spans: map[int][]ColSpan{}, GhostText: map[int]ghostText{}, NoteTexts: map[int][]NoteText{}, annotate: true}
 }
 
 // spanStyle returns the style of the last span covering col, or 0.
@@ -661,7 +662,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 		startCol, leftCol = row.startCol, 0
 	}
 	offset := runeByteOffset(old.Text, startCol)
-	cells, _ := e.renderLineSegmentToScreen(rowText(old.Text, offset, row), spans, false, nil, startCol, tabW, leftCol, editorW)
+	cells, _ := e.renderLineSegmentToScreen(rowText(old.Text, offset, row), spans, "", startCol, tabW, leftCol, editorW, ghostText{})
 	matches := e.DiffOverlay.DeletedMatches[row.bufLine]
 	for x := 0; x < editorW; x++ {
 		cell := term.Cell{Ch: cells[x].ch, Style: cells[x].style, BgStyle: term.StyleDiffDeleted}

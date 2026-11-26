@@ -230,7 +230,11 @@ func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "one\ntwo\n"})
 	a := filepath.Join(dir, "a.txt")
 	openCommitted(t, g, a)
-	g.SetDecorations("p", a, []Decoration{tint(1, term.StyleDiffAdded)})
+	g.SetDecorations("p", a, []Decoration{
+		tint(1, term.StyleDiffAdded),
+		{StartLine: 1, EndLine: 1, GhostText: "expired"},
+	})
+	overlay := g.decoSources["p"][a].overlay
 	for range 65 {
 		g.Editor.Buf.InsertLine(0, "new")
 	}
@@ -238,6 +242,9 @@ func TestDecorationsDropWhenTooManyEditsGoUnseen(t *testing.T) {
 	grid := renderGrid(g.Editor)
 	if got := grid[1][g.Editor.GutterWidth()].BgStyle; got == term.StyleDiffAdded {
 		t.Fatal("tint drawn on a line it never belonged to")
+	}
+	if len(overlay.GhostText) != 0 {
+		t.Fatal("stale overlay still holds ghost text")
 	}
 	g.SetDecorations("q", a, []Decoration{tint(0, term.StyleDiffDeleted)})
 	if got := g.Editor.DiffOverlay.LineBg; !reflect.DeepEqual(got, map[int]term.Style{0: term.StyleDiffDeleted}) {
@@ -387,5 +394,102 @@ func TestAnnotationHideYieldsToSelectionAndSearch(t *testing.T) {
 	}
 	if grid[0][x+2].Attrs&term.CellAttrHide == 0 {
 		t.Fatal("unselected text outside the search match was revealed")
+	}
+}
+
+func TestGhostTextMovesWithItsLineAndExpiresOnEdit(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "above\na\n"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(t, g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	version := e.Buf.Version()
+	g.SetDecorations("plugin:test", path, []Decoration{{StartLine: 1, EndLine: 1, GhostText: "界z"}})
+	grid := renderGrid(e)
+	x := e.GutterWidth() + 1
+	if c := grid[1][x]; c.Ch != '界' || c.Style != term.StyleMuted || grid[1][x+2].Ch != 'z' {
+		t.Fatalf("unexpected preview cells: %+v", grid[1][x:x+3])
+	}
+	if e.Buf.Version() != version || e.Buf.Lines[1] != "a" {
+		t.Fatal("showing ghost text modified the buffer")
+	}
+	e.Buf.InsertLine(0, "new")
+	if grid := renderGrid(e); grid[2][x].Ch != '界' {
+		t.Fatal("preview lost its anchor after insertion above")
+	}
+	e.Buf.Splice(2, 1, "b")
+	if got := renderRows(e)[2]; got != "b" {
+		t.Fatalf("edited row still has a preview: %q", got)
+	}
+}
+
+func TestGhostTextClipsWideRuneAtPaneEdge(t *testing.T) {
+	e := newRowsEditor([]string{"a"}, 2, 1)
+	cells, _ := e.renderLineSegmentToScreen("a", nil, "", 0, 4, 0, 2, ghostText{col: 1, text: "界"})
+	if cells[1].ch != ' ' {
+		t.Fatalf("clipped preview cell = %q", cells[1].ch)
+	}
+}
+
+func TestGhostTextAtRuneColumn(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "界ab"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(t, g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	e.Cursor.Col = 1
+	g.SetDecorations("plugin:test", path, []Decoration{{StartCol: 1, GhostAtCol: true, GhostText: "X"}})
+
+	grid := renderGrid(e)
+	x := e.GutterWidth() + 2
+	if grid[0][x].Ch != 'X' || grid[0][x].Style != term.StyleMuted || grid[0][x+1].Ch != 'a' {
+		t.Fatalf("unexpected cells at the insertion: %+v", grid[0][x:x+2])
+	}
+	if e.CursorX != x || e.Buf.Lines[0] != "界ab" {
+		t.Fatalf("cursor x = %d, buffer = %q", e.CursorX, e.Buf.Lines[0])
+	}
+	if _, col, ok := e.TextPosAt(x, 0); ok || col != 1 {
+		t.Fatalf("ghost cell mapped to col %d, text = %v", col, ok)
+	}
+	if _, col, ok := e.TextPosAt(x+1, 0); !ok || col != 1 {
+		t.Fatalf("shifted text mapped to col %d, text = %v", col, ok)
+	}
+	e.Cursor.Col = 2
+	renderGrid(e)
+	if e.CursorX != x+2 {
+		t.Fatalf("cursor after preview at x = %d, want %d", e.CursorX, x+2)
+	}
+	e.FullLineSelection = false
+	e.Selection.Start(0, 0)
+	row := renderGrid(e)[0]
+	for _, cellX := range []int{x - 2, x - 1, x + 1} {
+		if row[cellX].BgStyle != term.StyleSelection {
+			t.Fatalf("buffer cell at x=%d was not selected", cellX)
+		}
+	}
+	if row[x].BgStyle == term.StyleSelection {
+		t.Fatal("inline preview was selected")
+	}
+}
+
+func TestGhostTextPreservesIndentGuides(t *testing.T) {
+	g, dir := newDecoratedGroup(t, map[string]string{"x.txt": "        a\n\n        b"})
+	path := filepath.Join(dir, "x.txt")
+	openCommitted(t, g, path)
+	e := g.Editor
+	e.SetRect(Rect{W: 24, H: 6})
+	e.Viewport.Width, e.Viewport.Height = 24, 6
+	e.TabSize = 4
+	e.IndentGuides = true
+	g.SetDecorations("plugin:test", path, []Decoration{{StartLine: 1, EndLine: 1, GhostText: "界"}})
+
+	row := renderGrid(e)[1][e.GutterWidth():]
+	if row[0].Ch != '界' || row[0].Style != term.StyleMuted || row[1].Ch != ' ' {
+		t.Fatalf("indent guide overlaps ghost text: %+v", row[:2])
+	}
+	if x := 2 + e.resolveTabSize(); row[x].Style != term.StyleIndentGuide {
+		t.Fatalf("expected indent guide at column %d after ghost text: %+v", x, row[x])
 	}
 }
