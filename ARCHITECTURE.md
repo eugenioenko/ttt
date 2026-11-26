@@ -1,291 +1,216 @@
 # Architecture
 
-This document describes ttt's current architecture, its intended dependency
-boundaries, and the incremental program for improving them. It is the source of
-truth for package ownership. `AGENTS.md` summarizes the constraints agents most
-often need while working in the repository.
+This document describes ttt's architecture and its dependency boundaries. It is
+the source of truth for package ownership. `AGENTS.md` summarizes the
+constraints agents most often need while working in the repository.
 
 ## Current shape
 
-ttt is an acyclic Go application, but it is not a linear
-`core -> view -> render -> term -> ui` stack. The application and presentation
-packages compose several independent foundations:
+ttt is an acyclic Go application, but it is not a linear layer stack. The
+application and presentation packages compose several independent foundations:
 
 ```text
 cmd/ttt
   -> app
      -> ui -> widgets
      -> plugin -> widgets
-     -> git, github, lsp, terminal, watcher, workspace
-     -> render, term, view, textwidth
+     -> scm (git, jj), github, lsp, search, terminal, watcher,
+        workspace, trash, update
+     -> render, term, view, textwidth, highlight
 
-render -> term
-view   -> term
-widgets -> term, textwidth, markdown, core/clipboard, core/selection
-highlight -> term
+render, view -> term
+highlight    -> term, core/buffer
+markdown     -> highlight, term, textwidth
+widgets      -> term, textwidth, markdown, image, icons, i18n,
+                core/clipboard, core/selection
+git, jj      -> scm
+lsp          -> jsonrpc, config
 ```
 
-The main architectural pressure is concentrated in `internal/app`,
-`internal/ui`, and `internal/widgets`. The lower domain and service packages are
-generally bounded and reusable. This favors incremental replacement of blurred
-boundaries over a greenfield rewrite.
-
-### Baseline
-
-Recorded on 2026-08-23 at `65fc238`:
-
-| Package | Production Go files | Production LOC | Direct internal package dependencies | Direct tcell importers |
-|---|---:|---:|---:|---:|
-| `internal/app` | 54 | 17,710 | 19 | 22 |
-| `internal/ui` | 59 | 19,393 | 17 | 37 |
-| `internal/widgets` | 30 | 6,608 | 5 | 25 |
-| `internal/plugin` | 25 | 5,898 | 3 | 5 |
-
-`internal/app` and `internal/ui` contain 37,103 of 57,962 production Go
-lines under `internal` (64.0%). These measurements indicate concentration, not
-an automatic mandate to split packages. Re-record them after each completed
-tranche using the structural review commands below.
-
-Codemap 4.4.2 reported complete Go scan coverage for this baseline. That means
-the configured files were scanned; it does not mean file-level importer data is
-complete for same-package Go references.
+Architectural pressure is concentrated in `internal/app`, `internal/ui`, and
+`internal/widgets`, which hold most of the production code. The domain and
+service packages are bounded and reusable. This favors incremental cleanup of
+blurred boundaries over a rewrite.
 
 ## Dependency zones
 
-The zones below describe ownership and dependency direction. They are not a
-requirement that every zone map to exactly one package.
+The zones describe ownership and dependency direction. A zone need not map to
+exactly one package.
 
 ### Domain
 
 Packages: `internal/core/*`.
 
-Owns editor algorithms and state transitions: buffers, cursors, selections,
-undo, folds, multicursors, and diff algorithms. Domain code must not start
-processes, access terminal state, render widgets, or coordinate application
-lifecycle.
+Owns editor algorithms and state: buffers, cursors, selections, undo, folds,
+multicursors, and diff algorithms. Domain code must not start processes, access
+terminal state, render widgets, or coordinate application lifecycle.
+`internal/core/architecture_test.go` enforces part of this: core must not import
+`highlight`, `term`, `render`, `view`, `ui`, `widgets`, or tcell.
+`core/clipboard` starts processes and is an existing exception, not a pattern.
 
-`internal/filewrite` is a shared filesystem primitive used by buffer and config.
-It owns temporary-file staging, sync, close, replacement, and cleanup, and imports
-only the standard library. Callers own serialization and streaming, symlink
-resolution, metadata, retries, and recovery policy; buffer does not depend on config.
-Settings retain replacement-only saves, including Windows DACL preservation,
-replacement-friendly reads, and bounded sharing-error retries. Their Windows
-replacement keeps the existing extended-path `MoveFileEx` wrapper: a native
-concurrent-reader run exhausted retries with `os.Rename`, so equivalence has not
-been established. Document saves
-retain Unix owner/group preservation and their in-place recovery fallback.
-On Windows, document saves still use ordinary reads and a single replacement
-attempt, without settings' DACL preservation or sharing guarantees. Consolidation
-does not add those guarantees or prevent concurrent read/modify/write lost updates.
+### Shared foundations
+
+Packages: `internal/config` and `internal/filewrite`.
+
+`internal/config` owns settings, keybindings, themes, and `.editorconfig`. It is
+imported by services (`lsp`), presentation, and the application.
+
+`internal/filewrite` owns atomic file replacement (temp-file staging, sync,
+replace, cleanup) for buffer and config, using only the standard library.
+Callers own serialization, symlink resolution, metadata, retries, and recovery.
 
 ### Services
 
-Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`, `internal/jsonrpc`,
-`internal/lsp`, `internal/terminal`, `internal/watcher`,
-`internal/workspace`, `internal/trash`, and `internal/update`.
+Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`,
+`internal/jsonrpc`, `internal/lsp`, `internal/search`, `internal/terminal`,
+`internal/watcher`, `internal/workspace`, `internal/trash`, and
+`internal/update`. Test helpers: `internal/gittest`, `internal/jjtest`.
 
-Owns external-process and external-state integration. Services expose typed
-operations and results without owning product widgets. Long-running work must
-have explicit cancellation, identity, shutdown, and stale-result behavior.
+Own external-process and external-state integration. Services expose typed
+operations and results without owning widgets. Long-running work must have
+explicit cancellation, identity, shutdown, and stale-result behavior.
 
-`internal/scm` owns the internal provider, repository, optional staging, and
-optional working-copy baseline and single-change read contracts. Git supplies
-the built-in adapter. Repository discovery, status, active identity, and staging
-use this boundary; `RepositoryState` retains async lifecycle ownership. Working-tree state, selection, and Explorer decorations
-use typed SCM changes and identities. The panel retains its existing two-section
-projection; changes keep their provider group identity without requiring an
-index. Editor gutters and editable working-tree diffs read `scm.BaselineReader`;
-Git's index baseline and conflict HEAD fallback stay inside its adapter. Missing,
-ignored, and conflicted content are explicit states; failed reads are errors.
-Repository objects are captured on the main thread before background reads,
-which keep the existing cancellation and stale-result guards. Single-file
-read-only diffs use `scm.ChangeReader` through the cancellable diff-open task.
-Aggregate Current Changes also consumes typed changes through this capability;
-Git conflict-side selection, conflict detail, and verified working-file reads
-stay in the Git service. A provider can identify a shared conflict resolution
-view for aggregate deduplication without removing sidebar action groups.
-Provider groups and opaque conflict-side identities
-participate in aggregate refresh and per-file view identity. The existing
-`RepositoryState` owner retains cancellation, coalescing, and stale-result guards.
-The Changes panel passes typed changes without converting provider groups into
-Git status. Git resolves HEAD/index endpoints and supplies patch metadata for
-renames, modes, and binary changes inside its adapter.
+#### Source control
 
-`scm.HistoryReader` supplies the paged history list with opaque entry identities
-and immutable snapshot anchors. Git validates its full object IDs internally;
-pagination, cancellation, and selection restoration remain panel-owned.
+`internal/scm` defines provider contracts; `internal/git` and `internal/jj` are
+the built-in adapters, selected by `scm.Providers`.
 
-`scm.RevisionReader` supplies revision metadata, typed changed paths, patches,
-and separately requested full-file endpoints. Git resolves first-parent, root,
-rename/copy, and missing endpoints in its adapter. Historical content stays lazy;
-request ownership, cancellation, incarnation guards, and per-file retry remain
-in the application. Revision IDs are opaque, including in history tree identity.
+- Discovery, status, identity, and staging go through the provider. Changes are
+  typed and keep their provider group identity; the Changes panel keeps its
+  staged/unstaged projection without converting back to Git status.
+- `scm.BaselineReader` feeds editor gutters and editable diffs. Missing,
+  ignored, and conflicted content are explicit states; failed reads are errors.
+- `scm.ChangeReader` feeds single-file diffs and aggregate Current Changes.
+- `scm.HistoryReader` and `scm.RevisionReader` feed history and Commit Details
+  with opaque entry and revision IDs. Historical content is loaded lazily.
+- Optional `scm.Committer` and `scm.Discarder` cover providers without staging.
+- Provider-specific details (Git index/HEAD resolution, conflict sides, rename
+  and binary patch metadata) stay inside the adapter.
+- `RepositoryState` in `internal/app` owns async lifecycle: repository objects
+  are captured on the main thread, and background reads keep cancellation,
+  coalescing, and stale-result guards.
 
-`internal/jj` is the second built-in adapter. `scm.Providers` discovers with
-jj before Git, so a colocated workspace is presented through jj, while a nearer
-`.git` or a missing `jj` binary leaves the directory to Git. Optional
-`scm.Committer` and `scm.Discarder` contracts carry the commit box and discard
-actions for providers without staging; Git keeps its own paths. jj queries pass
-`--ignore-working-copy` except those that must see current files: the change
-list, the single-change patch, and the ignored-file check snapshot the working
-copy as any jj command does.
+Remaining work:
 
-Remaining integration work:
-
-- Git mutation commands (pull, push, sync, new branch) run the git CLI directly
-  and skip jj workspaces through `RepoOp.GitOnly`. Providers will contribute
-  their own actions through the future host action API.
-- Git-derived enumeration, blame, GitHub PRs/permalinks, and Git worktree tools
-  remain Git-specific. Introduce a shared contract only when a provider needs one.
-- Provider presentation retains its compatible staged/unstaged projection and
-  command identifiers. Provider-defined groups, labels, and actions are follow-ups.
-- Lua registration, permissions, cancellation/unload, and invalidation for
-  plugin-supplied providers remain host integration work before public plugin
-  APIs.
+- Pull, push, sync, new branch, blame, GitHub PRs/permalinks, and worktree tools
+  stay Git-specific until a provider needs a shared contract.
+- Provider-defined groups, labels, and actions, and plugin-supplied providers,
+  are future host work.
 
 ### Presentation kernel
 
 Packages: `internal/term`, `internal/render`, `internal/view`,
 `internal/textwidth`, `internal/widgets`, `internal/markdown`,
-`internal/highlight`, `internal/i18n`, and `internal/asynctask`.
+`internal/highlight`, `internal/i18n`, `internal/asynctask`, `internal/image`,
+`internal/icons`, and `internal/fileicons`.
 
-Owns screen cells, styles, terminal-width measurement, rendering, layout,
-focus, scrolling, reusable interaction primitives, and syntax-to-style
-projection. `internal/widgets` contains primitives with more than one product
-or plugin consumer; it is not a destination for every visually reusable
-product surface.
+Owns screen cells, styles, width measurement, rendering, layout, focus,
+scrolling, reusable interaction primitives, and syntax-to-style projection.
+`internal/widgets` holds primitives with more than one product or plugin
+consumer; it is not a destination for every visually reusable product surface.
 
-`internal/i18n` owns the embedded English UI catalog, immutable runtime
-catalogs, English-source and placeholder validation, and named interpolation.
-Presentation and application code resolve user-facing copy through it;
-identifiers and external service messages keep their own values. The application
-loads the selected catalog before constructing widgets, manages language-pack
-caches and restart-based settings, and delivers background update results on
-the main thread. The plugin host owns declarative language contributions and
-bounded, commit-pinned catalog downloads; catalog updates never execute Lua.
+`internal/i18n` owns the embedded English catalog, runtime catalogs, placeholder
+validation, and named interpolation. The application loads the selected catalog
+before constructing widgets; the plugin host owns language-pack contributions
+and commit-pinned catalog downloads, which never execute Lua.
 
 `internal/asynctask` provides terminal-independent scheduling with injected
-execution and delivery. Product widgets may use it directly; the application
-owns service coordination and task shutdown.
-
-`tcell` is the accepted event and terminal implementation dependency for this
-zone. Replacing it with one-for-one local event wrappers would add indirection
-without creating a meaningful backend boundary.
+execution and delivery. Widgets may use it directly; the application owns
+service coordination and task shutdown.
 
 ### Product presentation
 
 Package: `internal/ui`.
 
-Owns editor, diff, search, terminal, tab, panel, and dialog surfaces. Product UI
-may depend on the presentation kernel and domain models. It should receive
-service results and emit intents rather than own subprocess or filesystem
-lifecycle. Existing direct I/O is migration work, not precedent for new UI I/O.
+Owns editor, diff, search, terminal, tab, panel, and dialog surfaces. It may
+depend on the presentation kernel and domain models. It should receive service
+results and emit intents rather than own subprocess or filesystem lifecycle;
+existing direct I/O is migration work, not precedent.
 
-Direct `tcell` event use is allowed here. Render-time geometry remains the
-single source of truth for hit testing and interaction routing.
+Render-time geometry is the single source of truth for hit testing and
+interaction routing.
 
 ### Application
 
 Packages: `internal/app` and `internal/command`.
 
-Owns composition, commands, async lifecycle, cancellation, request identity,
-and service coordination. An App subsystem owner is valuable only when it owns
-the behavior and lifecycle behind a narrow API. Moving fields into nested
-structs while unrelated methods continue to mutate them is not decomposition.
-
-Application code may route `tcell` events where it composes the event loop and
-UI, but new feature state should not depend directly on terminal event types.
+Owns composition, commands, async lifecycle, cancellation, request identity, and
+service coordination. An App subsystem owner is valuable only when it owns the
+behavior and lifecycle behind a narrow API; moving fields into nested structs
+while other code still mutates them is not decomposition.
 
 `app.NewTask` registers tasks for shutdown. `App.Init` wires UI delivery for
-both existing and future tasks. Uninitialized/headless Apps execute tasks
-synchronously, including the E2E simulation harness.
+existing and future tasks. Uninitialized/headless Apps, including the E2E
+harness, run tasks synchronously.
 
 ### Plugin host
 
 Package: `internal/plugin`.
 
 Owns the Lua runtime, permissions, registry, descriptors, callbacks, and
-adapters into the presentation kernel. The public Lua behavior is a
-compatibility boundary. Internal widget consolidation must preserve plugin
-semantics or introduce an explicit compatibility migration.
+adapters into the presentation kernel. Public Lua behavior is a compatibility
+boundary: internal widget changes must preserve plugin semantics or ship an
+explicit migration.
 
 ### Platform
 
 Package: `cmd/ttt`.
 
-Owns process startup and concrete composition. It may import multiple internal
-packages to wire the application. Breadth at the composition root is not by
-itself an architectural defect; product behavior and reusable algorithms do
-not belong there.
+Owns process startup and concrete composition. Breadth here is not a defect;
+product behavior and reusable algorithms do not belong here.
 
 ## Known boundary violations
 
-Known violations describe current code that conflicts with the target zones.
-They do not authorize similar dependencies. Each violation must have a bounded
-cleanup lane, characterization evidence, and an exit condition.
+These describe current code that conflicts with the zones. They do not authorize
+similar dependencies.
 
-| Violation | Freeze rule | Cleanup lane | Exit condition |
-|---|---|---|---|
-| Product UI directly owns some search subprocess and filesystem discovery work | Add no new process or filesystem lifecycle to `internal/ui` | IO1 -> IO2 | UI receives typed results and emits intents through an application or service API |
-| App state and lifecycle are spread across the root `App` and feature files | Add new async state only behind an explicit owner or with a named follow-up owner | AL, AT, AP | Selected subsystems own their timers, cancellation, identities, mutation boundary, and shutdown |
-| Scrollbar and diff projection behavior is duplicated | Fix shared invariants in every affected path until consolidation is complete | S1/S2, D1-D4 | One canonical model remains for each shared contract and old paths are deleted |
-
-Direct `tcell` use in presentation packages is not listed as a violation. It is
-an explicit boundary decision below. Issue #495 is resolved by documenting and
-enforcing that decision rather than constructing a one-for-one event wrapper.
+| Violation                                                                                                                                                                                                                                   | Rule until fixed                                            | Exit condition                                                                    |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| `internal/ui` still owns I/O: `search_widget.go` spawns `rg` (argument building and parsing already live in `internal/search`), `dirloader.go` reads directories and calls `git` for ignored files, and `editor_group.go` reads directories | Add no new process or filesystem lifecycle to `internal/ui` | UI receives typed results and emits intents through an application or service API |
+| `internal/ui` imports `internal/git` directly (`dirloader.go`, `changes_helpers.go`)                                                                                                                                                        | New UI code uses `scm` types, not `git`                     | No `internal/git` import in `internal/ui`                                         |
+| Two scrollbar implementations: `internal/ui/scrollbar.go` and `internal/widgets/scrollbar.go` (issue #1462)                                                                                                                                 | Fix shared invariants in both until consolidated            | One implementation remains                                                        |
+| App async state is spread across `App` and feature files (language features, terminal, plugin/settings)                                                                                                                                     | Add new async state only behind an explicit owner           | Those subsystems own their timers, cancellation, identities, and shutdown         |
 
 ## Architecture decisions
 
 ### tcell ownership
 
-`internal/term` owns the screen abstraction and concrete screen
-implementation. `tcell` event types are also intentionally used by the
-presentation kernel, product UI, and narrow application/platform event wiring.
-Domain and service packages must not import `tcell`.
-
-This is the current decision for issue #495. A custom event abstraction should
-be reconsidered only if another backend, a deterministic boundary that tcell
-prevents, or measured migration value justifies it.
+`internal/term` owns the screen abstraction and concrete screen. tcell event
+types are intentionally used by the presentation kernel, product UI, and narrow
+application/platform event wiring. Domain and service packages must not import
+tcell. A custom event abstraction is worth reconsidering only for another
+backend, a deterministic boundary tcell prevents, or measured migration value
+(issue #495).
 
 ### Highlight ownership
 
 `internal/highlight` owns grammar selection, line caches, and projection from
-TextMate scopes to `term.Style`. These responsibilities form one presentation
-concern and stay together behind the existing `Highlighter` and `Span` API.
-`internal/core` must not import highlighting or other presentation packages.
-
+TextMate scopes to `term.Style` behind the `Highlighter` and `Span` API.
 Tokenization uses [textmate-go](https://github.com/eugenioenko/textmate-go),
-a Go port of VS Code's TextMate engine with embedded grammars. The engine
-carries its rule stack from line to line, so constructs that span lines (block
-comments, template literals, docstrings, multi-line tags) need no
-highlight-specific handling. Its incremental `Document` keeps the states above
-an edit and reuses the unchanged tail once the state converges.
+whose rule stack carries across lines, so multi-line constructs need no special
+handling. Its incremental `Document` keeps states above an edit and reuses the
+unchanged tail once state converges.
 
 ### Generic widgets and product surfaces
 
-`internal/widgets` owns reusable interaction and layout primitives.
-`internal/ui` owns product-specific composites. A component moves to
-`internal/widgets` only when its state model and behavior can be expressed
-without importing product policy or service lifecycle.
+A component moves from `internal/ui` to `internal/widgets` only when its state
+and behavior can be expressed without product policy or service lifecycle.
 
-### Shared input behavior
+### Shared input
 
-`internal/widgets.InputWidget` is the single input implementation for product
-surfaces and plugins. Product owners configure actions and callbacks and route
-focus; the input owns editing, selection, history, scrolling, rendering, and hit
-testing. Find/Replace copies text state without copying callbacks or sharing
-mutable history. The former `internal/ui.InputWidget` has been removed.
+`widgets.InputWidget` is the single input implementation for product surfaces
+and plugins. Owners configure actions and callbacks and route focus; the input
+owns editing, selection, history, scrolling, rendering, and hit testing.
 
-### Shared diff behavior
+### Shared diff
 
-Diff surfaces should share pure projection, layout, styling, and anchor models
-where their contracts agree. They should remain separate product surfaces when
-their interaction or lifecycle differs. The target is shared models with thin
-surface adapters, not one highly conditional diff widget.
+Every diff tab and each file in Commit Details use `ui.DiffEditorWidget` with a
+`DiffOverlay`. Surfaces with different interaction or lifecycle stay separate
+product surfaces over shared models, not one highly conditional widget.
 
 ### Application owners
 
-Subsystem owners must establish all of the following:
+A subsystem owner must establish:
 
 - a typed API for commands and results;
 - ownership of timers, goroutines, cancellation, and shutdown;
@@ -293,160 +218,5 @@ Subsystem owners must establish all of the following:
 - a single mutation boundary on the main event loop where UI state is involved;
 - tests at the smallest deterministic boundary that proves those contracts.
 
-`RepositoryState` is the reference direction. It is not a template that must be
-copied mechanically.
-
-### Refactors and UX
-
-User-facing work starts from the intended interaction and presentation.
-Architecture refactors start from characterization tests and preserve existing
-UX unless the PR explicitly declares a behavior change.
-
-## Verification strategy
-
-Choose the smallest deterministic layer that proves the intended invariant:
-
-- Unit tests prove pure algorithms, state models, parsers, and lifecycle
-  helpers.
-- Go E2E tests prove composed App/UI behavior on `term.SimScreen`.
-- Functional tests prove real-binary behavior through `--exec`.
-- Live PTY integration tests prove terminal byte encoding, terminal modes, and
-  external-process behavior that simulation cannot establish.
-- Real language-server tests prove vendor compatibility; deterministic fake
-  servers prove protocol and application semantics.
-
-Do not duplicate the same assertion at every layer. Add broader coverage when
-it proves a distinct boundary. During development, run focused tests for the
-affected contracts; before merge, CI remains the broad regression gate.
-
-## Architecture convergence program
-
-Execution is tracked in issue #165. Each item should link its implementation
-PR, adversarial review result, and merge commit.
-
-### Preparation gate
-
-Structural repairs begin only after the relevant preparation work is complete:
-
-- P0: publish the truthful architecture contract and remove contradictory
-  contributor guidance;
-- P1: record the baseline dependency graph and package concentration with
-  Codemap and `go list`;
-- P2: maintain issue #165 as the dependency-aware execution tracker;
-- P3: characterize each shared behavior before changing its implementation;
-- P4: define the canonical model, ownership boundary, and deletion target for
-  that repair lane.
-
-P0-P2 are program-wide prerequisites. P3-P4 are lane-specific gates and can be
-completed in parallel. They are not a reason to serialize unrelated work.
-
-```text
-P0 Truthful contract -> P1 Baseline -> P2 Execution tracker
-
-P2
-|-- [P3/P4] S1 Canonical scrollbar API
-|              `-- S2 Migrate consumers and delete duplicates
-|
-|-- I1/I2/I3 Consolidated inputs (done: internal/widgets.InputWidget)
-|              `-- AP Plugin/settings App owner
-|
-|-- [P3/P4] AL LanguageFeaturesState owner
-|-- [P3/P4] AT TerminalState owner
-|
-|-- [P3/P4] HL1 Highlight/style characterization
-|              `-- HL2 Highlight package ownership correction
-|
-|-- [P3/P4] D1 Diff-surface characterization
-|              `-- D2 Pure shared projection/layout model
-|
-|-- [P3/P4] IO1 Search/file-discovery ownership characterization
-|              `-- IO2 Move execution behind application/service APIs
-|
-|-- [P3/P4] T1 Theme/style/catalog validation
-`-- [P3/P4] H1 PTY readiness fixture correction for issue #533
-
-S2 + D2
-  `-- D3  Migrate DiffViewWidget (done: diff tabs use DiffEditorWidget, #791 and #792)
-        `-- D4  Migrate CommitDetailWidget and remove duplicate projection (done: #797, issue #796)
-```
-
-### Parallel work
-
-After P0-P2, the scrollbar, input-model, highlight, diff-foundation,
-service-I/O, theme/catalog, and issue #533 lanes may prepare and proceed
-independently. Language and terminal App owners are also semantically
-independent, but should be serialized when they overlap `app.go`, construction,
-callbacks, or shutdown wiring. Plugin/settings ownership follows input
-migration. Diff-surface migration follows both the scrollbar and
-shared-projection foundations.
-
-Use separate PRs or small dependency stacks. Merge through `main`; do not use a
-long-lived integration branch.
-
-### Exit criteria
-
-The program is complete when:
-
-- documentation and imports agree on the dependency zones;
-- duplicate scrollbar and input state machines are removed;
-- shared diff projection is consumed by both diff surfaces without merging
-  their distinct product behavior;
-- selected App subsystems own their lifecycle rather than only grouping fields;
-- UI-owned process and filesystem work has moved behind application or service
-  APIs;
-- issue #533 has deterministic behavior tests and a bounded real-PTY smoke;
-- Codemap and `go list` show no new prohibited dependency directions;
-- user-visible behavior and the plugin API remain compatible unless separately
-  approved.
-
-## Rewrite checkpoint
-
-A larger presentation-shell experiment is not currently justified. Reconsider
-only after at least three completed strangler tranches if App fan-out and async
-state continue growing, UI cannot relinquish service I/O, old and new paths
-require repeated duplicate fixes, or a plugin compatibility break is already
-planned.
-
-Any experiment is limited to ten working days and one narrow path. It must
-prove behavioral parity, preserve public plugin semantics, delete the replaced
-state machine, and reduce dependency or lifecycle complexity. Otherwise stop
-and continue the incremental program.
-
-## Structural review commands
-
-Codemap is useful for cross-package direction and concentration, but it cannot
-establish same-package Go coupling or runtime lifecycle behavior. Pair it with
-source inspection and Go's package graph.
-
-```sh
-codemap skill show explore
-codemap --depth 3 --only go .
-codemap --deps --json --only go .
-codemap --importers internal/textwidth/textwidth.go --json
-codemap blast-radius --json --ref main .
-go list -deps ./...
-```
-
-Treat zero file importers in a multi-file Go package as unknown, not safe.
-
-Regenerate the baseline table with the following definitions. Production Go
-files exclude `*_test.go`; LOC is physical `wc -l`; direct dependencies are
-unique imports below this module's `internal/` path; direct tcell importers are
-production files containing the tcell v3 import path.
-
-```sh
-module_path=$(go list -m)
-
-for package_path in internal/app internal/ui internal/widgets internal/plugin; do
-  production_files=$(rg --files "$package_path" -g '*.go' -g '!*_test.go')
-  file_count=$(printf '%s\n' "$production_files" | wc -l)
-  line_count=$(printf '%s\n' "$production_files" | xargs wc -l | tail -1 | awk '{print $1}')
-  dependency_count=$(go list -json "./$package_path" | jq --arg prefix "$module_path/internal/" '[.Imports[] | select(startswith($prefix))] | unique | length')
-  tcell_count=$(rg -l 'github.com/gdamore/tcell/v3' "$package_path" -g '*.go' -g '!*_test.go' | wc -l)
-  printf '%s files=%s loc=%s internal_deps=%s tcell_importers=%s\n' "$package_path" "$file_count" "$line_count" "$dependency_count" "$tcell_count"
-done
-
-app_ui_loc=$(for package_path in internal/app internal/ui; do rg --files "$package_path" -g '*.go' -g '!*_test.go'; done | xargs wc -l | tail -1 | awk '{print $1}')
-internal_loc=$(rg --files internal -g '*.go' -g '!*_test.go' | xargs wc -l | tail -1 | awk '{print $1}')
-awk -v numerator="$app_ui_loc" -v denominator="$internal_loc" 'BEGIN { printf "app_ui=%d internal=%d percent=%.1f\n", numerator, denominator, 100*numerator/denominator }'
-```
+`RepositoryState` is the reference direction, not a template to copy
+mechanically.
