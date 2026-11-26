@@ -39,6 +39,7 @@ type rowLayout struct {
 	notes   map[int][]NoteRow
 	labels  map[int]string
 	deleted map[int][]diff.SideLine
+	overlay *DiffOverlay
 
 	key    rowLayoutKey
 	starts []int
@@ -55,6 +56,7 @@ type rowLayoutKey struct {
 	n          int
 	version    uint64
 	overlay    *DiffOverlay
+	overlayGen uint64
 	visible    *int
 	visN       int
 	phantomGen uint64
@@ -65,8 +67,9 @@ type rowLayoutKey struct {
 }
 
 type lineRowsMemo struct {
-	text string
-	rows int
+	text  string
+	ghost ghostText
+	rows  int
 }
 
 func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
@@ -98,6 +101,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 		n:          n,
 		version:    e.Buf.Version(),
 		overlay:    e.DiffOverlay,
+		overlayGen: e.overlayGen,
 		visible:    unsafe.SliceData(visible),
 		visN:       len(visible),
 		phantomGen: e.phantomGen,
@@ -125,6 +129,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 		width:   width,
 		tabW:    key.tabW,
 		visible: visible,
+		overlay: e.DiffOverlay,
 		key:     key,
 	}
 	if len(e.phantoms) > 0 {
@@ -162,19 +167,27 @@ func (e *EditorPaneWidget) setPhantoms(p map[int]int) {
 	e.phantomGen++
 }
 
+func (l *rowLayout) ghostAt(line int) ghostText {
+	if l.overlay == nil || l.overlay.stale || l.hasLabel(line) {
+		return ghostText{}
+	}
+	return l.overlay.GhostText[line]
+}
+
 // lineRows is how many rows a wrapped line takes, reusing the count from the
 // previous layout when the line's text is unchanged; a line shifted by an
 // insert or delete is found at its old index offset by the line delta.
 func (l *rowLayout) lineRows(line int, prev []lineRowsMemo, delta int) int {
 	text := l.lines[line]
+	ghost := l.ghostAt(line)
 	for _, i := range [2]int{line, line - delta} {
-		if i >= 0 && i < len(prev) && prev[i].rows > 0 && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
+		if i >= 0 && i < len(prev) && prev[i].rows > 0 && prev[i].ghost == ghost && len(prev[i].text) == len(text) && unsafe.StringData(prev[i].text) == unsafe.StringData(text) {
 			l.memo[line] = prev[i]
 			return prev[i].rows
 		}
 	}
-	rows := wrapLineVisualRows(text, l.width, l.tabW, l.words)
-	l.memo[line] = lineRowsMemo{text: text, rows: rows}
+	rows := wrapLineVisualRowsWithGhost(text, l.width, l.tabW, l.words, ghost)
+	l.memo[line] = lineRowsMemo{text: text, ghost: ghost, rows: rows}
 	return rows
 }
 
@@ -342,7 +355,7 @@ func (l *rowLayout) segments(line int) []int {
 		return singleSegment
 	}
 	if l.wrap && line >= 0 && line < l.n() {
-		return wrapLineSegments(l.lines[line], l.width, l.tabW, l.words)
+		return wrapLineSegmentsWithGhost(l.lines[line], l.width, l.tabW, l.words, l.ghostAt(line))
 	}
 	return singleSegment
 }

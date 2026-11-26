@@ -205,14 +205,15 @@ func (e *EditorPaneWidget) TextPosAt(mx, my int) (line, col int, ok bool) {
 	if row.isPhantom() || row.bufLine < 0 || row.bufLine >= len(e.Buf.Lines) {
 		return 0, 0, false
 	}
-	x, onGhost := e.textXAt(row, mx-r.X-e.GutterWidth())
+	rawX := mx - r.X - e.GutterWidth()
+	x, ghostCol, onGhost := e.textXAt(row, rawX)
 	if onGhost {
-		return row.bufLine, e.ghostTextAt(row).col, false
+		return row.bufLine, ghostCol, false
 	}
 	line, col = e.mouseToPos(r, mx, my)
 	if e.WordWrap {
 		runes := []rune(e.Buf.Lines[line])
-		if x >= e.Viewport.Width || col >= len(runes) {
+		if rawX >= e.Viewport.Width || col >= len(runes) {
 			return line, col, false
 		}
 		segment := string(runes[row.startCol : col+1])
@@ -235,9 +236,9 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 		line = len(e.Buf.Lines) - 1
 	}
 	tabW := e.resolveTabSize()
-	x, onGhost := e.textXAt(row, mx-r.X-gutterW)
+	x, ghostCol, onGhost := e.textXAt(row, mx-r.X-gutterW)
 	if onGhost {
-		return line, e.ghostTextAt(row).col
+		return line, ghostCol
 	}
 	if e.WordWrap {
 		segVisCol := x
@@ -262,10 +263,10 @@ func (e *EditorPaneWidget) mouseToPos(r Rect, mx, my int) (line, col int) {
 	return
 }
 
-func (e *EditorPaneWidget) textXAt(row editorRow, x int) (int, bool) {
-	ghost := e.ghostTextAt(row)
+func (e *EditorPaneWidget) textXAt(row editorRow, x int) (int, int, bool) {
+	ghost := e.visibleGhostAt(row, e.ghostPaneWidth())
 	if ghost.text == "" {
-		return x, false
+		return x, 0, false
 	}
 	tabW := e.resolveTabSize()
 	line := e.Buf.Lines[row.bufLine]
@@ -275,10 +276,10 @@ func (e *EditorPaneWidget) textXAt(row editorRow, x int) (int, bool) {
 	}
 	start, end := ghost.screenRange(line[runeByteOffset(line, row.startCol):], row.startCol, tabW, leftCol)
 	if x < start {
-		return x, false
+		return x, 0, false
 	}
 	if x < end {
-		return start, true
+		return start, ghost.col, true
 	}
-	return x - (end - start), false
+	return x - (end - start), 0, false
 }

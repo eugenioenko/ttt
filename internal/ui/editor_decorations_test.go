@@ -493,3 +493,216 @@ func TestGhostTextPreservesIndentGuides(t *testing.T) {
 		t.Fatalf("expected indent guide at column %d after ghost text: %+v", x, row[x])
 	}
 }
+
+func TestGhostTextKeepsCursorVisibleInNarrowPane(t *testing.T) {
+	// Issue #1789 example: 8-col text area, "abcdef", cursor at col 5, "XXXX" at col 1.
+	e := newRowsEditor([]string{"abcdef"}, 8, 3)
+	e.LineNumbers = false
+	e.GutterStyle = "minimal"
+	e.Embedded = true
+	e.Cursor.Col = 5
+	o := NewAnnotationOverlay()
+	o.GhostText[0] = ghostText{col: 1, text: "XXXX"}
+	e.SetDiffOverlay(o)
+
+	// Without horizontal scroll, ghost text is capped so the cursor and buffer text stay visible.
+	rows := renderRows(e)
+	if rows[0] != "aXXbcdef" {
+		t.Fatalf("unscrolled row = %q, want %q", rows[0], "aXXbcdef")
+	}
+	if !editorCursorVisible(e) || e.CursorX != 7 || e.CursorY != 0 {
+		t.Fatalf("unscrolled cursor = (%d,%d) visible=%v, want (7,0) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+	if line, col, ok := e.TextPosAt(1, 0); ok || line != 0 || col != 1 {
+		t.Fatalf("ghost cell mapped to (%d,%d,%v), want (0,1,false)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(e.CursorX, e.CursorY); !ok || line != 0 || col != 5 {
+		t.Fatalf("cursor cell mapped to (%d,%d,%v), want (0,5,true)", line, col, ok)
+	}
+
+	// Scrolling to the cursor accounts for the ghost text width and keeps cursor + nearby text visible.
+	e.scrollViewport()
+	rows = renderRows(e)
+	if rows[0] != "XXXbcdef" {
+		t.Fatalf("scrolled row = %q, want %q", rows[0], "XXXbcdef")
+	}
+	if e.Viewport.LeftCol != 2 || !editorCursorVisible(e) || e.CursorX != 7 {
+		t.Fatalf("scrolled LeftCol=%d CursorX=%d visible=%v, want LeftCol=2 CursorX=7 visible=true",
+			e.Viewport.LeftCol, e.CursorX, editorCursorVisible(e))
+	}
+	if line, col, ok := e.TextPosAt(2, 0); ok || line != 0 || col != 1 {
+		t.Fatalf("scrolled ghost cell mapped to (%d,%d,%v), want (0,1,false)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(3, 0); !ok || line != 0 || col != 1 {
+		t.Fatalf("shifted text cell mapped to (%d,%d,%v), want (0,1,true)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(e.CursorX, e.CursorY); !ok || line != 0 || col != 5 {
+		t.Fatalf("scrolled cursor cell mapped to (%d,%d,%v), want (0,5,true)", line, col, ok)
+	}
+
+	// Moving back left scrolls LeftCol back and preserves full placement.
+	e.Cursor.Col = 0
+	e.scrollViewport()
+	rows = renderRows(e)
+	if rows[0] != "aXXXXbcd" || e.Viewport.LeftCol != 0 || e.CursorX != 0 {
+		t.Fatalf("after moving left: row=%q LeftCol=%d CursorX=%d", rows[0], e.Viewport.LeftCol, e.CursorX)
+	}
+
+	// When both ghost text and cursor fit, existing placement is preserved.
+	e.Cursor.Col = 3
+	rows = renderRows(e)
+	if rows[0] != "aXXXXbcd" || e.CursorX != 7 {
+		t.Fatalf("fitting placement changed: row=%q CursorX=%d, want aXXXXbcd / 7", rows[0], e.CursorX)
+	}
+
+	// When buffer text up to the cursor already fills the pane, ghost text is suppressed.
+	e.SetRect(Rect{W: 6, H: 3})
+	e.Viewport.Width = 6
+	e.Viewport.LeftCol = 0
+	e.Cursor.Col = 5
+	rows = renderRows(e)
+	if rows[0] != "abcdef" || e.CursorX != 5 || !editorCursorVisible(e) {
+		t.Fatalf("narrow pane = %q CursorX=%d visible=%v, want abcdef / 5 / true", rows[0], e.CursorX, editorCursorVisible(e))
+	}
+}
+
+func TestGhostTextWrapsWithCursorVisible(t *testing.T) {
+	e := newRowsEditor([]string{"abcdef"}, 8, 4)
+	e.LineNumbers = false
+	e.GutterStyle = "minimal"
+	e.NoWrapMargin = true
+	e.WordWrap = true
+	e.Cursor.Col = 5
+	o := NewAnnotationOverlay()
+	o.GhostText[0] = ghostText{col: 1, text: "XXXX"}
+	e.SetDiffOverlay(o)
+
+	rows := renderRows(e)
+	if rows[0] != "aXXXXbcd" || rows[1] != "ef" {
+		t.Fatalf("wrapped rows = %q, want [aXXXXbcd ef]", rows[:2])
+	}
+	if !editorCursorVisible(e) || e.CursorX != 1 || e.CursorY != 1 {
+		t.Fatalf("wrapped cursor = (%d,%d) visible=%v, want (1,1) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+	if line, col, ok := e.TextPosAt(2, 0); ok || line != 0 || col != 1 {
+		t.Fatalf("wrapped ghost cell mapped to (%d,%d,%v), want (0,1,false)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(7, 0); !ok || line != 0 || col != 3 {
+		t.Fatalf("wrapped row 0 end mapped to (%d,%d,%v), want (0,3,true)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(1, 1); !ok || line != 0 || col != 5 {
+		t.Fatalf("wrapped cursor cell mapped to (%d,%d,%v), want (0,5,true)", line, col, ok)
+	}
+
+	// Cursor on the same wrapped row after ghost text stays inside the pane.
+	e.Cursor.Col = 3
+	renderRows(e)
+	if !editorCursorVisible(e) || e.CursorX != 7 || e.CursorY != 0 {
+		t.Fatalf("row-0 cursor = (%d,%d) visible=%v, want (7,0) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+
+	// Word-boundary wrapping accounts for ghost text width too.
+	e.Buf.Lines = []string{"hi there"}
+	e.WrapWords = true
+	e.Cursor.Col = 7
+	o.GhostText[0] = ghostText{col: 4, text: "XXXX"}
+	e.SetDiffOverlay(o)
+	rows = renderRows(e)
+	if rows[0] != "hi" || rows[1] != "tXXXXher" || rows[2] != "e" {
+		t.Fatalf("word-wrapped rows = %q, want [hi tXXXXher e]", rows[:3])
+	}
+	if !editorCursorVisible(e) || e.CursorX != 0 || e.CursorY != 2 {
+		t.Fatalf("word-wrapped cursor = (%d,%d) visible=%v, want (0,2) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+
+	// Oversized ghost text wraps to its own row and caps so the buffer rune and cursor fit.
+	e.WrapWords = false
+	e.Buf.Lines = []string{"ab"}
+	e.Cursor.Col = 2
+	o.GhostText[0] = ghostText{col: 1, text: "XXXXXXXXXX"}
+	e.SetDiffOverlay(o)
+	rows = renderRows(e)
+	if rows[0] != "a" || rows[1] != "XXXXXXb" {
+		t.Fatalf("oversized ghost rows = %q, want [a XXXXXXb]", rows[:2])
+	}
+	if !editorCursorVisible(e) || e.CursorX != 7 || e.CursorY != 1 {
+		t.Fatalf("oversized ghost cursor = (%d,%d) visible=%v, want (7,1) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+}
+
+func TestGhostTextFullwidthNarrowPane(t *testing.T) {
+	// Unwrapped: fullwidth ghost text is truncated at rune boundaries without splitting.
+	e := newRowsEditor([]string{"abcdef"}, 8, 3)
+	e.LineNumbers = false
+	e.GutterStyle = "minimal"
+	e.Embedded = true
+	e.Cursor.Col = 5
+	o := NewAnnotationOverlay()
+	o.GhostText[0] = ghostText{col: 1, text: "界界"}
+	e.SetDiffOverlay(o)
+
+	grid := renderGrid(e)
+	if grid[0][0].Ch != 'a' || grid[0][1].Ch != '界' || grid[0][3].Ch != 'b' || grid[0][7].Ch != 'f' {
+		t.Fatalf("unexpected fullwidth cells: %+v", grid[0])
+	}
+	if !editorCursorVisible(e) || e.CursorX != 7 {
+		t.Fatalf("fullwidth cursor x = %d visible=%v, want 7 / true", e.CursorX, editorCursorVisible(e))
+	}
+	if line, col, ok := e.TextPosAt(2, 0); ok || line != 0 || col != 1 {
+		t.Fatalf("second cell of fullwidth ghost mapped to (%d,%d,%v), want (0,1,false)", line, col, ok)
+	}
+	if line, col, ok := e.TextPosAt(3, 0); !ok || line != 0 || col != 1 {
+		t.Fatalf("buffer cell after fullwidth ghost mapped to (%d,%d,%v), want (0,1,true)", line, col, ok)
+	}
+
+	// When only 1 column remains before cursor, a 2-column rune is suppressed cleanly.
+	e.Buf.Lines = []string{"界abcdef"}
+	e.Cursor.Col = 5
+	o.GhostText[0] = ghostText{col: 2, text: "界界"}
+	e.SetDiffOverlay(o)
+	rows := renderRows(e)
+	if rows[0] != "界 abcdef" || e.CursorX != 6 {
+		t.Fatalf("1-col remaining row = %q CursorX=%d, want %q / 6", rows[0], e.CursorX, "界 abcdef")
+	}
+
+	// Scrolling horizontally accounts for fullwidth buffer + fullwidth ghost runes.
+	e.scrollViewport()
+	grid = renderGrid(e)
+	if e.Viewport.LeftCol != 3 || grid[0][0].Ch != '界' || grid[0][2].Ch != '界' || grid[0][4].Ch != 'b' || grid[0][7].Ch != 'e' {
+		t.Fatalf("scrolled fullwidth LeftCol=%d cells=%+v", e.Viewport.LeftCol, grid[0])
+	}
+	if !editorCursorVisible(e) || e.CursorX != 7 {
+		t.Fatalf("scrolled fullwidth cursor = %d visible=%v, want 7 / true", e.CursorX, editorCursorVisible(e))
+	}
+
+	// Wrapped mode with fullwidth buffer runes and fullwidth ghost text.
+	e = newRowsEditor([]string{"a界b"}, 5, 4)
+	e.LineNumbers = false
+	e.GutterStyle = "minimal"
+	e.NoWrapMargin = true
+	e.WordWrap = true
+	e.Cursor.Col = 3
+	o = NewAnnotationOverlay()
+	o.GhostText[0] = ghostText{col: 1, text: "界界"}
+	e.SetDiffOverlay(o)
+	rows = renderRows(e)
+	// With width 5, "界b" takes 3 cols and EOL cursor is at col 3, leaving 1 col before
+	// the right edge; the 2-column ghost rune is suppressed so cursor stays inside.
+	if rows[0] != "a" || rows[1] != "界 b" {
+		t.Fatalf("wrapped fullwidth rows (w=5) = %q, want [a %q]", rows[:2], "界 b")
+	}
+	if !editorCursorVisible(e) || e.CursorX != 3 || e.CursorY != 1 {
+		t.Fatalf("wrapped fullwidth cursor (w=5) = (%d,%d) visible=%v, want (3,1) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+
+	// With width 6, both fullwidth ghost runes and "界" fit on row 1 and "b" wraps to row 2.
+	e.SetRect(Rect{W: 6, H: 4})
+	e.Viewport.Width = 6
+	rows = renderRows(e)
+	if rows[0] != "a" || rows[1] != "界 界 界" || rows[2] != "b" {
+		t.Fatalf("wrapped fullwidth rows (w=6) = %q, want [a %q b]", rows[:3], "界 界 界")
+	}
+	if !editorCursorVisible(e) || e.CursorX != 1 || e.CursorY != 2 {
+		t.Fatalf("wrapped fullwidth cursor (w=6) = (%d,%d) visible=%v, want (1,2) visible=true", e.CursorX, e.CursorY, editorCursorVisible(e))
+	}
+}

@@ -10,39 +10,69 @@ import (
 // wrapLineSegments returns the starting rune offsets for each visual row of a wrapped line.
 // For a line "abcdefgh" with width 3, returns [0, 3, 6].
 func wrapLineSegments(line string, width, tabW int, words bool) []int {
+	return wrapLineSegmentsWithGhost(line, width, tabW, words, ghostText{})
+}
+
+func wrapLineSegmentsWithGhost(line string, width, tabW int, words bool, ghost ghostText) []int {
 	segments := []int{0}
-	walkWrap(line, width, tabW, words, func(col int) { segments = append(segments, col) })
+	walkWrap(line, width, tabW, words, ghost, func(col int) { segments = append(segments, col) })
 	return segments
 }
 
 // wrapLineVisualRows returns len(wrapLineSegments) for line without allocating.
 func wrapLineVisualRows(line string, width, tabW int, words bool) int {
+	return wrapLineVisualRowsWithGhost(line, width, tabW, words, ghostText{})
+}
+
+func wrapLineVisualRowsWithGhost(line string, width, tabW int, words bool, ghost ghostText) int {
 	// No rune is wider than its UTF-8 encoding, so only a tab can make a line
 	// wider than its byte length.
-	if len(line) <= width && strings.IndexByte(line, '\t') < 0 {
+	if len(line)+ghost.width() <= width && strings.IndexByte(line, '\t') < 0 {
 		return 1
 	}
 	rows := 1
-	walkWrap(line, width, tabW, words, func(int) { rows++ })
+	walkWrap(line, width, tabW, words, ghost, func(int) { rows++ })
 	return rows
+}
+
+func cappedGhostWidth(text string, maxW int) int {
+	if maxW <= 0 || text == "" {
+		return 0
+	}
+	return textwidth.String(textwidth.Truncate(text, maxW, ""))
 }
 
 // walkWrap calls next with the rune offset of each wrapped row after the
 // first.
-func walkWrap(line string, width, tabW int, words bool, next func(col int)) {
+func walkWrap(line string, width, tabW int, words bool, ghost ghostText, next func(col int)) {
 	if words {
-		walkWrapWords(line, width, tabW, next)
+		walkWrapWords(line, width, tabW, ghost, next)
 		return
 	}
-	visCol, col := 0, 0
+	ghostW := ghost.width()
+	visCol, shift, col := 0, 0, 0
 	for _, ch := range line {
 		advance := 1
 		if ch == '\t' || ch >= utf8.RuneSelf {
 			advance = wrapAdvance(ch, visCol, tabW)
 		}
-		if visCol+advance > width && visCol > 0 {
+		if ghostW > 0 && col == ghost.col {
+			gw := ghostW
+			if visCol+gw+advance > width && visCol > 0 {
+				next(col)
+				visCol = 0
+				if ch == '\t' {
+					advance = tabW
+				}
+			}
+			if visCol+gw+advance > width {
+				gw = cappedGhostWidth(ghost.text, max(width-visCol-advance, 0))
+			}
+			shift = gw
+		} else if visCol+shift+advance > width && visCol > 0 {
 			next(col)
 			visCol = 0
+			shift = 0
 			if ch == '\t' {
 				advance = tabW
 			}
@@ -55,8 +85,9 @@ func walkWrap(line string, width, tabW int, words bool, next func(col int)) {
 // walkWrapWords ends a row at the last break opportunity that fits. A space
 // that just overflows hangs past the edge instead of starting the next row,
 // and a run with no opportunity breaks at the character that overflows.
-func walkWrapWords(line string, width, tabW int, next func(col int)) {
-	start, visCol, col := 0, 0, 0
+func walkWrapWords(line string, width, tabW int, ghost ghostText, next func(col int)) {
+	ghostW := ghost.width()
+	start, rowStartCol, visCol, shift, col := 0, 0, 0, 0, 0
 	brk, brkCol := 0, 0
 	var prev rune
 	for i, ch := range line {
@@ -75,17 +106,47 @@ func walkWrapWords(line string, width, tabW int, next func(col int)) {
 		if ch == '\t' || ch >= utf8.RuneSelf {
 			advance = wrapAdvance(ch, visCol, tabW)
 		}
-		if visCol+advance > width && visCol > 0 && (ch != ' ' || visCol != width) {
+		if ghostW > 0 && col == ghost.col {
+			gw := ghostW
+			if visCol+gw+advance > width && visCol > 0 {
+				if brk > start {
+					start = brk
+					rowStartCol = brkCol
+					next(brkCol)
+					visCol = wrapTextWidth(line[start:i], tabW)
+					advance = wrapAdvance(ch, visCol, tabW)
+				}
+				if visCol+gw+advance > width && visCol > 0 {
+					start = i
+					rowStartCol = col
+					next(col)
+					visCol = 0
+					advance = wrapAdvance(ch, 0, tabW)
+				}
+			}
+			if visCol+gw+advance > width {
+				gw = cappedGhostWidth(ghost.text, max(width-visCol-advance, 0))
+			}
+			shift = gw
+		} else if visCol+shift+advance > width && visCol > 0 && (ch != ' ' || visCol+shift != width) {
 			if brk > start {
 				start = brk
+				rowStartCol = brkCol
 				next(brkCol)
 				visCol = wrapTextWidth(line[start:i], tabW)
 				advance = wrapAdvance(ch, visCol, tabW)
+				if ghostW > 0 && ghost.col >= rowStartCol && ghost.col < col {
+					shift = ghostW
+				} else {
+					shift = 0
+				}
 			}
-			if visCol+advance > width && visCol > 0 {
+			if visCol+shift+advance > width && visCol > 0 {
 				start = i
+				rowStartCol = col
 				next(col)
 				visCol = 0
+				shift = 0
 				advance = wrapAdvance(ch, 0, tabW)
 			}
 		}
