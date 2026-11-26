@@ -198,6 +198,9 @@ func (a *App) insertCompletion(item ui.CompletionItem, textEdit *lsp.TextEdit) {
 			endLine = startLine
 			endCol = len([]rune(lines[startLine]))
 		}
+		if cursorLine, _, _ := a.identStart(); startLine != cursorLine {
+			return
+		}
 		if startLine == endLine && startCol == endCol {
 			_, identCol, cursorCol := a.identStart()
 			if identCol < endCol || endCol <= cursorCol {
