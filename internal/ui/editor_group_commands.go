@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
+	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 )
 
@@ -29,6 +30,16 @@ func (g *EditorGroupWidget) undoRedoPostProcess(version uint64, reveal bool) {
 	}
 }
 
+func (e *EditorPaneWidget) applyUndoCursor(pos *undo.CursorPos, sel selection.Selection) {
+	if pos == nil {
+		return
+	}
+	e.Cursor.Line, e.Cursor.Col = pos.Line, pos.Col
+	if e.Selection != nil {
+		*e.Selection = sel
+	}
+}
+
 func (g *EditorGroupWidget) Undo() {
 	t := g.activeTab()
 	if t == nil || g.editableKeyEditor() == nil {
@@ -42,11 +53,8 @@ func (g *EditorGroupWidget) Undo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
-		pos := t.Undo.Undo(t.Buf)
-		if pos != nil {
-			g.Editor.Cursor.Line = pos.Line
-			g.Editor.Cursor.Col = pos.Col
-		}
+		pos, sel := t.Undo.UndoWithSelection(t.Buf)
+		g.Editor.applyUndoCursor(pos, sel)
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
@@ -64,11 +72,8 @@ func (g *EditorGroupWidget) Redo() {
 	}
 	if t.Undo != nil {
 		version := t.Buf.Version()
-		pos := t.Undo.Redo(t.Buf)
-		if pos != nil {
-			g.Editor.Cursor.Line = pos.Line
-			g.Editor.Cursor.Col = pos.Col
-		}
+		pos, sel := t.Undo.RedoWithSelection(t.Buf)
+		g.Editor.applyUndoCursor(pos, sel)
 		if t.Undo.AtSavePoint() && !t.Buf.LineEndingChanged() {
 			t.Buf.Dirty = false
 		}
