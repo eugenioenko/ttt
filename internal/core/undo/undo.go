@@ -218,7 +218,7 @@ func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *JoinNextLineCommand:
 		return &CursorPos{c.Line, c.JoinCol}
 	case *DeleteSelectionCommand:
-		if s.DeleteCursorStart {
+		if c.Forward || s.DeleteCursorStart {
 			return &CursorPos{c.StartLine, c.StartCol}
 		}
 		return &CursorPos{c.EndLine, c.EndCol}
@@ -522,6 +522,7 @@ func IsNoop(cmd EditCommand) bool {
 type DeleteSelectionCommand struct {
 	StartLine, StartCol int
 	EndLine, EndCol     int
+	Forward             bool
 	Deleted             string
 	applied             bool
 }
