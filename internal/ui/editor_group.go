@@ -75,7 +75,7 @@ type EditorGroupWidget struct {
 	active            int
 	lastDocumentPath  string
 	pinnedCount       int
-	closedTabs        []closedTab
+	closedTabs        *closedTabHistory
 	TabSize           int
 	InsertSpaces      bool
 	LineNumbers       bool
@@ -201,6 +201,7 @@ func NewEditorGroupWidget(borders *term.BorderSet, tabSize int, lineNumbers bool
 		LineNumbers: lineNumbers,
 		GutterStyle: gutterStyle,
 		Borders:     borders,
+		closedTabs:  &closedTabHistory{},
 
 		DiffSignsColor:      true,
 		DiffGutterHighlight: true,

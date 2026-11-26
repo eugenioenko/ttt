@@ -153,6 +153,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.FoldTask = NewTask[[]fold.Range](a, asynctask.TaskOptions{})
 	right.FoldDelay = NewTask[struct{}](a, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	right.InheritDocumentSources(left)
+	right.ShareClosedTabHistory(left)
 	a.wireEditorTabAutoHide(right)
 	right.ControlModifiers = left.ControlModifiers
 	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
