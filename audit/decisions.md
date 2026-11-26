@@ -17,6 +17,7 @@ Behavior that looks like a bug but is intended, or was reviewed and won't be fix
 | Layout at extremely narrow widths (around 30 columns or less), such as dialog buttons being cut off. | Not a supported terminal size; ttt doesn't target mobile terminals. | BUG-039 (2026-07 audit) |
 | Undoing an edit on a folded header line unfolds the region. | Unfolding shows the user that something inside the fold changed. | BUG-024 (2026-07 audit) |
 | The tab bar's overflow chevrons (◀ ▶) switch to the previous/next tab instead of scrolling the strip. | Tabs are navigated one at a time; the strip doesn't scroll on its own. | BUG-016 (2026-07 audit) |
+| Turning off workspace tab restoration keeps previously saved sessions until they expire or are cleared. | Disabling restoration pauses reads and writes. Use Session: Clear Saved Tabs to remove saved sessions. | #1761 (finding 8) |
 
 ## Won't fix
 
