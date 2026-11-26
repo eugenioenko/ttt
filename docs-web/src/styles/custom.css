@@ -5,10 +5,25 @@
   --sl-font-mono: 'IBM Plex Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 }
 
+[data-has-hero] body {
+  background-color: #141414;
+}
+
+[data-has-hero][data-theme='light'] body {
+  background-color: #fafafa;
+}
+
 /* Make hero full-width single column */
 .hero {
+  padding-block: 0 0.5rem;
   grid-template-columns: 1fr !important;
   text-align: center;
+}
+
+@media (min-width: 50rem) {
+  .hero {
+    padding-block: 72px;
+  }
 }
 
 .hero > .stack {
@@ -187,7 +202,7 @@
 }
 
 .homepage-footer .footer-install {
-  background: var(--sl-color-accent-low);
+  background: var(--sl-color-gray-6);
   border-inline-start: 4px solid var(--sl-color-text-accent);
   padding: clamp(1.5rem, 4vw, 3rem);
 }
@@ -216,4 +231,40 @@
   width: 1.333em;
   margin-inline-end: 0.5rem;
   vertical-align: middle;
+}
+
+.demo-window {
+  overflow: hidden;
+  margin-bottom: 2rem;
+  border: 2px solid #303030;
+  border-radius: 0.75rem;
+}
+
+.demo-titlebar {
+  position: relative;
+  padding: 0.3rem 4rem;
+  border-bottom: 1px solid var(--sl-color-gray-4);
+  background: var(--sl-color-gray-6);
+  color: var(--sl-color-gray-2);
+  font-size: var(--sl-text-sm);
+  text-align: center;
+}
+
+.demo-window-dots {
+  position: absolute;
+  inset-inline-start: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0.55rem;
+  height: 0.55rem;
+  border-radius: 50%;
+  color: var(--sl-color-gray-3);
+  background: currentColor;
+  box-shadow: 0.9rem 0, 1.8rem 0;
+}
+
+.demo-window video {
+  display: block;
+  width: 100%;
+  margin: 0;
 }
