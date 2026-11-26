@@ -123,6 +123,13 @@ func TestInactiveSplitTabHoverUsesItsOwnGroup(t *testing.T) {
 			t.Fatal("moving into the active editor with Control held scheduled or retained a hover")
 		}
 
+		a.ShowHover("active editor", editor.X+left.Editor.GutterWidth()+1, editor.Y)
+		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, a.Root.ControlModifiers))
+		h.clock.advance(a.hover.delay)
+		if left.Hover != nil || right.Hover != nil || len(h.work) != 0 {
+			t.Fatal("moving onto the inactive tab with Control held scheduled or retained a hover")
+		}
+
 		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, tcell.ModNone))
 		h.clock.advance(a.hover.delay)
 		h.run(t)()
