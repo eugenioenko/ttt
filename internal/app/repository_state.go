@@ -84,13 +84,14 @@ type RepositoryState struct {
 	dirs         []string
 	poster       eventPoster
 
-	scheduler    repositoryScheduler
-	readStatus   func(context.Context, []string, uint64) *RepositoryStatusResult
-	readIdentity func(context.Context, string, uint64) *RepositoryIdentityResult
-	pathIdentity func(string) (string, error)
-	debounceWait time.Duration
-	pollWait     time.Duration
-	statusWait   time.Duration
+	scheduler       repositoryScheduler
+	readStatus      func(context.Context, []string, uint64) *RepositoryStatusResult
+	onStatusWarning func(root, warning string)
+	readIdentity    func(context.Context, string, uint64) *RepositoryIdentityResult
+	pathIdentity    func(string) (string, error)
+	debounceWait    time.Duration
+	pollWait        time.Duration
+	statusWait      time.Duration
 
 	started bool
 	closed  bool
@@ -411,6 +412,9 @@ func (s *RepositoryState) HandleStatus(result *RepositoryStatusResult) {
 			continue
 		}
 		seenGroups[group.Dir] = true
+		if group.statusWarning != "" && group.statusWarning != s.lastGroups[group.Dir].statusWarning && s.onStatusWarning != nil {
+			s.onStatusWarning(group.Dir, group.statusWarning)
+		}
 		groups = append(groups, group)
 		nextGroups[group.Dir] = group
 		if previous, ok := s.lastRevisions[group.Dir]; ok && group.Dir == selectedDir && previous != revision {
@@ -610,10 +614,18 @@ func scanRepositoryStatus(ctx context.Context, provider scm.Provider, dirs []str
 		if rootErr != nil {
 			entry.StatusErr, entry.RevisionErr = rootErr, rootErr
 		} else {
-			changes, err := repo.Changes(ctx)
+			var changes []scm.Change
+			var warning string
+			var err error
+			if reader, ok := repo.(scm.ChangesWithWarnings); ok {
+				changes, warning, err = reader.ChangesWithWarnings(ctx)
+			} else {
+				changes, err = repo.Changes(ctx)
+			}
 			entry.StatusErr = err
 			if err == nil {
 				entry.Group.Changes = append([]scm.Change(nil), changes...)
+				entry.Group.statusWarning = warning
 			}
 			entry.Revision, entry.RevisionErr = repo.Revision(ctx)
 		}

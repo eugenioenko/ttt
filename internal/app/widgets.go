@@ -401,6 +401,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
 	app.Repository = NewRepositoryState(changes, ws.Paths())
+	app.Repository.onStatusWarning = app.reportSCMStatusWarning
 	app.Repository.SetExplorer(explorer)
 	app.Repository.SetCurrentChangesHandler(app.ApplyCurrentChanges)
 	app.applyMenuBarVisibility(cfg.Settings.Editor.IsMenuBarVisible())

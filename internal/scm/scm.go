@@ -21,6 +21,10 @@ type Repository interface {
 	Revision(context.Context) (string, error)
 }
 
+type ChangesWithWarnings interface {
+	ChangesWithWarnings(context.Context) ([]Change, string, error)
+}
+
 // Staging is optional: repositories without an index need not implement it.
 // Paths are literal, repository-relative paths; an empty list is a no-op.
 type Staging interface {

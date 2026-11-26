@@ -117,11 +117,17 @@ const changesTemplate = `diff.files().map(|f| "F\0" ++ f.status() ++ "\0" ++ f.s
 // Changes snapshots the working copy, as every jj command does by default, so
 // the result reflects files edited since the last jj invocation.
 func (r repository) Changes(ctx context.Context) ([]scm.Change, error) {
-	out, err := r.run(ctx, "log", "-r", "@", "--no-graph", "-T", changesTemplate)
+	changes, _, err := r.ChangesWithWarnings(ctx)
+	return changes, err
+}
+
+func (r repository) ChangesWithWarnings(ctx context.Context) ([]scm.Change, string, error) {
+	out, warning, err := r.runWithStderr(ctx, "log", "-r", "@", "--no-graph", "-T", changesTemplate)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return parseChanges(out)
+	changes, err := parseChanges(out)
+	return changes, warning, err
 }
 
 // Revision identifies the working-copy parents, which are the baseline every
@@ -223,6 +229,11 @@ func (r repository) read(ctx context.Context, args ...string) ([]byte, error) {
 }
 
 func (r repository) run(ctx context.Context, args ...string) ([]byte, error) {
+	out, _, err := r.runWithStderr(ctx, args...)
+	return out, err
+}
+
+func (r repository) runWithStderr(ctx context.Context, args ...string) ([]byte, string, error) {
 	// Word wrapping would split parsed template output at spaces in paths.
 	cmd := commandContext(ctx, append([]string{"--no-pager", "--color=never", "--config=ui.log-word-wrap=false", "-R", r.root}, args...)...)
 	cmd.Dir = r.root
@@ -230,12 +241,13 @@ func (r repository) run(ctx context.Context, args ...string) ([]byte, error) {
 	cmd.Stderr = &stderr
 	out, err := cmd.Output()
 	if ctx.Err() != nil {
-		return nil, ctx.Err()
+		return nil, "", ctx.Err()
 	}
+	warning := strings.TrimSpace(stderr.String())
 	if err != nil {
-		return nil, &CommandError{Args: args, Stderr: strings.TrimSpace(stderr.String()), Err: err}
+		return nil, "", &CommandError{Args: args, Stderr: warning, Err: err}
 	}
-	return out, nil
+	return out, warning, nil
 }
 
 type CommandError struct {
