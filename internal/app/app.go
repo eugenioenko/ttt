@@ -28,169 +28,163 @@ import (
 )
 
 type App struct {
-	language        languageState
-	Root            *ui.Root
-	EditorGroup     *ui.EditorGroupWidget // Follows activation so commands target the group receiving keys.
+	Root     *ui.Root
+	RootBox  *widgets.VStackWidget
+	Screen   *term.TcellScreen
+	Renderer *render.Renderer
+	Borders  *term.BorderSet
+
+	MenuBar              *ui.MenuBarWidget
+	menuReturnFocus      ui.Widget
+	StatusBar            *ui.StatusBarWidget
+	Status               *view.StatusBar
+	Output               *ui.OutputWidget
+	Reg                  *command.Registry
+	Keybindings          []config.KeyBinding
+	commandLine          *ui.CommandLineWidget
+	commandLinePrevFocus ui.Widget
+
+	Settings       *config.Settings
+	settingsFile   string
+	State          config.State
+	settingsView   *settingsView
+	language       languageState
+	loadedGrammars []config.GrammarSetting
+	// Last applied snapshot. Callers may mutate Settings before ApplySettings.
+	appliedSettings config.Settings
+
+	Sidebar               *ui.SidebarWidget
+	SplitPanel            *ui.SplitPanelWidget
+	ContentSplit          *ui.ContentSplitWidget
+	BottomPanel           *ui.BottomPanelWidget
+	panelResizing         bool
+	panelResizeFromClosed bool
+
+	Workspace           *workspace.Workspace
+	Watcher             *watcher.Watcher
+	Explorer            *NavigationPanel
+	ExplorerContextNode *widgets.TreeNode
+
+	EditorGroup     *ui.EditorGroupWidget // Tracks the active group for editor commands.
 	EditorSplit     *ui.EditorLayoutWidget
-	Sidebar         *ui.SidebarWidget
-	SplitPanel      *ui.SplitPanelWidget
-	ContentSplit    *ui.ContentSplitWidget
-	BottomPanel     *ui.BottomPanelWidget
-	Search          *ui.SearchWidget
-	MenuBar         *ui.MenuBarWidget
-	RootBox         *widgets.VStackWidget
-	StatusBar       *ui.StatusBarWidget
-	Status          *view.StatusBar
-	Borders         *term.BorderSet
-	Screen          *term.TcellScreen
-	Renderer        *render.Renderer
-	ImageLayer      *image.Layer
-	imageCellW      int
-	imageCellH      int
-	Settings        *config.Settings
-	settingsFile    string
-	State           config.State
-	Workspace       *workspace.Workspace
+	largeFiles      largeFileState
+	fileLinks       *asynctask.Task[map[string]string]
+	resolveFileLink func(string, string) string
+
+	// Apply `path:line[:col]` targets after the first render, when viewport height is known.
+	PendingFileTargets      []FileTarget
+	restoreSessionOnStartup bool
+	sessionWorkspaceKey     string
+	sessionSavingPaused     bool
+
+	welcomeView         *welcomeView
+	welcomeIsEmptyState bool // Welcome replaces the empty editor.
+	// Return to Welcome when the last tab closes in a workspace with no folders.
+	// Opening a folder clears this. Loose-file launches end on an untitled tab.
+	welcomeWhenEmpty bool
+
+	ImageLayer *image.Layer
+	imageCellW int
+	imageCellH int
+	graphics   *cachedGraphics
+
+	Search        *ui.SearchWidget
+	searchReplace searchReplaceState
+	findRefresh   *asynctask.Task[struct{}]
+	findStale     bool
+	quickOpen     *quickOpenState
+
+	Changes                   *ChangesPanel
+	Repository                *RepositoryState
+	runningRepoOp             string // Progress label, empty when idle.
+	pendingCurrentChangesOpen bool
+	diffOpenTask              *asynctask.Task[*diffOpenResult]
+	inlineDiffRepos           map[string]inlineDiffRepo
+	blame                     statusBlameState
+	gitGutterDebounce         *asynctask.Task[struct{}]
+	gitGutterTask             *asynctask.Task[*gitGutterResult]
+	commitDetailMu            sync.Mutex
+	commitDetailNext          uint64
+	commitDetailRequests      map[string]commitDetailRequest
+
 	Palette         *ui.TerminalColorPalette
 	TerminalPalette interface {
 		Snapshot() (string, map[string]string)
 		Request()
 	}
-	TerminalPanel *ui.TerminalPanelWidget
-	Terminals     []TerminalTab
+	TerminalPanel   *ui.TerminalPanelWidget
+	Terminals       []TerminalTab // Matches TerminalPanel tab order.
+	EditorTerminals []TerminalTab
+	TerminalSeq     int    // Monotonic to keep plugin terminal handles unique.
+	forwardSocket   string // UI goroutine only, including listener startup and shutdown.
+
 	Apps          *AppsPanel
 	apps          []config.Application
 	appCommandIDs []string
 	appsSearch    *asynctask.Task[[]config.Application]
-	// appTerminals maps an app name to the terminal it last launched.
-	appTerminals map[appLaunchKey]string
-	// EditorTerminals live in editor tabs. They are kept apart from Terminals,
-	// whose order matches the terminal panel's tabs.
-	EditorTerminals []TerminalTab
-	// TerminalSeq is monotonic so a closed-and-reopened tab never reuses an id
-	// (plugin handles key off it).
-	TerminalSeq            int
-	forwardSocket          string // UI goroutine only, including listener startup and shutdown.
-	LspManager             *lsp.Manager
-	lookupCodeActionClient func(string, string) (codeActionCommandClient, error)
-	DocVersionsMu          sync.Mutex
-	DocVersions            map[string]int
-	CompletionItems        []ui.CompletionItem
-	LspCompletionItems     []lsp.CompletionItem
-	completion             completionState
-	hover                  hoverState
-	diffOpenTask           *asynctask.Task[*diffOpenResult]
-	Problems               *ui.ProblemsWidget
-	References             *ui.ReferencesWidget
-	Keybindings            []config.KeyBinding
-	LspNotified            map[string]bool
-	Explorer               *NavigationPanel
-	ExplorerContextNode    *widgets.TreeNode
-	Changes                *ChangesPanel
-	Repository             *RepositoryState
-	Symbols                *SymbolsPanel
-	symbolsTask            *asynctask.Task[symbolsReply]
-	Reg                    *command.Registry
-	Running                *bool
-	quitPending            bool
-	quitAction             func()
-	RestartRequested       bool
-	RestartMethod          update.Kind
-	Updates                UpdateService
-	UpdateMethod           *update.Method
-	updateDialog           *updateDialogState
-	updateStartupTask      *asynctask.Task[update.Release]
-	menuReturnFocus        ui.Widget
-	Watcher                *watcher.Watcher
-	largeFiles             largeFileState
-	blame                  statusBlameState
-	gitGutterDebounce      *asynctask.Task[struct{}]
-	findRefresh            *asynctask.Task[struct{}]
-	findStale              bool
-	gitGutterTask          *asynctask.Task[*gitGutterResult]
-	inlineDiffRepos        map[string]inlineDiffRepo
-	commitDetailMu         sync.Mutex
-	commitDetailNext       uint64
-	commitDetailRequests   map[string]commitDetailRequest
-	Version                string
+	appTerminals  map[appLaunchKey]string // Last terminal launched for each app and path.
+
 	PluginManager          *plugin.Manager
+	PluginsPanel           *PluginsPanel
 	PendingPluginApprovals []*plugin.Plugin
 	approvalDialog         ui.Widget
-	// PendingFileTargets holds cursor positions parsed from `path:line[:col]`
-	// arguments. They are applied after the first render, once the viewport
-	// has a real height to scroll against.
-	PendingFileTargets []FileTarget
-	PluginsPanel       *PluginsPanel
-	// registryRequested is set once the community registry has been fetched,
-	// which waits until the plugins panel is first shown.
+	pluginDetailWidgets    map[string]*pluginDetailState
+	pluginDrawer           ui.Widget
+	pluginDrawerPanel      *plugin.PluginPanelWidget
+	pluginDialog           *pluginDialogState
+	fileHandlerTabs        map[string]*plugin.Plugin
+	// Set on the first registry request, usually when the Plugins panel opens.
 	registryRequested bool
-	// FetchRegistry replaces the community registry download in tests.
-	FetchRegistry func() ([]plugin.RemoteRegistryEntry, error)
-	Output        *ui.OutputWidget
-	// runningRepoOp is the progress label of the in-flight task, empty when idle.
-	runningRepoOp             string
-	pluginDetailWidgets       map[string]*pluginDetailState
-	pluginDrawer              ui.Widget
-	pluginDrawerPanel         *plugin.PluginPanelWidget
-	pluginDialog              *pluginDialogState
-	graphics                  *cachedGraphics
-	fileHandlerTabs           map[string]*plugin.Plugin
-	commandLine               *ui.CommandLineWidget
-	commandLinePrevFocus      ui.Widget
-	settingsView              *settingsView
-	pendingCurrentChangesOpen bool
-	// appliedSettings is the last value ApplySettings acted on. Callers routinely
-	// mutate a.Settings before calling it, so a.Settings cannot serve as "before".
-	appliedSettings         config.Settings
-	loadedGrammars          []config.GrammarSetting
-	restoreSessionOnStartup bool
-	sessionWorkspaceKey     string
-	sessionSavingPaused     bool
-	// welcomeIsEmptyState is set while the welcome page stands in for an
-	// empty editor, as opposed to being opened from Help.
-	welcomeIsEmptyState bool
-	// welcomeWhenEmpty is set once the session reaches the welcome page with no
-	// folder, and cleared when a folder opens: only then does closing every tab
-	// bring the page back. Loose files opened from the command line still end
-	// on an untitled tab.
-	welcomeWhenEmpty      bool
-	welcomeView           *welcomeView
-	panelResizing         bool
-	panelResizeFromClosed bool
-	eventLoopDoneOnce     sync.Once
-	eventLoopCloseOnce    sync.Once
-	eventLoopDone         chan struct{}
-	tasks                 taskOwner
-	quickOpen             *quickOpenState
-	fileLinks             *asynctask.Task[map[string]string]
-	resolveFileLink       func(string, string) string
-	searchReplace         searchReplaceState
+	FetchRegistry     func() ([]plugin.RemoteRegistryEntry, error) // Test hook for registry downloads.
 
-	// lspSent holds, per document, a channel closed once its latest queued
-	// notification send attempt finishes. Guarded by DocVersionsMu.
-	lspSent map[string]<-chan struct{}
-	// lspEpochs counts restarts per server. Written on the UI goroutine under
-	// DocVersionsMu, so other goroutines must hold the lock to read it.
-	lspEpochs map[string]int
-	diagPull  *asynctask.Task[pulledDiagnostics]
-	// diagBackground holds one task per server.
-	diagBackground map[string]*asynctask.Task[[]backgroundPull]
-	// lastPulled holds the document state behind each path's applied pull.
-	// UI goroutine only.
+	Symbols            *SymbolsPanel
+	symbolsTask        *asynctask.Task[symbolsReply]
+	CompletionItems    []ui.CompletionItem
+	LspCompletionItems []lsp.CompletionItem
+	completion         completionState
+	hover              hoverState
+
+	LspManager             *lsp.Manager
+	LspNotified            map[string]bool
+	lookupCodeActionClient func(string, string) (codeActionCommandClient, error)
+	References             *ui.ReferencesWidget
+	Problems               *ui.ProblemsWidget
+	diagPull               *asynctask.Task[pulledDiagnostics]
+	diagBackground         map[string]*asynctask.Task[[]backgroundPull] // One task per server.
+	// State of the last applied pull per path. UI goroutine only.
 	lastPulled map[string]pullKey
-	// lspDocRoots pins the root each open document was opened on, so its
-	// requests and synchronization keep reaching the client that has it open
-	// even when a marker change resolves another root for its directory. A
-	// close or an explicit server restart drops the pin.
-	lspDocRootsMu sync.Mutex
-	lspDocRoots   map[string]lspPin
-	// lspIdleGens counts each root's pins and idle periods; only the timer of
-	// the current generation may stop the root's server. Guarded by
-	// lspDocRootsMu.
-	lspIdleGens map[lspPin]uint64
-	// lspDiagRoots records which root published each path's diagnostics, so
-	// an idle root's stop can clear them. UI goroutine only.
+	// Publishing roots for idle diagnostic cleanup. UI goroutine only.
 	lspDiagRoots map[lspDiagKey]string
+
+	DocVersionsMu sync.Mutex // Protects DocVersions, lspSent, and lspEpochs.
+	DocVersions   map[string]int
+	// Per-document channel closes after the latest queued send attempt.
+	lspSent map[string]<-chan struct{}
+	// Per-server restart counts. UI goroutine writes only.
+	lspEpochs map[string]int
+
+	lspDocRootsMu sync.Mutex // Protects document pins and idle generations.
+	// Pins open documents to their LSP roots across marker changes.
+	// Released on document close or explicit server restart.
+	lspDocRoots map[string]lspPin
+	// Bumped on pin or idle scheduling. Only the current generation can stop the server.
+	lspIdleGens map[lspPin]uint64
+
+	Running            *bool
+	quitPending        bool
+	quitAction         func()
+	eventLoopDoneOnce  sync.Once
+	eventLoopCloseOnce sync.Once
+	eventLoopDone      chan struct{}
+	tasks              taskOwner
+
+	Version           string
+	RestartRequested  bool
+	RestartMethod     update.Kind
+	Updates           UpdateService
+	UpdateMethod      *update.Method
+	updateDialog      *updateDialogState
+	updateStartupTask *asynctask.Task[update.Release]
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
