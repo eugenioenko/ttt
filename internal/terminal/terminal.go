@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -61,6 +62,7 @@ type Terminal struct {
 // New spawns the terminal program in a fresh PTY. `args` are passed to the
 // program unchanged (e.g. Shell="pi", Args=["--model", "openrouter/free"]); a
 // plain shell call site simply omits them.
+// Environment entries use KEY=value to set a value and a bare KEY to remove it.
 func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, args ...string) (*Terminal, error) {
 	resolved, err := resolveShell(shell)
 	if err != nil {
@@ -110,7 +112,20 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 			cmd.Dir = dir
 		}
 	}
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = os.Environ()
+	for _, entry := range env {
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "=") {
+			cmd.Env = append(cmd.Env, entry)
+		} else {
+			cmd.Env = slices.DeleteFunc(cmd.Env, func(s string) bool {
+				name, _, _ := strings.Cut(s, "=")
+				return name == entry || runtime.GOOS == "windows" && strings.EqualFold(name, entry)
+			})
+		}
+	}
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	if err := pt.Resize(cols, rows); err != nil {
@@ -464,3 +479,5 @@ func (t *Terminal) ScreenText() string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+func (t *Terminal) PID() int { return t.cmd.Process.Pid }
