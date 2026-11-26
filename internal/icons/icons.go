@@ -150,11 +150,13 @@ func Get(mode string, name Name) string {
 		return o
 	}
 	g := table[name]
-	if mode == config.IconsNerdFont {
+	if mode == config.IconsNerdFont && g.Nerd != "" {
 		return g.Nerd
 	}
 	return g.Plain
 }
+
+func Active(name Name) string { return Get(activeMode, name) }
 
 // Rune returns name's glyph for the configured icon mode.
 func Rune(name Name) rune {

@@ -524,7 +524,9 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 
 	icon := node.Icon
 	if node.IconName != "" {
-		icon = string(icons.Rune(node.IconName))
+		if glyph := icons.Active(node.IconName); glyph != "" {
+			icon = glyph
+		}
 	}
 	if icon != "" {
 		iconStyle := node.IconStyle
