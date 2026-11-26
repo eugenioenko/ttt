@@ -115,6 +115,7 @@ type EditorPaneWidget struct {
 	goalContext             cursorGoalContext
 	phantoms                map[int]int
 	phantomGen              uint64
+	overlayGen              uint64
 	DiffOverlay             *DiffOverlay
 	diffNumDigits           int
 	// Passive panes draw no active line or bracket match: a diff pane that
@@ -245,6 +246,9 @@ func (e *EditorPaneWidget) computeMaxLineWidth() int {
 	botLine := min(topLine+e.Viewport.Height, len(e.Buf.Lines))
 	for i := topLine; i < botLine; i++ {
 		lw := bufColToVisualCol(e.Buf.Lines[i], len([]rune(e.Buf.Lines[i])), tabW)
+		if ghost := e.ghostTextAt(editorRow{bufLine: i, phantom: -1}); ghost.text != "" {
+			lw += ghost.width()
+		}
 		if lw > maxW {
 			maxW = lw
 		}
@@ -701,7 +705,11 @@ func (e *EditorPaneWidget) scrollViewportToRange(line, startCol, endCol int) {
 	if !e.Embedded && !e.WordWrap && effHeight > 1 && e.Viewport.Width > 0 {
 		tabW := e.resolveTabSize()
 		if line >= 0 && line < len(e.Buf.Lines) {
-			if bufColToVisualCol(e.Buf.Lines[line], len([]rune(e.Buf.Lines[line])), tabW) > e.Viewport.Width {
+			lw := bufColToVisualCol(e.Buf.Lines[line], len([]rune(e.Buf.Lines[line])), tabW)
+			if ghost := e.ghostTextAt(editorRow{bufLine: line, phantom: -1}); ghost.text != "" {
+				lw += ghost.width()
+			}
+			if lw > e.Viewport.Width {
 				if e.Viewport.LeftCol == 0 && e.maxWidthSeen <= e.Viewport.Width {
 					effHeight--
 				}
@@ -723,8 +731,18 @@ func (e *EditorPaneWidget) scrollViewportToRange(line, startCol, endCol int) {
 		e.hScrollPending = true
 		return
 	}
-	visStart := bufColToVisualCol(e.Buf.Lines[line], startCol, e.resolveTabSize())
-	visEnd := bufColToVisualCol(e.Buf.Lines[line], endCol, e.resolveTabSize())
+	tabW := e.resolveTabSize()
+	visStart := bufColToVisualCol(e.Buf.Lines[line], startCol, tabW)
+	visEnd := bufColToVisualCol(e.Buf.Lines[line], endCol, tabW)
+	if ghost := e.ghostTextAt(editorRow{bufLine: line, phantom: -1}); ghost.text != "" {
+		gw := ghost.width()
+		if startCol > ghost.col {
+			visStart += gw
+		}
+		if endCol > ghost.col {
+			visEnd += gw
+		}
+	}
 	if visEnd >= e.Viewport.LeftCol+e.Viewport.Width {
 		e.Viewport.LeftCol = visEnd - e.Viewport.Width + 1
 	}

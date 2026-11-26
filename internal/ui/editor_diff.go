@@ -519,6 +519,7 @@ func (e *EditorPaneWidget) SetDiffOverlay(o *DiffOverlay) {
 	if o != nil && o == e.DiffOverlay {
 		e.syncDiffOverlay()
 	}
+	e.overlayGen++
 	e.DiffOverlay = o
 	e.diffNumDigits = diffGutterDigits(o)
 	if o == nil {

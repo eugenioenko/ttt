@@ -354,7 +354,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				lineSpans = e.DiffOverlay.Spans[lineIdx]
 			}
 			segment := rowText(e.Buf.Lines[lineIdx], segmentByte, row)
-			ghost := e.ghostTextAt(row)
+			ghost := e.visibleGhostAt(row, editorW)
 			screenCells, contentEnd := e.renderLineSegmentToScreen(segment, syntaxSpans, suffix, startCol, tabW, leftCol, editorW, ghost)
 			ghostStart, ghostEnd := 0, 0
 			if e.IndentGuides && ghost.text != "" {
@@ -578,9 +578,9 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 	if !e.WordWrap {
 		curScreenCol = bufColToVisualCol(e.Buf.Lines[e.Cursor.Line], e.Cursor.Col, tabW) - e.Viewport.LeftCol
 	}
-	ghost := e.ghostTextAt(layout.rowInBlock(layout.rowToTop(curRow)))
+	ghost := e.visibleGhostAt(layout.rowInBlock(layout.rowToTop(curRow)), editorW)
 	if e.Cursor.Col > ghost.col {
-		curScreenCol += ghost.width(tabW)
+		curScreenCol += ghost.width()
 	}
 	e.CursorX = curScreenCol + gutterW + r.X
 	e.CursorY = curRow - topRow + r.Y
@@ -673,17 +673,62 @@ type ghostText struct {
 	text string
 }
 
-func (g ghostText) width(tabW int) int {
-	return bufColToVisualCol(g.text, len(g.text), tabW)
+func (g ghostText) width() int {
+	return textwidth.String(g.text)
 }
 
 func (g ghostText) screenRange(segment string, startCol, tabW, leftCol int) (int, int) {
 	start := bufColToVisualCol(segment, g.col-startCol, tabW) - leftCol
-	return start, start + g.width(tabW)
+	return start, start + g.width()
+}
+
+func (e *EditorPaneWidget) ghostPaneWidth() int {
+	if e.Viewport.Width > 0 {
+		return e.Viewport.Width
+	}
+	return e.wrapTextWidth(max(e.GetRect().W-e.GutterWidth(), 0))
+}
+
+func (e *EditorPaneWidget) visibleGhostAt(row editorRow, width int) ghostText {
+	ghost := e.ghostTextAt(row)
+	if ghost.text == "" || width <= 0 {
+		return ghostText{}
+	}
+	line := e.Buf.Lines[row.bufLine]
+	tabW := e.resolveTabSize()
+	seg := rowText(line, runeByteOffset(line, row.startCol), row)
+	prefixW := bufColToVisualCol(seg, ghost.col-row.startCol, tabW)
+	leftCol := 0
+	if !e.WordWrap {
+		leftCol = e.Viewport.LeftCol
+	}
+	maxW := width - (prefixW - leftCol)
+	if e.WordWrap {
+		if r, size := utf8.DecodeRuneInString(seg[runeByteOffset(seg, ghost.col-row.startCol):]); size > 0 {
+			maxW = min(maxW, width-prefixW-wrapAdvance(r, prefixW, tabW))
+		}
+	}
+	if e.Cursor.Line == row.bufLine && e.Cursor.Col > ghost.col && (row.nextCol == 0 || e.Cursor.Col < row.nextCol) {
+		baseScreenCol := bufColToVisualCol(seg, e.Cursor.Col-row.startCol, tabW) - leftCol
+		if baseScreenCol < width {
+			maxW = min(maxW, width-1-baseScreenCol)
+		}
+	}
+	if maxW <= 0 {
+		return ghostText{}
+	}
+	if ghost.width() > maxW {
+		ghost.text = textwidth.Truncate(ghost.text, maxW, "")
+		if ghost.text == "" {
+			return ghostText{}
+		}
+	}
+	return ghost
 }
 
 func (e *EditorPaneWidget) ghostTextAt(row editorRow) ghostText {
 	if e.DiffOverlay == nil || e.DiffOverlay.stale || row.isPhantom() ||
+		row.bufLine < 0 || row.bufLine >= len(e.Buf.Lines) ||
 		(e.Folds != nil && e.Folds.IsCollapsed(row.bufLine)) {
 		return ghostText{}
 	}
