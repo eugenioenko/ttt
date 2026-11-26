@@ -78,25 +78,14 @@ func (r *ReferencesWidget) Render(surface Surface) {
 		x := 1
 
 		loc := fmt.Sprintf("%s:%d:%d", filepath.Base(item.File), item.Line+1, item.Col+1)
-		for _, ch := range loc {
-			if x >= w {
-				break
-			}
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-			x++
-		}
-		x++
+		x = surface.DrawText(x, y, loc, w, style) + 1
 
 		textStyle := style
 		if idx != r.selected {
 			textStyle = term.StyleMuted
 		}
-		for _, ch := range item.Text {
-			if x >= w-1 {
-				break
-			}
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: textStyle})
-			x++
+		if x < w-1 {
+			surface.DrawText(x, y, item.Text, w-1, textStyle)
 		}
 	}
 }

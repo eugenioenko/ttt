@@ -345,6 +345,22 @@ func TestDialogTitleRendersWithBoldAndStyle(t *testing.T) {
 	}
 }
 
+func TestDialogTitleFullwidth(t *testing.T) {
+	d := NewDialogWidget(8)
+	d.Title = "測a界"
+
+	s := renderWidget(d, 0, 0, 20, 10)
+
+	row := s.cells[d.boxY+1]
+	start := d.boxX + 2
+	for offset, ch := range map[int]rune{0: '測', 2: 'a', 3: ' '} {
+		want := term.Cell{Ch: ch, Style: term.StylePaletteItem, Bold: true}
+		if got := row[start+offset]; got != want {
+			t.Errorf("title cell at offset %d = %+v, want %+v", offset, got, want)
+		}
+	}
+}
+
 func TestDialogRenderFullDialog(t *testing.T) {
 	d := NewDialogWidget(40)
 	d.Title = "Save Changes"
