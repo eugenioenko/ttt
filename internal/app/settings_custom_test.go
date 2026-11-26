@@ -3,11 +3,13 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -143,5 +145,61 @@ func TestPluginDefaultUsesExplicitSavedKeys(t *testing.T) {
 	}
 	if _, exists := saved.Get("editor.tabSize"); exists {
 		t.Fatal("deleted key still present on disk")
+	}
+}
+
+func TestPluginNestedDefaultsOnlyRemoveObjectsCreatedByInstall(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.settingsFile = filepath.Join(t.TempDir(), "settings.json")
+	if err := os.WriteFile(a.settingsFile, []byte(`{"prefs":{"empty":{},"cmd":"custom"}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	plug := filepath.Join(dir, "defaults")
+	if err := os.Mkdir(plug, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest := `{"name":"defaults","version":"1","entry":"main.ttt.lua","permissions":{"settings":true,"settings_keys":["prefs.*"]}}`
+	hook := `local settings=require("ttt.settings")
+	require("ttt").on_install(function()
+	  settings.set_default("prefs.cmd.path","tool")
+	  settings.set_default("prefs.empty.path","tool")
+	  settings.set_default("prefs.owned",{enabled=true})
+	  settings.set_default("prefs.owned.extra.path","tool")
+	end)`
+	for name, text := range map[string]string{"plugin.ttt.json": manifest, "main.ttt.lua": hook} {
+		if err := os.WriteFile(filepath.Join(plug, name), []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	m := plugin.NewManager(dir, filepath.Join(t.TempDir(), "registry.json"))
+	defer m.Shutdown()
+	m.SetSettingsAPI(NewPluginSettingsAPI(a))
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatal(pending)
+	}
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := NewPluginSettingsAPI(a).SavedSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for key, want := range map[string]string{"prefs.empty.path": "tool", "prefs.owned.extra.path": "tool", "prefs.cmd": "custom"} {
+		if got, ok := saved.Get(key); !ok || got != want {
+			t.Fatalf("%s = %#v, want %q", key, got, want)
+		}
+	}
+	if err := m.RunUninstallHook("defaults"); err != nil {
+		t.Fatal(err)
+	}
+	obj, err := config.ReadSettingsObject(a.settingsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]any{"prefs": map[string]any{"empty": map[string]any{}, "cmd": "custom"}}
+	if !reflect.DeepEqual(obj, want) {
+		t.Fatalf("remaining user settings = %#v, want %#v", obj, want)
 	}
 }

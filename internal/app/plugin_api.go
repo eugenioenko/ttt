@@ -978,15 +978,6 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 	}
 	parts := strings.Split(key, ".")
 	if s.saved != nil {
-		for i := 1; i < len(parts); i++ {
-			parent, ok := getPath(m, parts[:i])
-			if !ok {
-				break
-			}
-			if _, ok := parent.(map[string]any); !ok {
-				return fmt.Errorf("setting %q is not an object", strings.Join(parts[:i], "."))
-			}
-		}
 		setPath(m, parts, value)
 		updated, err := config.SaveSettingsObject(s.app.settingsFilePath(), m)
 		if err == nil {
