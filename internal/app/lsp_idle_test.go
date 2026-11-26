@@ -13,36 +13,14 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-type idleTimer struct {
-	fire    func()
-	stopped bool
-}
-
 // fakeIdleTimers replaces lspAfterFunc so a test decides when idle periods end.
-func fakeIdleTimers(t *testing.T) *[]*idleTimer {
+func fakeIdleTimers(t *testing.T) *[]func() {
 	t.Helper()
-	var timers []*idleTimer
+	var timers []func()
 	previous := lspAfterFunc
-	lspAfterFunc = func(_ time.Duration, f func()) func() bool {
-		timer := &idleTimer{fire: f}
-		timers = append(timers, timer)
-		return func() bool {
-			wasPending := !timer.stopped
-			timer.stopped = true
-			return wasPending
-		}
-	}
+	lspAfterFunc = func(_ time.Duration, f func()) { timers = append(timers, f) }
 	t.Cleanup(func() { lspAfterFunc = previous })
 	return &timers
-}
-
-func expireIdleTimers(timers []*idleTimer) {
-	for _, timer := range timers {
-		if !timer.stopped {
-			timer.stopped = true
-			timer.fire()
-		}
-	}
 }
 
 func idleRootApp(t *testing.T) (*App, *term.SimScreen, string, []string) {
@@ -115,7 +93,7 @@ func TestIdleRootServerStopsAfterLastDocumentCloses(t *testing.T) {
 	}
 
 	a.NotifyLSPClose(paths[1], "go")
-	expireIdleTimers(*timers)
+	(*timers)[0]()
 	stopped := waitRootStopped(t, sim)
 	if stopped.Server != "go" || stopped.Root != project {
 		t.Fatalf("stopped %+v, want go at %q", stopped, project)
@@ -128,28 +106,30 @@ func TestIdleRootServerStopsAfterLastDocumentCloses(t *testing.T) {
 	}
 }
 
-func TestReopenCancelsEarlierIdlePeriod(t *testing.T) {
+func TestOnlyLatestIdlePeriodStopsServer(t *testing.T) {
 	timers := fakeIdleTimers(t)
-	a, _, project, paths := idleRootApp(t)
+	a, sim, project, paths := idleRootApp(t)
 	client := a.LspManager.ReadyClient("go", project)
 
 	for _, path := range paths {
 		a.NotifyLSPClose(path, "go")
 	}
-	first := (*timers)[0]
 	a.NotifyLSPOpen(paths[0], "go", []string{"package a", ""})
 	waitDocumentSent(t, a, paths[0])
-	if !first.stopped {
-		t.Fatal("reopening did not cancel the pending idle stop")
-	}
-	if got := a.LspManager.ReadyClient("go", project); got != client {
-		t.Fatal("reopening within the idle timeout did not keep the running server")
+	a.NotifyLSPClose(paths[0], "go")
+	if len(*timers) != 2 {
+		t.Fatalf("idle periods = %d, want 2", len(*timers))
 	}
 
-	// Closing again starts a new idle period: only its timer may stop the server.
-	a.NotifyLSPClose(paths[0], "go")
-	if len(*timers) != 2 || (*timers)[1].stopped {
-		t.Fatalf("closing again did not schedule a fresh idle stop: %d timers", len(*timers))
+	// The first period's timer fires late, after the reopen and close.
+	(*timers)[0]()
+	if got := a.LspManager.ReadyClient("go", project); got != client {
+		t.Fatal("a timer from an earlier idle period stopped the server")
+	}
+
+	(*timers)[1]()
+	if stopped := waitRootStopped(t, sim); stopped.Root != project {
+		t.Fatalf("stopped %+v, want root %q", stopped, project)
 	}
 }
 

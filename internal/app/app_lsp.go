@@ -1217,12 +1217,10 @@ func (a *App) pinLSPRoot(path, server, root string) {
 	a.lspDocRootsMu.Lock()
 	if a.lspDocRoots == nil {
 		a.lspDocRoots = make(map[string]lspPin)
+		a.lspIdleGens = make(map[lspPin]uint64)
 	}
 	a.lspDocRoots[path] = pin
-	if stop := a.lspIdleStops[pin]; stop != nil {
-		stop()
-		delete(a.lspIdleStops, pin)
-	}
+	a.lspIdleGens[pin]++
 	a.lspDocRootsMu.Unlock()
 }
 
@@ -1239,32 +1237,20 @@ func (a *App) unpinLSPRoot(path string) {
 	a.lspDocRootsMu.Unlock()
 }
 
-func (a *App) lspRootInUse(server, root string) bool {
-	a.lspDocRootsMu.Lock()
-	defer a.lspDocRootsMu.Unlock()
-	for _, pin := range a.lspDocRoots {
-		if pin.server == server && pin.root == root {
-			return true
-		}
-	}
-	return false
-}
-
 // lspIdleTimeout is how long a root's server outlives its last open document,
 // so closing and reopening a file does not pay for a cold start.
 const lspIdleTimeout = time.Minute
 
 // lspAfterFunc schedules idle stops; tests replace it to fire them on demand.
-var lspAfterFunc = func(d time.Duration, f func()) (stop func() bool) {
-	return time.AfterFunc(d, f).Stop
-}
+var lspAfterFunc = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
 
 type LSPRootStopped struct {
 	Server, Root string
 }
 
-// scheduleLSPIdleStop starts the root's idle period. Reopening a document on
-// the root cancels it, so only the latest idle period can stop the server.
+// scheduleLSPIdleStop starts the root's idle period. Pinning a document on the
+// root bumps its generation, so a timer from an earlier period, even one
+// already firing, cannot stop the server.
 func (a *App) scheduleLSPIdleStop(server, root string) {
 	pin := lspPin{server: server, root: root}
 	manager := a.LspManager
@@ -1275,14 +1261,17 @@ func (a *App) scheduleLSPIdleStop(server, root string) {
 			return
 		}
 	}
-	if a.lspIdleStops == nil {
-		a.lspIdleStops = make(map[lspPin]func() bool)
+	if a.lspIdleGens == nil {
+		a.lspIdleGens = make(map[lspPin]uint64)
 	}
-	if stop := a.lspIdleStops[pin]; stop != nil {
-		stop()
-	}
-	a.lspIdleStops[pin] = lspAfterFunc(lspIdleTimeout, func() {
-		idle := func() bool { return !a.lspRootInUse(server, root) }
+	a.lspIdleGens[pin]++
+	gen := a.lspIdleGens[pin]
+	lspAfterFunc(lspIdleTimeout, func() {
+		idle := func() bool {
+			a.lspDocRootsMu.Lock()
+			defer a.lspDocRootsMu.Unlock()
+			return a.lspIdleGens[pin] == gen
+		}
 		if manager.StopIdle(server, root, idle) {
 			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPRootStopped{Server: server, Root: root}))
 		}
