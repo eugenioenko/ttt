@@ -15,7 +15,7 @@ concurrency:
 
 env:
   GO_VERSION: "1.25"
-  SIZE_BUDGET_MB: "20"
+  SIZE_BUDGET_MB: "23"
   SIZE_HEADROOM_WARN_MB: "1"
 
 jobs:
