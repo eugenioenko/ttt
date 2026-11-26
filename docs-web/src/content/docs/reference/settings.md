@@ -383,7 +383,7 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 |-----|------|---------|-------------|
 | `autocomplete.enabled` | bool | `true` | Enable LSP-powered autocompletion |
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
-| `autocomplete.pathCompletion` | bool | `true` | Suggest explicit workspace-relative filesystem paths (`./` and `../`) when LSP has no suggestions; also required for absolute path completion |
+| `autocomplete.pathCompletion` | bool | `true` | Suggest filesystem paths starting with `./` or `../` when LSP has no suggestions. Paths are relative to the workspace, or the open file’s directory in a file-only window. Enables absolute path completion when that option is on. |
 | `autocomplete.absolutePathCompletion` | bool | `false` | Also suggest absolute filesystem paths; requires `autocomplete.pathCompletion` |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |

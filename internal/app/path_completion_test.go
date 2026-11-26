@@ -61,6 +61,32 @@ func TestPathCompletionContinuesFromWorkspaceAndUndoes(t *testing.T) {
 	}
 }
 
+func TestPathCompletionUsesOpenFileDirectoryWithoutWorkspace(t *testing.T) {
+	const query = "./src/al"
+	a := completionTestApp(t, "notes.txt", query)
+	a.Workspace = workspace.New(nil)
+	src := filepath.Join(filepath.Dir(a.EditorGroup.ActiveFilePath()), "src")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writePathCompletionFiles(t, src, []string{"alpha.go"})
+	moveCursor(a, 0, len(query))
+
+	var run func()
+	a.completion.pathRead = asynctask.New[[]ui.CompletionItem](asynctask.TaskOptions{
+		Run: func(fn func()) { run = fn },
+	}, func(fn func()) error { fn(); return nil })
+	a.TriggerAutocomplete()
+	if run == nil {
+		t.Fatal("path completion did not run for a file outside a workspace")
+	}
+	run()
+	popup := a.EditorGroup.Autocomplete
+	if popup == nil || len(popup.Items) != 1 || popup.Items[0].Label != "alpha.go" {
+		t.Fatal("expected src/alpha.go next to the open file")
+	}
+}
+
 func TestPathCompletionDiscardsMovedCursorAndRespectsToggle(t *testing.T) {
 	a := completionTestApp(t, "notes.txt", "./\n")
 	a.Workspace = workspace.New([]string{t.TempDir()})
