@@ -19,6 +19,7 @@ import (
 )
 
 type highlightStep struct{}
+type eventLoopShutdown struct{}
 
 const highlightStepBudget = 4 * time.Millisecond
 
@@ -236,6 +237,12 @@ func RunEventLoop(
 					if pev == nil || !*running {
 						break
 					}
+					if interrupt, ok := pev.(*tcell.EventInterrupt); ok {
+						if _, shutdown := interrupt.Data().(eventLoopShutdown); shutdown {
+							*running = false
+							return
+						}
+					}
 					if pe, ok := pev.(*tcell.EventPaste); ok && !pe.Start() {
 						break
 					}
@@ -277,6 +284,9 @@ func RunEventLoop(
 			var execErr error
 			skipRedraw := false
 			switch v := tev.Data().(type) {
+			case eventLoopShutdown:
+				*running = false
+				return
 			case *taskDelivery:
 				v.run()
 			case *highlightStep:

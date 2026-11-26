@@ -579,12 +579,7 @@ func StopExecLoop(a *App) error {
 	default:
 	}
 
-	lifecycle := newExecRequestLifecycle()
-	request := &execMainRequest{Run: func() error {
-		*a.Running = false
-		return nil
-	}, Lifecycle: lifecycle}
-	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(request)); err != nil {
+	if err := a.Screen.PostEvent(tcell.NewEventInterrupt(eventLoopShutdown{})); err != nil {
 		select {
 		case <-eventLoopDone:
 			return nil
@@ -592,17 +587,8 @@ func StopExecLoop(a *App) error {
 		}
 		return failedExec("failed to post shutdown request: %v", err)
 	}
-	select {
-	case err := <-lifecycle.done:
-		return err
-	case <-eventLoopDone:
-		select {
-		case err := <-lifecycle.done:
-			return err
-		default:
-			return nil
-		}
-	}
+	<-eventLoopDone
+	return nil
 }
 
 func stripQuotes(s string) string {
