@@ -26,13 +26,11 @@ type hoverKey struct {
 type hoverState struct {
 	task  *asynctask.Task[string]
 	delay time.Duration
-	// tab is the tab bar index whose cut name the popup (shown or pending)
-	// belongs to; tabOwned is false for LSP hovers.
-	tab      int
-	tabOwned bool
+	tab   tabHoverKey
 }
 
 type tabHoverKey struct {
+	Group            *ui.EditorGroupWidget
 	Index            int
 	Name             string
 	AnchorX, AnchorY int
@@ -68,6 +66,9 @@ func (a *App) scheduleHover(path, lang string, line, col, anchorX, anchorY int, 
 	if a.EditorGroup.ActiveBuffer() == nil || a.EditorGroup.IsActiveVirtual() {
 		a.DismissHover()
 		return
+	}
+	if a.hover.tab.Group != nil {
+		a.DismissHover()
 	}
 	a.ensureHoverTask()
 	server, _, _ := a.lspResolve(path, lang)
@@ -113,17 +114,23 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	mx, my := ev.Position()
 	btn := ev.Buttons()
 	// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
-	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) && a.EditorGroup.GetRect().Contains(mx, my) {
-		a.DismissHover()
-	} else if btn == 0 && a.checkTabHover(mx, my) {
+	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) {
+		for _, group := range a.editorGroups() {
+			if group.GetRect().Contains(mx, my) {
+				a.DismissHover()
+				return
+			}
+		}
+	}
+	if btn == 0 && a.checkTabHover(mx, my) {
 		return
-	} else if btn != 0 && a.hover.tabOwned && !a.isMouseInsideHover(mx, my) {
+	} else if btn != 0 && a.hover.tab.Group != nil && !a.isMouseInsideHover(mx, my) {
 		a.DismissHover()
-	} else if a.EditorGroup.Hover == nil {
+	} else if hover := a.hoverEditorGroup().Hover; hover == nil {
 		if btn == 0 {
 			a.checkMouseHover(mx, my)
 		}
-	} else if !a.isMouseOverHover(mx, my) && !a.EditorGroup.Hover.IsDragging() {
+	} else if !a.isMouseOverHover(mx, my) && !hover.IsDragging() {
 		a.DismissHover()
 	}
 }
@@ -148,8 +155,15 @@ func (a *App) ShowHover(text string, anchorX, anchorY int) {
 	}
 }
 
+func (a *App) hoverEditorGroup() *ui.EditorGroupWidget {
+	if a.hover.tab.Group != nil {
+		return a.hover.tab.Group
+	}
+	return a.EditorGroup
+}
+
 func (a *App) isMouseOverHover(mx, my int) bool {
-	h := a.EditorGroup.Hover
+	h := a.hoverEditorGroup().Hover
 	if h == nil {
 		return false
 	}
@@ -165,38 +179,39 @@ func (a *App) checkTabHover(mx, my int) bool {
 	if a.isMouseInsideHover(mx, my) {
 		return false
 	}
-	tabBar := a.EditorGroup.TabBar
-	if !tabBar.GetRect().Contains(mx, my) {
-		if a.hover.tabOwned {
+	group := a.editorTabGroupAt(mx, my)
+	if group == nil {
+		if a.hover.tab.Group != nil {
 			a.DismissHover()
 		}
 		return false
 	}
-	index, name, ax, ay, ok := tabBar.CutTabAt(mx, my)
-	if ok && a.hover.tabOwned && a.hover.tab == index &&
-		(a.EditorGroup.Hover != nil || (a.hover.task != nil && a.hover.task.Pending())) {
+	index, name, ax, ay, ok := group.TabBar.CutTabAt(mx, my)
+	key := tabHoverKey{Group: group, Index: index, Name: name, AnchorX: ax, AnchorY: ay}
+	if ok && a.hover.tab == key &&
+		(group.Hover != nil || (a.hover.task != nil && a.hover.task.Pending())) {
 		return true
 	}
 	a.DismissHover()
 	if ok {
-		a.scheduleTabHover(tabHoverKey{Index: index, Name: name, AnchorX: ax, AnchorY: ay})
+		a.scheduleTabHover(key)
 	}
 	return true
 }
 
 func (a *App) isMouseInsideHover(mx, my int) bool {
-	h := a.EditorGroup.Hover
+	h := a.hoverEditorGroup().Hover
 	return h != nil && h.GetRect().Contains(mx, my)
 }
 
 func (a *App) scheduleTabHover(key tabHoverKey) {
 	a.ensureHoverTask()
-	a.hover.tab, a.hover.tabOwned = key.Index, true
+	a.hover.tab = key
 	a.hover.task.ScheduleKey(key, func(context.Context) (string, error) {
 		return escapeMarkdown(key.Name), nil
 	}, func(text string, err error) {
-		if err == nil && a.hover.tabOwned && a.hover.tab == key.Index {
-			a.ShowHover(text, key.AnchorX, key.AnchorY)
+		if err == nil && a.hover.tab == key {
+			key.Group.Hover = ui.NewHoverWidget(text, key.AnchorX, key.AnchorY, &a.Root.ControlModifiers)
 		}
 	})
 }
@@ -255,7 +270,7 @@ func (a *App) stopHoverTask() {
 }
 
 func (a *App) DismissHover() {
-	a.EditorGroup.Hover = nil
-	a.hover.tabOwned = false
+	a.hoverEditorGroup().Hover = nil
+	a.hover.tab = tabHoverKey{}
 	a.stopHoverTask()
 }

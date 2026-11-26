@@ -373,6 +373,9 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
+	if group := app.editorTabGroupAt(mx, my); group != nil && group != app.EditorGroup {
+		app.Root.SetFocus(group)
+	}
 	tabR := app.EditorGroup.TabBar.GetRect()
 	if tabR.Contains(mx, my) {
 		ev := tcell.NewEventMouse(mx, my, tcell.Button2, 0)
