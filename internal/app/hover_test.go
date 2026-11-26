@@ -93,6 +93,8 @@ func TestInactiveSplitTabHoverUsesItsOwnGroup(t *testing.T) {
 	left := a.EditorGroup
 	a.SplitEditor()
 	right := a.EditorGroup
+	// Only hover delivery belongs in this test's fake task queue.
+	left.FoldTask, right.FoldTask = nil, nil
 	right.NewFileFromText("right editor")
 	path := filepath.Join(t.TempDir(), strings.Repeat("long-name-", 12)+"file.txt")
 	requireNoError(t, right.OpenFile(path))
