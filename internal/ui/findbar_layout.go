@@ -15,18 +15,44 @@ type findBarLayout struct {
 	btnToggle, btnPrev, btnNext, btnClose HitRegion
 }
 
-func renderFindBar(surface Surface, borders *term.BorderSet, query string, current, matches int, expanded, toggle bool) findBarLayout {
-	sw, _ := surface.Size()
-	w := max(min(40, sw-4), 0)
-	l := findBarLayout{barRect: Rect{X: sw - w - 1, Y: 4, W: w, H: 3}}
-	if expanded {
-		l.barRect.H++
+const minFindBarWidth = 24
+
+func findBarAnchor(fn func() Rect) Rect {
+	if fn == nil {
+		return Rect{}
 	}
+	return fn()
+}
+
+func findBarRect(surface Surface, anchor Rect, expanded bool) Rect {
+	sw, sh := surface.Size()
+	h := 3
+	if expanded {
+		h++
+	}
+	if anchor.W > 0 && anchor.H > 0 {
+		ox, oy := surface.Origin()
+		left := max(anchor.X-ox, 0)
+		right := min(anchor.X-ox+anchor.W, sw)
+		if aw := right - left; aw > 0 {
+			w := min(40, max(aw, min(sw, minFindBarWidth)))
+			x := max(right-w, 0)
+			y := max(min(anchor.Y-oy, sh-h), 0)
+			return Rect{X: x, Y: y, W: w, H: h}
+		}
+	}
+	w := max(min(40, sw-4), 0)
+	return Rect{X: sw - w - 1, Y: 4, W: w, H: h}
+}
+
+func renderFindBar(surface Surface, borders *term.BorderSet, anchor Rect, query string, current, matches int, expanded, toggle bool) findBarLayout {
+	l := findBarLayout{barRect: findBarRect(surface, anchor, expanded)}
+	r := l.barRect
+	w := r.W
 	b := term.SingleBorderSet()
 	if borders != nil {
 		b = *borders
 	}
-	r := l.barRect
 	surface.DrawBorder(r.X, r.Y, r.W, r.H, b, term.StyleBorder)
 	surface.ClearRect(r.X+1, r.Y+1, max(w-2, 0), r.H-2, term.StyleInput)
 	ox, oy := surface.Origin()

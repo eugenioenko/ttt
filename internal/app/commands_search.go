@@ -61,10 +61,18 @@ func (a *App) OpenFind() {
 	a.ShowFindBar(findBar)
 }
 
+func (a *App) activeEditorContentRect() ui.Rect {
+	if a.EditorGroup == nil {
+		return ui.Rect{}
+	}
+	return a.EditorGroup.ContentRect()
+}
+
 func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar := ui.NewFindBarWidget()
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
+	findBar.AnchorRect = a.activeEditorContentRect
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		if !a.EditorGroup.IsEditorActive() {
 			a.EditorGroup.SetFindSearch(query, nil, opts)
@@ -108,6 +116,7 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 	findBar := ui.NewFindBarWidget()
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
+	findBar.AnchorRect = a.activeEditorContentRect
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)
 		if err != nil {
@@ -250,6 +259,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar.SearchInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.ReplaceInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.Borders = a.Borders
+	bar.AnchorRect = a.activeEditorContentRect
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
