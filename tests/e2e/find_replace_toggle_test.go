@@ -101,7 +101,9 @@ func TestFindReplaceConfiguredIcons(t *testing.T) {
 			if got := h.screenText(); !strings.Contains(got, " > Search") {
 				t.Fatalf("configured collapsed chevron missing:\n%s", got)
 			}
-			h.click(21, 5)
+			find := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
+			in := find.Input.GetRect()
+			h.click(in.X-2, in.Y)
 			replace, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 			if !ok {
 				t.Fatalf("toggle opened %T", h.app.Root.TopOverlayWidget())
@@ -116,7 +118,7 @@ func TestFindReplaceConfiguredIcons(t *testing.T) {
 			if replace.ReplaceInput.Actions[1].Label != want {
 				t.Fatalf("Replace All = %q, want %q", replace.ReplaceInput.Actions[1].Label, want)
 			}
-			h.click(21, 5)
+			h.click(in.X-2, in.Y)
 			if _, ok := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget); !ok {
 				t.Fatal("configured expanded chevron did not collapse")
 			}
