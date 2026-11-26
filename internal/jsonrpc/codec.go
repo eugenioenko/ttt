@@ -130,7 +130,7 @@ func (c *Codec) ReceiveInto(message any) error {
 		if line == "" {
 			break
 		}
-		if val, ok := strings.CutPrefix(line, "Content-Length: "); ok {
+		if name, val, ok := strings.Cut(line, ":"); ok && strings.EqualFold(name, "Content-Length") {
 			n, err := strconv.Atoi(strings.TrimSpace(val))
 			if err != nil {
 				return fmt.Errorf("bad Content-Length: %w", err)
