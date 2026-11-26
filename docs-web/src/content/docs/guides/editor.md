@@ -5,7 +5,7 @@ description: Core editing features in TTT.
 
 ## Workspace tabs
 
-To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
+To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Launching with explicit file arguments leaves the initial workspace’s saved session intact. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
 
 On exit, the current text-file tab list replaces the remembered list for that workspace, including when you started with explicit file arguments. Closing all text-file tabs clears that workspace's saved list, so closed tabs do not return on the next launch.
 

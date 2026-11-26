@@ -73,7 +73,7 @@ type App struct {
 
 	// Apply `path:line[:col]` targets after the first render, when viewport height is known.
 	PendingFileTargets      []FileTarget
-	restoreSessionOnStartup bool
+	sessionHasExplicitFiles bool
 	sessionWorkspaceKey     string
 	sessionSavingPaused     bool
 

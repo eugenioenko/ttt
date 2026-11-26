@@ -64,7 +64,7 @@ func (a *App) editorSessionTabs() []config.EditorTabState {
 }
 
 func (a *App) persistEditorSession() {
-	if !a.Settings.Editor.RestoreTabs || a.sessionSavingPaused || a.sessionWorkspaceKey == "" {
+	if !a.Settings.Editor.RestoreTabs || a.sessionSavingPaused || a.sessionHasExplicitFiles || a.sessionWorkspaceKey == "" {
 		return
 	}
 	session := config.EditorSessionState{}
@@ -84,19 +84,20 @@ func (a *App) persistEditorSession() {
 
 func (a *App) updateEditorSessionWorkspace() {
 	a.persistEditorSession()
-	a.sessionWorkspaceKey = a.editorSessionKey()
+	key := a.editorSessionKey()
+	if key != a.sessionWorkspaceKey {
+		a.sessionHasExplicitFiles = false
+	}
+	a.sessionWorkspaceKey = key
 }
 
 func (a *App) restoreEditorSession() {
 	a.sessionWorkspaceKey = a.editorSessionKey()
-	if !a.Settings.Editor.RestoreTabs || a.sessionWorkspaceKey == "" {
+	if !a.Settings.Editor.RestoreTabs || a.sessionHasExplicitFiles || a.sessionWorkspaceKey == "" {
 		return
 	}
 	if err := config.PruneEditorSessions(time.Now()); err != nil {
 		a.StatusError(i18n.Format("session.cleanupFailed", i18n.Args{"error": err.Error()}))
-	}
-	if !a.restoreSessionOnStartup {
-		return
 	}
 	session, err := config.LoadEditorWorkspaceSession(a.sessionWorkspaceKey)
 	if err != nil {
