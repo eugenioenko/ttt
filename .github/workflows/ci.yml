@@ -294,7 +294,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SIZE_BUDGET_MB: "23"
       THRESHOLD_KB: "256"
     steps:
       - name: Check out PR head
@@ -346,7 +345,8 @@ jobs:
           build_targets . .size-out/head
 
           marker="<!-- ttt-binary-size -->"
-          budget_bytes=$((SIZE_BUDGET_MB * 1000000))
+          read -r budget_mb < .github/binary-size-budget-mb
+          budget_bytes=$((budget_mb * 1000000))
           threshold_bytes=$((THRESHOLD_KB * 1024))
           over_budget=false
           exceeded=false
@@ -355,7 +355,7 @@ jobs:
             echo "$marker"
             echo "## Binary size"
             echo ""
-            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Budget: **${SIZE_BUDGET_MB} MB**. Growth threshold: **${THRESHOLD_KB} KB**."
+            echo "Comparing \`${BASE_SHA:0:12}\` (base) with \`${HEAD_SHA:0:12}\` (PR). Budget: **${budget_mb} MB**. Growth threshold: **${THRESHOLD_KB} KB**."
             echo ""
             echo "| Target | Base | PR | Delta | % |"
             echo "| --- | ---: | ---: | ---: | ---: |"
@@ -403,7 +403,7 @@ jobs:
 
           if [ "$over_budget" = true ]; then
             echo "" >> "$RUNNER_TEMP/size-report.md"
-            echo "> :warning: **At least one PR binary exceeds the ${SIZE_BUDGET_MB} MB budget.**" >> "$RUNNER_TEMP/size-report.md"
+            echo "> :warning: **At least one PR binary exceeds the ${budget_mb} MB budget.**" >> "$RUNNER_TEMP/size-report.md"
           fi
 
           if [ "$exceeded" = true ]; then
@@ -415,6 +415,7 @@ jobs:
           cat "$RUNNER_TEMP/size-report.md"
 
           {
+            echo "budget_mb=$budget_mb"
             echo "over_budget=$over_budget"
             echo "exceeded=$exceeded"
           } >> "$GITHUB_OUTPUT"
@@ -430,6 +431,7 @@ jobs:
       - name: Fail on size budget or growth threshold breach
         if: steps.size.outputs.over_budget == 'true' || steps.size.outputs.exceeded == 'true'
         env:
+          SIZE_BUDGET_MB: ${{ steps.size.outputs.budget_mb }}
           OVER_BUDGET: ${{ steps.size.outputs.over_budget }}
           EXCEEDED: ${{ steps.size.outputs.exceeded }}
         run: |
