@@ -73,9 +73,7 @@ explicit cancellation, identity, shutdown, and stale-result behavior.
 #### Source control
 
 `internal/scm` defines provider contracts; `internal/git` and `internal/jj` are
-the built-in adapters. `scm.Providers` tries jj before Git, so a colocated
-workspace uses jj, while a nearer `.git` or a missing `jj` binary leaves it to
-Git.
+the built-in adapters, selected by `scm.Providers`.
 
 - Discovery, status, identity, and staging go through the provider. Changes are
   typed and keep their provider group identity; the Changes panel keeps its
@@ -94,10 +92,8 @@ Git.
 
 Remaining work:
 
-- Pull, push, sync, and new branch run the git CLI directly and skip jj
-  workspaces via `RepoOp.GitOnly`.
-- Blame, GitHub PRs/permalinks, and worktree tools stay Git-specific until a
-  provider needs a shared contract.
+- Pull, push, sync, new branch, blame, GitHub PRs/permalinks, and worktree tools
+  stay Git-specific until a provider needs a shared contract.
 - Provider-defined groups, labels, and actions, and plugin-supplied providers,
   are future host work.
 
