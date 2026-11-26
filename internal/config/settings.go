@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -779,6 +780,46 @@ func ReadSettingsFile(path string) (Settings, error) {
 	}
 	normalizeSettings(&s)
 	return s, err
+}
+
+// ReadSettingsObject returns only keys present on disk, before defaults or normalization.
+func ReadSettingsObject(path string) (map[string]any, error) {
+	data, err := readSettingsFileBytes(path)
+	if os.IsNotExist(err) {
+		return map[string]any{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var obj map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if !json.Valid(data) {
+		return nil, fmt.Errorf("%s: invalid settings JSON", path)
+	}
+	if err := decoder.Decode(&obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("%s: expected a settings object", path)
+	}
+	return obj, nil
+}
+
+func SaveSettingsObject(path string, obj map[string]any) (Settings, error) {
+	var updated = DefaultSettings()
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err == nil {
+		err = json.Unmarshal(data, &updated)
+	}
+	if err != nil {
+		return Settings{}, err
+	}
+	normalizeSettings(&updated)
+	if err := writeFileAtomically(path, append(data, '\n'), 0644); err != nil {
+		return Settings{}, err
+	}
+	return updated, nil
 }
 
 func SaveSettings(s Settings) error {

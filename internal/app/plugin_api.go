@@ -947,7 +947,7 @@ func (n *PluginNetworkAPI) Post(url string, headers map[string]string, body stri
 
 type PluginSettingsAPI struct {
 	app   *App
-	saved *config.Settings
+	saved map[string]any
 }
 
 func NewPluginSettingsAPI(app *App) *PluginSettingsAPI {
@@ -956,11 +956,11 @@ func NewPluginSettingsAPI(app *App) *PluginSettingsAPI {
 
 // Ownership checks must see edits made on disk since the plugin was installed.
 func (s *PluginSettingsAPI) SavedSettings() (plugin.SettingsAPI, error) {
-	settings, err := config.ReadSettingsFile(s.app.settingsFilePath())
-	if err != nil && !os.IsNotExist(err) {
+	settings, err := config.ReadSettingsObject(s.app.settingsFilePath())
+	if err != nil {
 		return nil, err
 	}
-	return &PluginSettingsAPI{app: s.app, saved: &settings}, nil
+	return &PluginSettingsAPI{app: s.app, saved: settings}, nil
 }
 
 func (s *PluginSettingsAPI) Get(key string) (any, bool) {
@@ -976,7 +976,25 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 	if m == nil {
 		m = make(map[string]any)
 	}
-	setPath(m, strings.Split(key, "."), value)
+	parts := strings.Split(key, ".")
+	if s.saved != nil {
+		for i := 1; i < len(parts); i++ {
+			parent, ok := getPath(m, parts[:i])
+			if !ok {
+				break
+			}
+			if _, ok := parent.(map[string]any); !ok {
+				return fmt.Errorf("setting %q is not an object", strings.Join(parts[:i], "."))
+			}
+		}
+		setPath(m, parts, value)
+		updated, err := config.SaveSettingsObject(s.app.settingsFilePath(), m)
+		if err == nil {
+			*s.app.Settings = updated
+		}
+		return err
+	}
+	setPath(m, parts, value)
 
 	data, err := json.Marshal(m)
 	if err != nil {
@@ -994,11 +1012,10 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 }
 
 func (s *PluginSettingsAPI) settingsMap() map[string]any {
-	settings := s.app.Settings
 	if s.saved != nil {
-		settings = s.saved
+		return s.saved
 	}
-	data, err := json.Marshal(settings)
+	data, err := json.Marshal(s.app.Settings)
 	if err != nil {
 		return nil
 	}

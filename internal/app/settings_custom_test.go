@@ -109,3 +109,39 @@ func TestCustomSettingsWritesStayInActiveFile(t *testing.T) {
 		})
 	}
 }
+
+func TestPluginDefaultUsesExplicitSavedKeys(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	a.settingsFile = filepath.Join(t.TempDir(), "settings.json")
+	api := NewPluginSettingsAPI(a)
+	saved, err := api.SavedSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := saved.Get("editor.tabSize"); exists {
+		t.Fatal("built-in default counted as a user setting")
+	}
+	if err = saved.Set("editor.tabSize", 7); err != nil {
+		t.Fatal(err)
+	}
+	if a.Settings.Editor.TabSize != 7 {
+		t.Fatal("did not apply installed default")
+	}
+	saved, err = api.SavedSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = saved.Set("editor.tabSize", nil); err != nil {
+		t.Fatal(err)
+	}
+	if a.Settings.Editor.TabSize != config.DefaultSettings().Editor.TabSize {
+		t.Fatal("did not restore built-in tab size")
+	}
+	saved, err = api.SavedSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, exists := saved.Get("editor.tabSize"); exists {
+		t.Fatal("deleted key still present on disk")
+	}
+}
