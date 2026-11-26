@@ -437,7 +437,7 @@ func (e *EditorPaneWidget) renderDiffGutterRow(surface Surface, y, gutterW, line
 		collapsed = term.StyleSidebarSelected
 	}
 	look := o.gutterLook(side.Kind, term.StyleLineNumber, collapsed)
-	renderDiffGutterWithSigns(surface, 0, y, gutterW, side.Num, look, e.diffMarkCol(gutterW, side.Kind) >= 0)
+	e.rowMap[y].bookmarkWidth = renderDiffGutterWithSigns(surface, 0, y, gutterW, side.Num, look, e.diffMarkCol(gutterW, side.Kind) >= 0)
 }
 
 // diffGutterLook is how a diff row's gutter is drawn. Every diff gutter, the
@@ -504,7 +504,7 @@ func (e *EditorPaneWidget) diffMarkCol(gutterW int, kind diff.LineKind) int {
 // number, the gutter tint and the mark, all from gutterLook.
 func (e *EditorPaneWidget) renderEditorDiffGutter(surface Surface, y, gutterW, num int, kind diff.LineKind, base term.Style) diffGutterLook {
 	look := e.DiffOverlay.gutterLook(kind, base, term.StyleDefault)
-	e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: look.num, BgStyle: look.bg})
+	e.rowMap[y].bookmarkWidth = e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: look.num, BgStyle: look.bg})
 	if col := e.diffMarkCol(gutterW, kind); col >= 0 && look.mark != 0 {
 		surface.SetCell(col, y, term.Cell{Ch: look.mark, Style: look.sign, BgStyle: look.bg})
 	}
@@ -681,7 +681,7 @@ func (e *EditorPaneWidget) renderPhantomRow(surface Surface, y, gutterW, editorW
 
 // renderDiffGutterWithSigns draws the compact diff gutter: the number
 // right-aligned, a space, then the mark.
-func renderDiffGutterWithSigns(surface Surface, x, y, width, num int, look diffGutterLook, signs bool) {
+func renderDiffGutterWithSigns(surface Surface, x, y, width, num int, look diffGutterLook, signs bool) int {
 	var buf [20]byte
 	number := buf[:0]
 	if num > 0 {
@@ -708,6 +708,10 @@ func renderDiffGutterWithSigns(surface Surface, x, y, width, num int, look diffG
 	put(' ')
 	style = markerStyle
 	put(marker)
+	if num == 0 {
+		return min(width, 1)
+	}
+	return max(width-2-len(number), 0) + (len(number)+1)/2
 }
 
 func diffGutterDigits(o *DiffOverlay) int {

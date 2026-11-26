@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"strconv"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -62,10 +61,8 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 	bookmarkSide := false
 	if inGutter && btn == tcell.ButtonNone {
-		line := e.rowAt(my - r.Y).bufLine
-		digits := len(strconv.Itoa(line + 1))
-		before, _ := e.gutterNumberPadding(gutterW, digits)
-		bookmarkSide = !e.LineNumbers || mx-r.X < before+(digits+1)/2
+		row := e.rowAt(my - r.Y)
+		bookmarkSide = mx-r.X < row.bookmarkWidth
 	}
 
 	if btn == tcell.ButtonNone && !e.mouseDown {

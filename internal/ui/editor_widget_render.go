@@ -229,6 +229,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 
 	for y := 0; y < h; y++ {
 		row := e.rowMap[y]
+		e.rowMap[y].bookmarkWidth = min(1, gutterW)
 		lineIdx := row.bufLine
 		segStartCol := row.startCol
 		isWrapContinuation := segStartCol > 0
@@ -271,7 +272,7 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 				if lineIdx < totalLines {
 					num = lineIdx + 1
 				}
-				e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
+				e.rowMap[y].bookmarkWidth = e.drawGutterNumber(surface, y, gutterW, num, term.Cell{Style: gutterStyle})
 			}
 			if e.Folds != nil && !e.WordWrap && lineIdx < totalLines && !isWrapContinuation {
 				if fr := e.Folds.FoldAt(lineIdx); fr != nil {
@@ -740,7 +741,7 @@ func (e *EditorPaneWidget) renderLineSegmentToScreen(text string, spans []highli
 
 // drawGutterNumber writes the gutter's number column for num (0 leaves it
 // blank) without building a string.
-func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int, cell term.Cell) {
+func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int, cell term.Cell) int {
 	var buf [20]byte
 	digits := buf[:0]
 	if num > 0 {
@@ -762,6 +763,10 @@ func (e *EditorPaneWidget) drawGutterNumber(surface Surface, y, gutterW, num int
 	for range after {
 		put(' ')
 	}
+	if num == 0 {
+		return min(1, gutterW)
+	}
+	return before + (len(digits)+1)/2
 }
 
 func (e *EditorPaneWidget) gutterNumberPadding(width, digits int) (int, int) {
