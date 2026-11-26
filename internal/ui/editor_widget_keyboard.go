@@ -389,7 +389,9 @@ func (e *EditorPaneWidget) execDelete() {
 // execRune inserts a rune for a single cursor, replacing the selection if one is
 // active and dedenting first when a closing bracket is typed.
 func (e *EditorPaneWidget) execRune(r rune) {
+	before := e.undoSelectionPosition()
 	if cmd := e.surroundSelection(r, e.Selection, &e.Cursor.Line, &e.Cursor.Col); cmd != nil {
+		cmd.Before, cmd.After = before, e.undoSelectionPosition()
 		e.exec(cmd)
 		return
 	}

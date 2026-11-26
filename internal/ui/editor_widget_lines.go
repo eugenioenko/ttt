@@ -618,6 +618,7 @@ func hasCommentPrefix(trimmed, prefix string) bool {
 
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
+	before := e.undoSelectionPosition()
 	prefix, postfix := e.commentSyntax()
 	prefixLen := len([]rune(prefix))
 	postfixLen := len([]rune(postfix))
@@ -804,12 +805,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		}
 	}
 
+	e.clampCursor()
 	if len(cmds) > 0 && e.Undo != nil {
-		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds, Before: before, After: e.undoSelectionPosition()})
 		e.bufferDirty = true
 	}
-
-	e.clampCursor()
 	e.scrollViewport()
 }
 

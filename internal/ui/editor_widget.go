@@ -386,6 +386,16 @@ func (e *EditorPaneWidget) refreshFolds() {
 
 func (e *EditorPaneWidget) ExecCommand(cmd undo.EditCommand) { e.exec(cmd) }
 
+func (e *EditorPaneWidget) undoSelectionPosition() *undo.EditPosition {
+	if e.Selection == nil || !e.Selection.Active {
+		return nil
+	}
+	return &undo.EditPosition{
+		Cursor:    undo.CursorPos{Line: e.Cursor.Line, Col: e.Cursor.Col},
+		Selection: *e.Selection,
+	}
+}
+
 func (e *EditorPaneWidget) FlushOnChange() {
 	if e.bufferDirty {
 		e.bufferDirty = false
