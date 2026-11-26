@@ -10,6 +10,20 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
+func clickFindReplaceToggle(t *testing.T, h *testHarness) {
+	t.Helper()
+	var in ui.Rect
+	switch bar := h.app.Root.TopOverlayWidget().(type) {
+	case *ui.FindBarWidget:
+		in = bar.Input.GetRect()
+	case *ui.ReplaceBarWidget:
+		in = bar.SearchInput.GetRect()
+	default:
+		t.Fatalf("unexpected overlay %T", bar)
+	}
+	h.click(in.X-2, in.Y)
+}
+
 func TestFindReplaceTogglePreservesInput(t *testing.T) {
 	for _, start := range []string{"search.find", "search.replace"} {
 		t.Run(start, func(t *testing.T) {
@@ -19,7 +33,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			pasteText(h, pasteKeys("日foo 日foo 日FOO"))
 			h.exec(start)
 			if start == "search.replace" {
-				h.click(81, 5)
+				clickFindReplaceToggle(t, h)
 			}
 			find := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
 			find.Input.SetText("日foo")
@@ -31,7 +45,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			cursor, _, _ := find.Input.CursorPosition()
 			current := find.Current
 			options := find.Options
-			h.click(81, 5)
+			clickFindReplaceToggle(t, h)
 			replace, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 			if !ok {
 				t.Fatalf("toggle opened %T", h.app.Root.TopOverlayWidget())
@@ -47,7 +61,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			replace.SearchInput.SetText("日foo")
 			h.pressKey(tcell.KeyTab, tcell.ModNone)
 			pasteText(h, pasteKeys("replacement"))
-			h.click(81, 5)
+			clickFindReplaceToggle(t, h)
 			find = h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
 			if find.Input.Text() != "日foo" || find.Options != options {
 				t.Fatal("collapse lost query or options")
@@ -56,7 +70,7 @@ func TestFindReplaceTogglePreservesInput(t *testing.T) {
 			if len(find.Matches) != 2 {
 				t.Fatalf("find callback after collapse: %+v", find.Matches)
 			}
-			h.click(81, 5)
+			clickFindReplaceToggle(t, h)
 			replace = h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 			if replace.SearchInput.Text() != "foo" || replace.ReplaceInput.Text() != "replacement" || replace.Options != options {
 				t.Fatal("expand lost search or replacement text or options")
@@ -101,9 +115,7 @@ func TestFindReplaceConfiguredIcons(t *testing.T) {
 			if got := h.screenText(); !strings.Contains(got, " > Search") {
 				t.Fatalf("configured collapsed chevron missing:\n%s", got)
 			}
-			find := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget)
-			in := find.Input.GetRect()
-			h.click(in.X-2, in.Y)
+			clickFindReplaceToggle(t, h)
 			replace, ok := h.app.Root.TopOverlayWidget().(*ui.ReplaceBarWidget)
 			if !ok {
 				t.Fatalf("toggle opened %T", h.app.Root.TopOverlayWidget())
@@ -118,7 +130,7 @@ func TestFindReplaceConfiguredIcons(t *testing.T) {
 			if replace.ReplaceInput.Actions[1].Label != want {
 				t.Fatalf("Replace All = %q, want %q", replace.ReplaceInput.Actions[1].Label, want)
 			}
-			h.click(in.X-2, in.Y)
+			clickFindReplaceToggle(t, h)
 			if _, ok := h.app.Root.TopOverlayWidget().(*ui.FindBarWidget); !ok {
 				t.Fatal("configured expanded chevron did not collapse")
 			}
