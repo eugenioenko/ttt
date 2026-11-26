@@ -385,13 +385,9 @@ func RunEventLoop(
 			case *FormattingResult:
 				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
-				var lines []string
-				if len(v.Diagnostics) > 0 {
-					lines = app.lspLines(v.Path)
-				}
-				for _, group := range app.editorGroups() {
-					group.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
-				}
+				app.applyLSPDiagnostics(v)
+			case *LSPRootStopped:
+				app.handleLSPRootStopped(v)
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:

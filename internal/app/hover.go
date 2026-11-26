@@ -68,7 +68,7 @@ func (a *App) scheduleHover(path, lang string, line, col, anchorX, anchorY int, 
 	}
 	a.ensureHoverTask()
 	server, _, _ := a.lspResolve(path, lang)
-	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDir(path),
+	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDirFor(path, lang),
 		Line: line, Col: a.lspColumn(path, line, col), AnchorX: anchorX, AnchorY: anchorY, Diagnostic: diagText,
 		Version: a.EditorGroup.ActiveBuffer().Version(), Manager: a.LspManager}
 	a.hover.task.ScheduleKey(key, func(ctx context.Context) (string, error) {

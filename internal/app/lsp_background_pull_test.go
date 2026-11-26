@@ -345,3 +345,23 @@ func TestBackgroundPullDoesNotStartARestartingServer(t *testing.T) {
 		})
 	}
 }
+
+func TestDocumentReopenedOnAnotherRootIsPulledAgain(t *testing.T) {
+	a, active, _ := pullServerApp(t, false)
+	a.ScheduleDiagnosticPull(true)
+	if got := pulledMessage(a, active); got != "a.go#1" {
+		t.Fatalf("first pull = %q, want a.go#1", got)
+	}
+
+	a.NotifyLSPClose(active, "")
+	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource("go"), active, nil)
+	a.NotifyLSPOpen(active, "", []string{"package a", ""})
+	// A marker that appeared while the document was closed resolves it to
+	// another root, at the same version and epoch as before.
+	a.pinLSPRoot(active, "go", t.TempDir())
+	a.ScheduleDiagnosticPull(true)
+
+	if got := pulledMessage(a, active); got != "a.go#1" {
+		t.Errorf("reopened document = %q, want it pulled from its new root", got)
+	}
+}

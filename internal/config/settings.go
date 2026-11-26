@@ -104,8 +104,9 @@ func DefaultAutocompleteSettings() AutocompleteSettings {
 }
 
 type LSPServerConfig struct {
-	Command   []string          `json:"command"`
-	Languages map[string]string `json:"languages,omitempty"`
+	Command     []string          `json:"command"`
+	Languages   map[string]string `json:"languages,omitempty"`
+	RootMarkers []string          `json:"rootMarkers,omitempty"`
 }
 
 type LSPSettings struct {

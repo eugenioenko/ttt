@@ -214,6 +214,19 @@ type App struct {
 	// lastPulled holds the document state behind each path's applied pull.
 	// UI goroutine only.
 	lastPulled map[string]pullKey
+	// lspDocRoots pins the root each open document was opened on, so its
+	// requests and synchronization keep reaching the client that has it open
+	// even when a marker change resolves another root for its directory. A
+	// close or an explicit server restart drops the pin.
+	lspDocRootsMu sync.Mutex
+	lspDocRoots   map[string]lspPin
+	// lspIdleGens counts each root's pins and idle periods; only the timer of
+	// the current generation may stop the root's server. Guarded by
+	// lspDocRootsMu.
+	lspIdleGens map[lspPin]uint64
+	// lspDiagRoots records which root published each path's diagnostics, so
+	// an idle root's stop can clear them. UI goroutine only.
+	lspDiagRoots map[lspDiagKey]string
 }
 
 func (a *App) eventLoopDoneSignal() chan struct{} {
@@ -893,13 +906,14 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		_ = screen.PostEvent(tcell.NewEventInterrupt(&LSPDiagnosticRefresh{Server: server}))
 	}
 
-	lspManager.OnDiagnostics = func(server string, params lsp.PublishDiagnosticsParams) {
+	lspManager.OnDiagnostics = func(server, root string, params lsp.PublishDiagnosticsParams) {
 		path := URIToPath(params.URI)
 		diags := params.Diagnostics
 		slog.Debug("lsp diagnostics", "path", path, "count", len(diags))
 		_ = screen.PostEvent(tcell.NewEventInterrupt(&DiagnosticsResult{
 			Server:      server,
 			Path:        path,
+			Root:        root,
 			Diagnostics: diags,
 		}))
 	}

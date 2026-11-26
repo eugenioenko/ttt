@@ -355,7 +355,7 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 | `lsp.saveOnRename` | bool | `false` | Auto-save files affected by a rename operation |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before save (e.g. `"source.organizeImports"`) |
 | `lsp.notifyAvailability` | bool | `true` | Show a notification when a language server binary is not installed |
-| `lsp.servers` | object | `{}` | Map of server key to `{ "command": [...], "languages": {...} }`. Configured automatically by LSP plugins (e.g. `lsp-go`, `lsp-typescript`). The optional `languages` field maps file extensions to language IDs for servers handling multiple file types. |
+| `lsp.servers` | object | `{}` | Map of server key to `{ "command": [...], "languages": {...} }`. Configured automatically by LSP plugins (e.g. `lsp-go`, `lsp-typescript`). The optional `languages` field maps file extensions to language IDs for servers handling multiple file types. The optional `rootMarkers` field lists files or globs, in priority order, that mark a project root; each root gets its own server ([Project roots](/guides/lsp/#project-roots-the-rootmarkers-field)). |
 
 ## Search
 

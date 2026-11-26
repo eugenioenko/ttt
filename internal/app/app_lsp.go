@@ -142,7 +142,7 @@ func (a *App) resolveAndInsert(item ui.CompletionItem) {
 		path, lang := a.editorPathLang()
 		serverKey, _, ok := a.lspResolve(path, lang)
 		if ok {
-			if client := a.LspManager.ReadyClient(serverKey); client != nil {
+			if client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang)); client != nil {
 				resolved, err := client.ResolveCompletion(*lspItem)
 				if err == nil && resolved != nil {
 					if resolved.TextEdit != nil {
@@ -382,7 +382,7 @@ func (a *App) RequestFormatting(path, lang string) {
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	tabSize, insertSpaces := a.editorTabSize()
 	version := a.editorBufferVersion()
 	buf := a.editorBuffer()
@@ -413,7 +413,7 @@ func (a *App) RequestRangeFormatting(path, lang string, startLine, startCol, end
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	tabSize, insertSpaces := a.editorTabSize()
 	version := a.editorBufferVersion()
 	buf := a.editorBuffer()
@@ -448,7 +448,7 @@ func (a *App) RunCodeActionsOnSave(path, lang string) {
 	if !ok {
 		return
 	}
-	client := a.LspManager.ReadyClient(serverKey)
+	client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang))
 	if client == nil {
 		return
 	}
@@ -501,7 +501,7 @@ func (a *App) RequestCodeAction(path, lang, kind string) {
 		}
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	lineCount := 0
 	if a.EditorGroup.Editor != nil {
 		lineCount = len(a.EditorGroup.Editor.Buf.Lines)
@@ -553,7 +553,7 @@ func (a *App) FormatOnSave(path, lang string) {
 		return
 	}
 	tabSize, insertSpaces := a.editorTabSize()
-	client := a.LspManager.ReadyClient(serverKey)
+	client := a.LspManager.ReadyClient(serverKey, a.lspWorkDirFor(path, lang))
 	if client == nil {
 		return
 	}
@@ -576,7 +576,7 @@ func (a *App) RequestRename(path, lang string, line, col int, newName string) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -696,7 +696,7 @@ func (a *App) RequestInteractiveCodeActions() {
 	openBuffers := a.snapshotCodeActionBuffers()
 	r := a.currentCodeActionRange(path)
 	diagnostics := a.codeActionDiagnostics(path, serverKey, r)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -853,7 +853,7 @@ func (a *App) codeActionClient(server, workDir string) (codeActionCommandClient,
 }
 
 func (a *App) executeCodeActionCommand(server, path string, command lsp.Command, notify bool) {
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirForServer(path, server)
 	go func() {
 		client, err := a.codeActionClient(server, workDir)
 		if err == nil {
@@ -872,7 +872,7 @@ func (a *App) RequestReferences(path, lang string, line, col int) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -1143,7 +1143,7 @@ func (a *App) requestLocation(method, path, lang string, line, col int) {
 		return
 	}
 	col = a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	go func() {
 		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
 		if err != nil {
@@ -1183,6 +1183,146 @@ func (a *App) lspWorkDir(path string) string {
 	return workDir
 }
 
+func (a *App) lspWorkDirFor(path, lang string) string {
+	serverKey, _, ok := a.lspResolve(path, lang)
+	if !ok {
+		return a.lspWorkDir(path)
+	}
+	return a.lspWorkDirForServer(path, serverKey)
+}
+
+func (a *App) lspWorkDirForServer(path, serverKey string) string {
+	workDir := a.lspWorkDir(path)
+	if path == "" || a.LspManager == nil {
+		return workDir
+	}
+	// A client only knows the documents opened on it, so a document stays on
+	// the root it was opened on: re-resolving mid-lifecycle would send its
+	// changes and requests to a client that never received its didOpen.
+	if root, pinned := a.pinnedLSPRoot(path); pinned {
+		return root
+	}
+	if root := lsp.FindRoot(filepath.Dir(path), a.LspManager.ServerConfig(serverKey).RootMarkers); root != "" {
+		return root
+	}
+	return workDir
+}
+
+type lspPin struct {
+	server, root string
+}
+
+func (a *App) pinLSPRoot(path, server, root string) {
+	pin := lspPin{server: server, root: root}
+	a.lspDocRootsMu.Lock()
+	if a.lspDocRoots == nil {
+		a.lspDocRoots = make(map[string]lspPin)
+		a.lspIdleGens = make(map[lspPin]uint64)
+	}
+	a.lspDocRoots[path] = pin
+	a.lspIdleGens[pin]++
+	a.lspDocRootsMu.Unlock()
+}
+
+func (a *App) pinnedLSPRoot(path string) (string, bool) {
+	a.lspDocRootsMu.Lock()
+	pin, ok := a.lspDocRoots[path]
+	a.lspDocRootsMu.Unlock()
+	return pin.root, ok
+}
+
+func (a *App) unpinLSPRoot(path string) {
+	a.lspDocRootsMu.Lock()
+	delete(a.lspDocRoots, path)
+	a.lspDocRootsMu.Unlock()
+}
+
+// lspIdleTimeout is how long a root's server outlives its last open document,
+// so closing and reopening a file does not pay for a cold start.
+const lspIdleTimeout = time.Minute
+
+// lspAfterFunc schedules idle stops; tests replace it to fire them on demand.
+var lspAfterFunc = func(d time.Duration, f func()) { time.AfterFunc(d, f) }
+
+type LSPRootStopped struct {
+	Server, Root string
+}
+
+// scheduleLSPIdleStop starts the root's idle period. Pinning a document on the
+// root bumps its generation, so a timer from an earlier period, even one
+// already firing, cannot stop the server.
+func (a *App) scheduleLSPIdleStop(server, root string) {
+	pin := lspPin{server: server, root: root}
+	manager := a.LspManager
+	a.lspDocRootsMu.Lock()
+	defer a.lspDocRootsMu.Unlock()
+	for _, p := range a.lspDocRoots {
+		if p == pin {
+			return
+		}
+	}
+	if a.lspIdleGens == nil {
+		a.lspIdleGens = make(map[lspPin]uint64)
+	}
+	a.lspIdleGens[pin]++
+	gen := a.lspIdleGens[pin]
+	lspAfterFunc(lspIdleTimeout, func() {
+		idle := func() bool {
+			a.lspDocRootsMu.Lock()
+			defer a.lspDocRootsMu.Unlock()
+			return a.lspIdleGens[pin] == gen
+		}
+		if manager.StopIdle(server, root, idle) {
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPRootStopped{Server: server, Root: root}))
+		}
+	})
+}
+
+// handleLSPRootStopped clears what the stopped server published, which no
+// server would otherwise replace.
+func (a *App) handleLSPRootStopped(ev *LSPRootStopped) {
+	for key, root := range a.lspDiagRoots {
+		if key.server != ev.Server || root != ev.Root {
+			continue
+		}
+		delete(a.lspDiagRoots, key)
+		for _, group := range a.editorGroups() {
+			group.SetDiagnosticsSource(key.source, key.path, nil)
+		}
+	}
+}
+
+type lspDiagKey struct {
+	server, source, path string
+}
+
+func (a *App) recordLSPDiagRoot(server, source, path, root string, has bool) {
+	key := lspDiagKey{server: server, source: source, path: path}
+	if !has {
+		delete(a.lspDiagRoots, key)
+		return
+	}
+	if a.lspDiagRoots == nil {
+		a.lspDiagRoots = make(map[lspDiagKey]string)
+	}
+	a.lspDiagRoots[key] = root
+}
+
+func (a *App) applyLSPDiagnostics(v *DiagnosticsResult) {
+	if !a.lspDiagnosticsStillCurrent(v.Path, v.Root) {
+		return
+	}
+	source := lspDiagnosticsSource(v.Server)
+	a.recordLSPDiagRoot(v.Server, source, v.Path, v.Root, len(v.Diagnostics) > 0)
+	var lines []string
+	if len(v.Diagnostics) > 0 {
+		lines = a.lspLines(v.Path)
+	}
+	for _, group := range a.editorGroups() {
+		group.SetDiagnosticsSource(source, v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
+	}
+}
+
 func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	serverKey, langID, ok := a.lspResolve(path, lang)
 	if !ok {
@@ -1214,23 +1354,64 @@ func (a *App) NotifyLSPOpen(path, lang string, lines []string) {
 	}
 
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
+	a.pinLSPRoot(path, serverKey, workDir)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
+	epoch := a.lspEpochs[serverKey]
 	a.DocVersions[path] = 1
 	a.lspSent[path] = sent
 	a.DocVersionsMu.Unlock()
 	slog.Debug("lsp didOpen", "path", path, "language", langID)
 	go func() {
 		defer close(sent)
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
+		// A restart repins the document and reopens it on the root it resolves
+		// to now, so this open must not create a client for a root the document
+		// has since left.
+		current := func() bool { return a.lspOpenStillCurrent(serverKey, path, workDir, epoch) }
+		client, err := a.LspManager.ClientForLanguageCurrent(serverKey, workDir, current)
 		if err != nil {
+			return
+		}
+		// The lookup may hand back a client another root started, so the open
+		// still has to be current to reach that server.
+		if !current() {
 			return
 		}
 		if err := client.DidOpen(FileURI(path), langID, text); err != nil {
 			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didOpen %s: %v", path, err))
 		}
 	}()
+}
+
+// lspDiagnosticsStillCurrent reports whether diagnostics published by a client
+// rooted at root may be applied to path. A document that moved roots has its
+// diagnostics owned by the server now rooted at its pin, so the old root's
+// list must not replace that one. Documents without a pin (never opened here,
+// or closed) keep whatever their server publishes.
+func (a *App) lspDiagnosticsStillCurrent(path, root string) bool {
+	pinned, ok := a.pinnedLSPRoot(path)
+	return !ok || pinned == root
+}
+
+// lspEpochIsCurrent reports whether epoch is still the server's latest restart
+// generation.
+func (a *App) lspEpochIsCurrent(server string, epoch int) bool {
+	a.DocVersionsMu.Lock()
+	current := a.lspEpochs[server] == epoch
+	a.DocVersionsMu.Unlock()
+	return current
+}
+
+// lspOpenStillCurrent reports whether a didOpen resolved for workDir under
+// epoch still targets the document's current root. A restart bumps the epoch
+// and repins every open document, so an open queued before it is obsolete.
+func (a *App) lspOpenStillCurrent(server, path, workDir string, epoch int) bool {
+	if !a.lspEpochIsCurrent(server, epoch) {
+		return false
+	}
+	root, pinned := a.pinnedLSPRoot(path)
+	return pinned && root == workDir
 }
 
 // The returned channel closes once the didChange send attempt finishes,
@@ -1244,7 +1425,7 @@ func (a *App) NotifyLSPChange(path, lang string, lines []string) <-chan struct{}
 		return done
 	}
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	a.DocVersionsMu.Lock()
 	a.DocVersions[path]++
 	version := a.DocVersions[path]
@@ -1284,7 +1465,7 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 		return
 	}
 	text := strings.Join(lines, "\n")
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	sent := make(chan struct{})
 	a.DocVersionsMu.Lock()
 	previous := a.lspSent[path]
@@ -1308,20 +1489,28 @@ func (a *App) NotifyLSPSave(path, lang string, lines []string) {
 func (a *App) NotifyLSPClose(path, lang string) {
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok {
+		// A stale pin would send the next open to a root resolved before the
+		// document was closed.
+		a.unpinLSPRoot(path)
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
+	a.unpinLSPRoot(path)
+	a.scheduleLSPIdleStop(serverKey, workDir)
 	a.DocVersionsMu.Lock()
 	delete(a.DocVersions, path)
 	delete(a.lspSent, path)
 	a.DocVersionsMu.Unlock()
 	// Reopening starts the version over at 1, which would match this entry.
 	delete(a.lastPulled, path)
+	// A server that is not running has nothing to close; starting one here
+	// would also revive a root whose idle server was stopped. An open still
+	// waiting for startup sees the pin gone and skips its didOpen.
+	client := a.LspManager.ReadyClient(serverKey, workDir)
+	if client == nil {
+		return
+	}
 	go func() {
-		client, err := a.LspManager.ClientForLanguage(serverKey, workDir)
-		if err != nil {
-			return
-		}
 		if err := client.DidClose(FileURI(path)); err != nil {
 			a.LogOutputAsync("error", "lsp:"+serverKey, fmt.Sprintf("didClose %s: %v", path, err))
 		}
