@@ -28,13 +28,19 @@ func LoadState() State {
 }
 
 func ReadState() (State, error) {
-	for _, dir := range configPaths() {
-		s, err := readState(filepath.Join(dir, "state.json"))
+	s, _, err := findState(configPaths())
+	return s, err
+}
+
+func findState(dirs []string) (State, string, error) {
+	for _, dir := range dirs {
+		path := filepath.Join(dir, "state.json")
+		s, err := readState(path)
 		if !errors.Is(err, os.ErrNotExist) {
-			return s, err
+			return s, path, err
 		}
 	}
-	return State{}, nil
+	return State{}, "", nil
 }
 
 func readState(path string) (State, error) {
@@ -50,9 +56,19 @@ func readState(path string) (State, error) {
 }
 
 func SaveState(s State) error {
-	path := ConfigFilePath("state.json")
-	if _, err := readState(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+	return saveState(s, configPaths())
+}
+
+func saveState(s State, dirs []string) error {
+	_, path, err := findState(dirs)
+	if err != nil {
 		return err
+	}
+	if path == "" {
+		path = ConfigFilePath("state.json")
+		if _, err := readState(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return err
+		}
 	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {

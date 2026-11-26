@@ -64,6 +64,31 @@ func TestSaveStatePreservesCorruptFile(t *testing.T) {
 	}
 }
 
+func TestSaveStateDeclinesFallbackAfterLookupError(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "state.json")
+	const original = `{"sidebarWidth":40}`
+	requireNoError(t, os.WriteFile(path, []byte(original), 0o644))
+
+	unreadable := filepath.Join(t.TempDir(), "invalid\x00directory")
+	if err := saveState(State{SidebarWidth: 20}, []string{unreadable, dir}); err == nil {
+		t.Error("SaveState skipped the first candidate's lookup error")
+	}
+	got, err := os.ReadFile(path)
+	requireNoError(t, err)
+	if string(got) != original {
+		t.Errorf("the fallback file was overwritten with %q", got)
+	}
+
+	absent := filepath.Join(t.TempDir(), "missing")
+	requireNoError(t, saveState(State{SidebarWidth: 20}, []string{absent, dir}))
+	saved, err := readState(path)
+	requireNoError(t, err)
+	if saved.SidebarWidth != 20 {
+		t.Errorf("a missing candidate blocked the write: %+v", saved)
+	}
+}
+
 func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { OverrideConfigDir = "" })
