@@ -336,3 +336,20 @@ func TestButtonKeepsLiteralAmpersandBeforeAccelerator(t *testing.T) {
 		t.Fatalf("label %q, accelerator %q", b.label, b.accelRune)
 	}
 }
+
+func TestButtonOnlyTriggersVisibleAccelerator(t *testing.T) {
+	clicks := 0
+	b := NewButtonWidget(ButtonConfig{Label: "&Save", Icon: icons.More, OnClick: func() { clicks++ }})
+	key := tcell.NewEventKey(tcell.KeyRune, "s", tcell.ModNone)
+	if got := b.HandleEvent(key); got != EventIgnored || clicks != 0 {
+		t.Fatalf("hidden accelerator: event %v, clicks %d", got, clicks)
+	}
+	b.Config.Icon = "unknown"
+	s := renderWidget(b, 0, 0, 20, 1)
+	if !s.cells[0][1].Underline || s.cells[0][1].Ch != 'S' {
+		t.Fatal("fallback label did not show its accelerator")
+	}
+	if got := b.HandleEvent(key); got != EventConsumed || clicks != 1 {
+		t.Fatalf("visible accelerator: event %v, clicks %d", got, clicks)
+	}
+}

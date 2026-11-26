@@ -120,6 +120,10 @@ func (b *ButtonWidget) Width() int {
 	return textwidth.String(b.text()) + b.BoxOverheadW()
 }
 
+func (b *ButtonWidget) showsAccelerator() bool {
+	return b.accelRune != 0 && !b.HasSpans() && icons.Active(b.Config.Icon) == ""
+}
+
 func (b *ButtonWidget) text() string {
 	label := b.label
 	if b.Config.Icon != "" {
@@ -183,7 +187,9 @@ func (b *ButtonWidget) Render(surface Surface) {
 	x := 0
 	i := 0
 	accel := b.accelIndex
-	if accel >= 0 && b.Config.Variant == ButtonBracket {
+	if !b.showsAccelerator() {
+		accel = -1
+	} else if b.Config.Variant == ButtonBracket {
 		accel++
 	}
 	for _, ch := range b.text() {
@@ -196,7 +202,7 @@ func (b *ButtonWidget) Render(surface Surface) {
 			break
 		}
 		cell := term.Cell{Ch: ch, Style: style}
-		if i == accel && b.Config.Icon == "" {
+		if i == accel {
 			cell.Underline = true
 		}
 		inner.SetCell(x, 0, cell)
@@ -264,7 +270,7 @@ func (b *ButtonWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			}
 		}
-		if b.accelRune != 0 && e.Key() == tcell.KeyRune {
+		if e.Key() == tcell.KeyRune && b.showsAccelerator() {
 			if unicode.ToLower(term.KeyRune(e)) == unicode.ToLower(b.accelRune) {
 				b.trigger()
 				return EventConsumed
