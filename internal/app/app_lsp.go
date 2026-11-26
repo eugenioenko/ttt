@@ -1388,14 +1388,20 @@ func (a *App) lspDiagnosticsStillCurrent(path, root string) bool {
 	return !ok || pinned == root
 }
 
+// lspEpochIsCurrent reports whether epoch is still the server's latest restart
+// generation.
+func (a *App) lspEpochIsCurrent(server string, epoch int) bool {
+	a.DocVersionsMu.Lock()
+	current := a.lspEpochs[server] == epoch
+	a.DocVersionsMu.Unlock()
+	return current
+}
+
 // lspOpenStillCurrent reports whether a didOpen resolved for workDir under
 // epoch still targets the document's current root. A restart bumps the epoch
 // and repins every open document, so an open queued before it is obsolete.
 func (a *App) lspOpenStillCurrent(server, path, workDir string, epoch int) bool {
-	a.DocVersionsMu.Lock()
-	restarted := a.lspEpochs[server] != epoch
-	a.DocVersionsMu.Unlock()
-	if restarted {
+	if !a.lspEpochIsCurrent(server, epoch) {
 		return false
 	}
 	root, pinned := a.pinnedLSPRoot(path)

@@ -1,6 +1,8 @@
 package app
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/i18n"
@@ -12,6 +14,9 @@ import (
 type LSPServerStopped struct {
 	Server  string
 	WorkDir string
+	// Epoch is the restart generation that stopped the server. A later restart
+	// bumps the epoch and reopens the documents itself, so this event must not.
+	Epoch int
 }
 
 type LSPServerRestarted struct {
@@ -42,11 +47,12 @@ func (a *App) RestartLSPServer() {
 	// would otherwise start the new server and reach it before the reopen.
 	a.DocVersionsMu.Lock()
 	a.lspEpochs[serverKey]++
+	epoch := a.lspEpochs[serverKey]
 	a.DocVersionsMu.Unlock()
 	a.StatusNotify(i18n.Format("status.restarting", i18n.Args{"serverKey": serverKey}))
 	go func() {
 		a.LspManager.Stop(serverKey)
-		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LSPServerStopped{Server: serverKey, WorkDir: workDir, Epoch: epoch}))
 	}()
 }
 
@@ -54,6 +60,11 @@ func (a *App) RestartLSPServer() {
 // posted is already queued ahead of this event and is cleared here rather than
 // landing after the restart.
 func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
+	// A restart that began while this one was stopping has already repinned and
+	// reopened every document under the newer epoch.
+	if !a.lspEpochIsCurrent(ev.Server, ev.Epoch) {
+		return
+	}
 	for _, group := range a.editorGroups() {
 		group.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
 		group.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
@@ -103,18 +114,27 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		// Reopen each document on the process rooted at its own project. A root
 		// that fails must not keep the other roots' documents from reopening, so
 		// its remaining documents are skipped instead of ending the loop.
+		// Reopening is an open like any other: a later restart repins and reopens
+		// the document itself, so this one must not start a client or send a
+		// didOpen for a root it no longer uses.
+		current := func(d openDoc) bool {
+			return a.lspOpenStillCurrent(ev.Server, d.path, d.workDir, ev.Epoch)
+		}
 		clients := make(map[string]*lsp.Client)
 		failed := make(map[string]bool)
 		var firstErr error
 		for _, d := range docs {
-			if failed[d.workDir] {
+			if failed[d.workDir] || !current(d) {
 				continue
 			}
 			client := clients[d.workDir]
 			if client == nil {
 				var err error
-				client, err = a.LspManager.ClientForLanguage(ev.Server, d.workDir)
+				client, err = a.LspManager.ClientForLanguageCurrent(ev.Server, d.workDir, func() bool { return current(d) })
 				if err != nil {
+					if errors.Is(err, context.Canceled) {
+						continue
+					}
 					failed[d.workDir] = true
 					a.LogOutputAsync("error", "lsp:"+ev.Server, err.Error())
 					if firstErr == nil {
@@ -123,6 +143,9 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 					continue
 				}
 				clients[d.workDir] = client
+			}
+			if !current(d) {
+				continue
 			}
 			if err := client.DidOpen(d.uri, d.langID, d.text); err != nil {
 				err = fmt.Errorf("didOpen %s: %w", d.uri, err)

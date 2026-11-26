@@ -1,9 +1,11 @@
 package app
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -118,6 +120,130 @@ func TestDiagnosticsFromAnotherRootAreRejected(t *testing.T) {
 				t.Errorf("lspDiagnosticsStillCurrent = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// fakeRestartApp opens a.go on the fake server, which records every did* it
+// receives, so a reopen can be observed.
+func fakeRestartApp(t *testing.T) (*App, string, string) {
+	t.Helper()
+	t.Setenv(fakePullServerEnv, "intrafile")
+	logPath := filepath.Join(t.TempDir(), "sync.jsonl")
+	t.Setenv(fakePullSyncLogEnv, logPath)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := buildTestApp(t, config.DefaultSettings())
+	sim := term.NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	a.Screen = term.NewTcellScreenFrom(sim)
+	a.LspManager = lsp.NewManager(&config.LSPSettings{Servers: map[string]config.LSPServerConfig{
+		"go": {Command: []string{exe}, Languages: map[string]string{".go": "go"}},
+	}})
+	t.Cleanup(func() {
+		a.LspManager.Shutdown()
+		sim.Fini()
+	})
+	path := filepath.Join(t.TempDir(), "a.go")
+	if err := os.WriteFile(path, []byte("package a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	requireNoError(t, a.EditorGroup.OpenFile(path))
+	return a, path, logPath
+}
+
+func waitDocumentSent(t *testing.T, a *App, path string) {
+	t.Helper()
+	a.DocVersionsMu.Lock()
+	sent := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+	select {
+	case <-sent:
+	case <-time.After(5 * time.Second):
+		t.Fatal("document send never finished")
+	}
+}
+
+func fakeSyncMethods(t *testing.T, path string) []string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	var methods []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line == "" {
+			continue
+		}
+		var msg struct{ Method string }
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			t.Fatal(err)
+		}
+		methods = append(methods, msg.Method)
+	}
+	return methods
+}
+
+func TestStopFromSupersededRestartDoesNotReopen(t *testing.T) {
+	a, path, logPath := fakeRestartApp(t)
+	a.NotifyLSPOpen(path, "go", []string{"package a", ""})
+	waitDocumentSent(t, a, path)
+	opened := fakeSyncMethods(t, logPath)
+
+	a.DocVersionsMu.Lock()
+	stale := a.lspEpochs["go"]
+	a.lspEpochs["go"] = stale + 1
+	sent := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+	a.handleLSPServerStopped(&LSPServerStopped{Server: "go", WorkDir: filepath.Dir(path), Epoch: stale})
+
+	a.DocVersionsMu.Lock()
+	after := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+	if after != sent {
+		t.Fatal("a stop from a superseded restart reopened the document")
+	}
+	if got := fakeSyncMethods(t, logPath); len(got) != len(opened) {
+		t.Fatalf("sync messages = %v, want only the original open %v", got, opened)
+	}
+}
+
+func TestReopenSupersededWhileWaitingDoesNotSend(t *testing.T) {
+	a, path, logPath := fakeRestartApp(t)
+	root := a.lspWorkDirFor(path, "go")
+	inFlight := make(chan struct{})
+	a.DocVersionsMu.Lock()
+	a.DocVersions[path] = 1
+	a.lspSent[path] = inFlight
+	a.DocVersionsMu.Unlock()
+
+	a.handleLSPServerStopped(&LSPServerStopped{Server: "go", WorkDir: root, Epoch: 0})
+	a.DocVersionsMu.Lock()
+	reopened := a.lspSent[path]
+	a.DocVersionsMu.Unlock()
+
+	// A later restart begins while the reopen waits for an in-flight send.
+	a.DocVersionsMu.Lock()
+	a.lspEpochs["go"] = 1
+	a.DocVersionsMu.Unlock()
+	close(inFlight)
+	select {
+	case <-reopened:
+	case <-time.After(5 * time.Second):
+		t.Fatal("superseded reopen never released the document")
+	}
+
+	if client := a.LspManager.ReadyClient("go", root); client != nil {
+		t.Fatal("an obsolete reopen started a client")
+	}
+	if got := fakeSyncMethods(t, logPath); len(got) != 0 {
+		t.Fatalf("an obsolete reopen sent %v", got)
 	}
 }
 
