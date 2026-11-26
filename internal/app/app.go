@@ -47,6 +47,7 @@ type App struct {
 	Settings       *config.Settings
 	settingsFile   string
 	State          config.State
+	stateLoadError error
 	settingsView   *settingsView
 	language       languageState
 	loadedGrammars []config.GrammarSetting

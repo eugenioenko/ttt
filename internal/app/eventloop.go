@@ -42,6 +42,9 @@ func RunEventLoop(
 	}
 	defer app.CloseTasks()
 	defer app.persistEditorSession()
+	if app.stateLoadError != nil {
+		app.StatusWarn(i18n.Format("state.loadFailed", i18n.Args{"error": app.stateLoadError.Error()}))
+	}
 
 	lastGutterFile := ""
 	lastGutterRepo := ""

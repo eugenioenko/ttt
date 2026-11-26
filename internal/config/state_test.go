@@ -41,6 +41,29 @@ func TestLoadStatePartialDecodeReturnsDefaults(t *testing.T) {
 	}
 }
 
+func TestSaveStatePreservesCorruptFile(t *testing.T) {
+	OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { OverrideConfigDir = "" })
+	path := filepath.Join(OverrideConfigDir, "state.json")
+	const corrupt = `{"recentFolders":["project"],"sidebarWidth":`
+	requireNoError(t, os.WriteFile(path, []byte(corrupt), 0o644))
+
+	if err := SaveState(State{SidebarWidth: 40}); err == nil {
+		t.Error("SaveState succeeded with corrupt state.json on disk")
+	}
+	got, err := os.ReadFile(path)
+	requireNoError(t, err)
+	if string(got) != corrupt {
+		t.Errorf("saved over corrupt file with %q", got)
+	}
+
+	requireNoError(t, os.WriteFile(path, []byte("{}"), 0o644))
+	requireNoError(t, SaveState(State{SidebarWidth: 40}))
+	if got := LoadState().SidebarWidth; got != 40 {
+		t.Errorf("SidebarWidth after repairing state.json = %d, want 40", got)
+	}
+}
+
 func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 	OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { OverrideConfigDir = "" })

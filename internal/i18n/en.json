@@ -1029,6 +1029,7 @@
   "settings.wordWrapBreakWord": "Between words",
   "settings.wrapColumn0PaneWidth": "Wrap column (0: pane width)",
   "settings.wrapWidth": "Wrap width",
+  "state.loadFailed": "Could not load state.json. Repair or move the file to resume saving editor state. {error}",
   "status.absolutePathCopiedToClipboard": "Absolute path copied to clipboard",
   "status.bufferIsEmpty": "Buffer is empty",
   "status.cannotDeleteWorkspaceRoot": "The workspace root cannot be deleted; remove the folder from the workspace instead",

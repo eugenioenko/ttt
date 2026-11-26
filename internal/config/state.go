@@ -2,7 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -20,18 +23,37 @@ type State struct {
 }
 
 func LoadState() State {
-	var s State
-	paths := configPaths()
-	if data, err := readFirst(paths, "state.json"); err == nil {
-		if json.Unmarshal(data, &s) != nil {
-			return State{}
+	s, _ := ReadState()
+	return s
+}
+
+func ReadState() (State, error) {
+	for _, dir := range configPaths() {
+		s, err := readState(filepath.Join(dir, "state.json"))
+		if !errors.Is(err, os.ErrNotExist) {
+			return s, err
 		}
 	}
-	return s
+	return State{}, nil
+}
+
+func readState(path string) (State, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return State{}, err
+	}
+	var s State
+	if err := json.Unmarshal(data, &s); err != nil {
+		return State{}, fmt.Errorf("%s: %w", path, err)
+	}
+	return s, nil
 }
 
 func SaveState(s State) error {
 	path := ConfigFilePath("state.json")
+	if _, err := readState(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	data, err := json.MarshalIndent(s, "", "  ")
 	if err != nil {
 		return err

@@ -285,7 +285,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
 	changes.SetIcons(cfg.Settings.Appearance.Icons)
-	state := config.LoadState()
+	state, stateErr := config.ReadState()
 	if h := state.CommitHistoryHeight; h > 0 {
 		changes.Split.BottomH = h
 		changes.Split.BottomRatio = 0
@@ -382,6 +382,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Settings:            &cfg.Settings,
 		settingsFile:        settingsFile,
 		State:               state,
+		stateLoadError:      stateErr,
 		Workspace:           ws,
 		Palette:             BuildTerminalPalettePtr(cfg.Theme, WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), WithTerminalSelectionStyle(cfg.Settings.Terminal.SelectionStyle)),
 		TerminalPanel:       terminalPanel,
