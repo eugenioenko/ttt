@@ -57,6 +57,7 @@ func (a *App) activateEditorGroup(g *ui.EditorGroupWidget) {
 		return
 	}
 	a.FlushEditorOnChange()
+	a.closeFindBarOnGroupChange()
 	a.CloseAutocomplete()
 	a.DismissHover()
 	a.DismissSignatureHelp()

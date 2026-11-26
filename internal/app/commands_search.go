@@ -89,8 +89,9 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		a.EditorGroup.ScrollToCursor()
 	}
 	findBar.OnDismiss = func() {
-		a.DismissDialog()
+		findBar.Debounce.Stop()
 		a.EditorGroup.ClearFindHighlights()
+		a.restoreFocusAfterFindDismiss(findBar)
 	}
 	findBar.OnEditorTabChange = func() {
 		findBar.Current = 0
@@ -121,9 +122,10 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 		dv.ScrollToLine(match.Line)
 	}
 	findBar.OnDismiss = func() {
+		findBar.Debounce.Stop()
 		dv.OnRecompute = nil
-		a.DismissDialog()
 		dv.ClearSearch()
+		a.restoreFocusAfterFindDismiss(findBar)
 	}
 	dv.OnRecompute = func() {
 		findBar.Refresh()
@@ -171,6 +173,32 @@ type findBar interface {
 func (a *App) findBar() findBar {
 	bar, _ := a.Root.TopOverlayWidget().(findBar)
 	return bar
+}
+
+func (a *App) closeFindBarOnGroupChange() {
+	for _, overlay := range a.Root.Overlays {
+		var dismiss func()
+		switch bar := overlay.Widget.(type) {
+		case *ui.FindBarWidget:
+			dismiss = bar.OnDismiss
+		case *ui.ReplaceBarWidget:
+			dismiss = bar.OnDismiss
+		default:
+			continue
+		}
+		// Remove the bar before running its cleanup so it cannot restore focus to the old group.
+		a.Root.RemoveOverlay(overlay.Widget)
+		if dismiss != nil {
+			dismiss()
+		}
+		return
+	}
+}
+
+func (a *App) restoreFocusAfterFindDismiss(bar ui.Widget) {
+	if a.Root.TopOverlayWidget() == bar {
+		a.DismissDialog()
+	}
 }
 
 func (a *App) FindNext() {
@@ -248,8 +276,8 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		a.EditorGroup.ReplaceAll(query, replacement, opts)
 	}
 	bar.OnDismiss = func() {
-		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
+		a.restoreFocusAfterFindDismiss(bar)
 	}
 	return bar
 }
