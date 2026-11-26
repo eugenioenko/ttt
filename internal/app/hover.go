@@ -114,7 +114,8 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	mx, my := ev.Position()
 	btn := ev.Buttons()
 	// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
-	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) && a.hoverEditorGroup().GetRect().Contains(mx, my) {
+	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) &&
+		(a.EditorGroup.GetRect().Contains(mx, my) || a.hoverEditorGroup().GetRect().Contains(mx, my)) {
 		a.DismissHover()
 	} else if btn == 0 && a.checkTabHover(mx, my) {
 		return

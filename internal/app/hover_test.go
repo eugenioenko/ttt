@@ -115,6 +115,17 @@ func TestInactiveSplitTabHoverUsesItsOwnGroup(t *testing.T) {
 		if right.Hover == nil || !right.Hover.HasContent() || left.Hover != nil || a.Root.Focused != left {
 			t.Fatal("hover did not appear in the inactive group without stealing focus")
 		}
+
+		editor := left.Editor.GetRect()
+		a.TrackMouseHover(tcell.NewEventMouse(editor.X+left.Editor.GutterWidth()+1, editor.Y, tcell.ButtonNone, a.Root.ControlModifiers))
+		h.clock.advance(a.hover.delay)
+		if right.Hover != nil || len(h.work) != 0 {
+			t.Fatal("moving into the active editor with Control held scheduled or retained a hover")
+		}
+
+		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, tcell.ModNone))
+		h.clock.advance(a.hover.delay)
+		h.run(t)()
 		a.TrackMouseHover(tcell.NewEventMouse(0, 0, tcell.ButtonNone, tcell.ModNone))
 		if right.Hover != nil {
 			t.Fatal("leaving the tab bar kept the inactive group's tooltip")
