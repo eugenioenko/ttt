@@ -40,6 +40,21 @@ func TestFindRootMatchesGlobMarkers(t *testing.T) {
 	}
 }
 
+func TestFindRootPrefersEarlierMarkers(t *testing.T) {
+	root := t.TempDir()
+	module := filepath.Join(root, "module")
+	writeMarkerFile(t, filepath.Join(root, "go.work"))
+	writeMarkerFile(t, filepath.Join(module, "go.mod"))
+	src := filepath.Join(module, "src")
+
+	if got := FindRoot(src, []string{"go.work", "go.mod"}); got != root {
+		t.Errorf("root = %q, want the go.work directory %q", got, root)
+	}
+	if got := FindRoot(src, []string{"go.mod", "go.work"}); got != module {
+		t.Errorf("root = %q, want the go.mod directory %q", got, module)
+	}
+}
+
 func TestFindRootReturnsEmptyWithoutMatch(t *testing.T) {
 	if got := FindRoot(t.TempDir(), []string{".git"}); got != "" {
 		t.Errorf("root = %q, want no root", got)

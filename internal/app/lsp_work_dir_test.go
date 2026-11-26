@@ -55,7 +55,7 @@ func TestLSPWorkDirFallsBackWithoutRootMarkers(t *testing.T) {
 	}
 }
 
-func TestLSPWorkDirCachesRootUntilMarkerAppears(t *testing.T) {
+func TestLSPWorkDirSeesNewMarkerWithoutWatcher(t *testing.T) {
 	a, workspaceDir, file := lspWorkDirApp(t, []string{"*.csproj"})
 	project := filepath.Join(workspaceDir, "project")
 	if err := os.Remove(filepath.Join(project, "App.csproj")); err != nil {
@@ -68,11 +68,6 @@ func TestLSPWorkDirCachesRootUntilMarkerAppears(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(project, "App.csproj"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if got := a.lspWorkDirFor(file, "csharp"); got != workspaceDir {
-		t.Fatalf("workDir = %q, want the cached fallback %q", got, workspaceDir)
-	}
-
-	a.HandleExplorerDirChanged(project)
 	if got := a.lspWorkDirFor(file, "csharp"); got != project {
 		t.Fatalf("workDir = %q, want the newly created project root %q", got, project)
 	}
@@ -150,7 +145,6 @@ func TestLSPDocumentKeepsRootItWasOpenedOn(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(src, "go.mod"), nil, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.HandleExplorerDirChanged(src)
 	if got := a.lspWorkDirFor(path, "go"); got != project {
 		t.Fatalf("open document moved to %q after a nearer marker appeared, want %q", got, project)
 	}
@@ -166,7 +160,7 @@ func TestNotifyLSPCloseReleasesPinWhileLSPDisabled(t *testing.T) {
 	a, workspaceDir, file := lspWorkDirApp(t, []string{"*.csproj"})
 	disabled := false
 	a.Settings.LSP.Enabled = &disabled
-	a.pinLSPRoot(file, filepath.Join(workspaceDir, "project"))
+	a.pinLSPRoot(file, "csharp", filepath.Join(workspaceDir, "project"))
 
 	a.NotifyLSPClose(file, "csharp")
 
@@ -239,7 +233,7 @@ func TestLSPRestartRerootsOpenDocuments(t *testing.T) {
 	}
 }
 
-func TestLSPWorkDirCacheDropsWhenRootMarkersChange(t *testing.T) {
+func TestLSPWorkDirFollowsRootMarkerSettings(t *testing.T) {
 	workspaceDir := t.TempDir()
 	project := filepath.Join(workspaceDir, "project")
 	src := filepath.Join(project, "src")

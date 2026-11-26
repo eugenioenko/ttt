@@ -3,52 +3,51 @@ package lsp
 import (
 	"os"
 	"path/filepath"
+	"strings"
 )
 
-// FindRoot walks up from startDir and returns the first directory containing
-// one of markers. Markers are file or directory names; a marker containing a
+// FindRoot returns the nearest directory at or above startDir that contains
+// a marker, trying markers in priority order: the first marker found anywhere
+// up the tree wins over a later marker in a nearer directory, so ["go.work",
+// "go.mod"] roots a multi-module workspace at its go.work. A marker with a
 // glob metacharacter matches names in each directory (for example "*.sln").
 func FindRoot(startDir string, markers []string) string {
-	if startDir == "" || len(markers) == 0 {
+	if startDir == "" {
 		return ""
 	}
-	dir, err := filepath.Abs(startDir)
+	start, err := filepath.Abs(startDir)
 	if err != nil {
 		return ""
 	}
-	for {
-		if containsMarker(dir, markers) {
-			return dir
+	for _, marker := range markers {
+		if marker == "" {
+			continue
 		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
+		for dir := start; ; {
+			if containsMarker(dir, marker) {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
 		}
-		dir = parent
 	}
+	return ""
 }
 
-func containsMarker(dir string, markers []string) bool {
+func containsMarker(dir, marker string) bool {
+	if !strings.ContainsAny(marker, `*?[\`) {
+		_, err := os.Lstat(filepath.Join(dir, marker))
+		return err == nil
+	}
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return false
 	}
 	for _, entry := range entries {
-		if MatchesMarker(entry.Name(), markers) {
-			return true
-		}
-	}
-	return false
-}
-
-// MatchesMarker reports whether name matches any of markers with the same
-// glob-or-exact rules FindRoot applies to directory entries.
-func MatchesMarker(name string, markers []string) bool {
-	for _, marker := range markers {
-		if marker == "" {
-			continue
-		}
-		if matched, _ := filepath.Match(marker, name); matched {
+		if matched, _ := filepath.Match(marker, entry.Name()); matched {
 			return true
 		}
 	}

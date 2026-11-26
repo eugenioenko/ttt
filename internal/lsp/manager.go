@@ -145,20 +145,6 @@ func (m *Manager) ServerConfig(key string) config.LSPServerConfig {
 	return config.LSPServerConfig{}
 }
 
-// HasRootMarker reports whether name matches a root marker of any configured
-// server, which is the only kind of on-disk change that can move a root.
-func (m *Manager) HasRootMarker(name string) bool {
-	if m == nil || name == "" {
-		return false
-	}
-	for _, cfg := range m.config.Servers {
-		if MatchesMarker(name, cfg.RootMarkers) {
-			return true
-		}
-	}
-	return false
-}
-
 func (m *Manager) ClientForLanguage(lang, workDir string) (*Client, error) {
 	return m.clientForLanguage(lang, workDir, nil)
 }
@@ -378,6 +364,30 @@ func (m *Manager) Stop(key string) bool {
 	stopStarts(starts)
 	m.notifyStateChange(changed)
 	m.log(server, "info", "stopped")
+	return true
+}
+
+// StopIdle stops the client rooted at workDir if idle still reports it unused.
+// idle runs under the manager lock, so a lookup cannot hand that client to a
+// caller between the check and the stop; idle must not call back into the
+// manager.
+func (m *Manager) StopIdle(server, workDir string, idle func() bool) bool {
+	key := clientKey(server, workDir)
+	server = serverForKey(key)
+	m.mu.Lock()
+	start, ok := m.servers[key]
+	if !ok || m.closed || !idle() {
+		m.mu.Unlock()
+		return false
+	}
+	before := m.serverStateLocked(server)
+	delete(m.servers, key)
+	delete(m.states, key)
+	changed := m.serverStateLocked(server) != before
+	m.mu.Unlock()
+	stopStart(key, start)
+	m.notifyStateChange(changed)
+	m.log(server, "info", "stopped idle server for "+workDir)
 	return true
 }
 

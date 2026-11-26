@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -61,7 +62,7 @@ func TestOpenFromBeforeRestartIsNotSent(t *testing.T) {
 	a, path := missingGoServerApp(t)
 	oldRoot := filepath.Join(t.TempDir(), "old")
 	newRoot := filepath.Join(t.TempDir(), "new")
-	a.pinLSPRoot(path, oldRoot)
+	a.pinLSPRoot(path, "go", oldRoot)
 	a.DocVersionsMu.Lock()
 	epoch := a.lspEpochs["go"]
 	a.DocVersionsMu.Unlock()
@@ -85,7 +86,7 @@ func TestOpenFromBeforeRestartIsNotSent(t *testing.T) {
 			a.DocVersionsMu.Unlock()
 			a.unpinLSPRoot(path)
 			if tc.pinned != "" {
-				a.pinLSPRoot(path, tc.pinned)
+				a.pinLSPRoot(path, "go", tc.pinned)
 			}
 
 			if got := a.lspOpenStillCurrent("go", path, tc.root, epoch); got != tc.want {
@@ -114,7 +115,7 @@ func TestDiagnosticsFromAnotherRootAreRejected(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			a.unpinLSPRoot(path)
 			if tc.pinned != "" {
-				a.pinLSPRoot(path, tc.pinned)
+				a.pinLSPRoot(path, "go", tc.pinned)
 			}
 			if got := a.lspDiagnosticsStillCurrent(path, tc.root); got != tc.want {
 				t.Errorf("lspDiagnosticsStillCurrent = %v, want %v", got, tc.want)
@@ -190,11 +191,28 @@ func fakeSyncMethods(t *testing.T, path string) []string {
 	return methods
 }
 
+// waitFakeSyncMethod waits for the fake server to log method: a notification
+// has no reply, so a finished send does not mean the server has read it.
+func waitFakeSyncMethod(t *testing.T, path, method string) []string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		methods := fakeSyncMethods(t, path)
+		if slices.Contains(methods, method) {
+			return methods
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("fake server never logged %s; got %v", method, methods)
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func TestStopFromSupersededRestartDoesNotReopen(t *testing.T) {
 	a, path, logPath := fakeRestartApp(t)
 	a.NotifyLSPOpen(path, "go", []string{"package a", ""})
 	waitDocumentSent(t, a, path)
-	opened := fakeSyncMethods(t, logPath)
+	opened := waitFakeSyncMethod(t, logPath, "textDocument/didOpen")
 
 	a.DocVersionsMu.Lock()
 	stale := a.lspEpochs["go"]

@@ -74,9 +74,6 @@ func (a *App) HandleFileChanged(path string) {
 
 func (a *App) handleFileChanged(path string, stat func(string) (os.FileInfo, error)) {
 	a.invalidateRepositoryPath(path, RepositoryWorktree)
-	if a.LspManager != nil && a.LspManager.HasRootMarker(filepath.Base(path)) {
-		a.invalidateLSPRootsUnder(filepath.Dir(path))
-	}
 	var buf *buffer.Buffer
 	for _, group := range a.editorGroups() {
 		if buf = group.BufferForPath(path); buf != nil {
@@ -136,9 +133,6 @@ func (a *App) reloadFile(path string) {
 // filesystem changed. Reload preserves expansion state and selection.
 func (a *App) HandleExplorerDirChanged(dir string) {
 	a.invalidateRepositoryPath(dir, RepositoryWorktree)
-	// The changed entry may be a root marker, so cached roots resolved through
-	// this directory have to be looked up again.
-	a.invalidateLSPRootsUnder(dir)
 	if a.Explorer != nil {
 		a.Explorer.Reload()
 		a.SyncWatched()

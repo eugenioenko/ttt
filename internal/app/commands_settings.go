@@ -203,9 +203,6 @@ func (a *App) ApplySettings(s config.Settings) {
 	if s.LSP.IsHoverEnabled() != prev.LSP.IsHoverEnabled() || s.LSP.IsEnabled() != prev.LSP.IsEnabled() {
 		a.DismissHover()
 	}
-	if lspRootMarkersChanged(prev.LSP, s.LSP) {
-		a.invalidateLSPRoots()
-	}
 
 	if s.Editor.IsGitGutterEnabled() != prev.Editor.IsGitGutterEnabled() {
 		if !s.Editor.IsGitGutterEnabled() && a.EditorGroup.Editor != nil {

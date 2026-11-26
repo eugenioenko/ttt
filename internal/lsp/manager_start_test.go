@@ -187,6 +187,33 @@ func TestManagerOldExitCannotRemoveRestartedClient(t *testing.T) {
 	}
 }
 
+func TestManagerStopIdleStopsOnlyThatRoot(t *testing.T) {
+	m := fakeServerManager(t, "ok")
+	t.Cleanup(m.Shutdown)
+	idleDir, busyDir := t.TempDir(), t.TempDir()
+	for _, dir := range []string{idleDir, busyDir} {
+		if _, err := m.ClientForLanguage("fake", dir); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if m.StopIdle("fake", idleDir, func() bool { return false }) {
+		t.Fatal("stopped a root reported in use")
+	}
+	if m.ReadyClient("fake", idleDir) == nil {
+		t.Fatal("root reported in use lost its client")
+	}
+	if !m.StopIdle("fake", idleDir, func() bool { return true }) {
+		t.Fatal("idle root was not stopped")
+	}
+	if m.ReadyClient("fake", idleDir) != nil {
+		t.Error("idle root still has a client")
+	}
+	if m.ReadyClient("fake", busyDir) == nil || m.State("fake") != ServerReady {
+		t.Error("stopping one root affected another")
+	}
+}
+
 // A file in another project must get its own process, rooted at that project,
 // rather than reusing the first root's server.
 func TestManagerStartsClientPerRoot(t *testing.T) {

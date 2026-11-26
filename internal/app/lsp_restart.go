@@ -69,15 +69,18 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		group.ClearDiagnosticsSource(lspDiagnosticsSource(ev.Server))
 		group.ClearDiagnosticsSource(lspPullDiagnosticsSource(ev.Server))
 	}
+	for key := range a.lspDiagRoots {
+		if key.server == ev.Server {
+			delete(a.lspDiagRoots, key)
+		}
+	}
 	type openDoc struct {
 		path, uri, langID, text, workDir string
 		inFlight                         <-chan struct{}
 	}
 	var docs []openDoc
-	// Restarting re-resolves every root: a marker created or removed since the
-	// documents were opened (possibly in a directory the watcher does not see)
-	// takes effect here.
-	a.invalidateLSPRoots()
+	// Restarting re-resolves every root, so a marker created or removed since
+	// the documents were opened takes effect here.
 	for _, d := range a.openEditorDocuments() {
 		key, langID, ok := a.lspResolve(d.Path, d.Language)
 		if !ok || key != ev.Server {
@@ -85,7 +88,7 @@ func (a *App) handleLSPServerStopped(ev *LSPServerStopped) {
 		}
 		a.unpinLSPRoot(d.Path)
 		workDir := a.lspWorkDirFor(d.Path, d.Language)
-		a.pinLSPRoot(d.Path, workDir)
+		a.pinLSPRoot(d.Path, key, workDir)
 		docs = append(docs, openDoc{
 			path:    d.Path,
 			uri:     FileURI(d.Path),
