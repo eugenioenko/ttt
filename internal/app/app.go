@@ -413,18 +413,6 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	}
 }
 
-func (a *App) statusMessage(msg string, level view.NotifyLevel) {
-	a.Status.SetNotification(msg, level, 5*time.Second)
-	a.LogOutput(outputLevelForNotify(level), "notice", msg)
-	time.AfterFunc(5*time.Second, func() {
-		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
-	})
-}
-
-func (a *App) StatusNotify(msg string) { a.statusMessage(msg, view.NotifyInfo) }
-func (a *App) StatusWarn(msg string)   { a.statusMessage(msg, view.NotifyWarning) }
-func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) }
-
 func OpenURL(rawURL string) {
 	cmd := openURLCommand(rawURL, runtime.GOOS)
 	if cmd == nil {
