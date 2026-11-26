@@ -215,6 +215,7 @@ func (e *EditorPaneWidget) DeleteWordRight() {
 	e.exec(&undo.DeleteSelectionCommand{
 		StartLine: e.Cursor.Line, StartCol: e.Cursor.Col,
 		EndLine: e.Cursor.Line, EndCol: end,
+		Forward: true,
 	})
 	e.clampCursor()
 	e.scrollViewport()
