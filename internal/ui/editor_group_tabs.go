@@ -261,6 +261,14 @@ type closedTab struct {
 	line, col int
 }
 
+type closedTabHistory struct {
+	tabs []closedTab
+}
+
+func (g *EditorGroupWidget) ShareClosedTabHistory(source *EditorGroupWidget) {
+	g.closedTabs = source.closedTabs
+}
+
 // rememberClosed records a closed file tab for ReopenClosedTab. Tabs without a
 // file on disk to reopen (plugin, virtual, diff and placeholder tabs) are skipped.
 func (g *EditorGroupWidget) rememberClosed(tab editorTab) {
@@ -271,22 +279,25 @@ func (g *EditorGroupWidget) rememberClosed(tab editorTab) {
 	if tab.Cur != nil {
 		c.line, c.col = tab.Cur.Line, tab.Cur.Col
 	}
-	g.closedTabs = slices.DeleteFunc(g.closedTabs, func(o closedTab) bool { return o.path == c.path })
-	g.closedTabs = append(g.closedTabs, c)
-	if len(g.closedTabs) > maxClosedTabs {
-		g.closedTabs = g.closedTabs[1:]
+	history := g.closedTabs
+	history.tabs = slices.DeleteFunc(history.tabs, func(o closedTab) bool { return o.path == c.path })
+	history.tabs = append(history.tabs, c)
+	if len(history.tabs) > maxClosedTabs {
+		history.tabs = history.tabs[1:]
 	}
 }
 
-func (g *EditorGroupWidget) HasClosedTabs() bool { return len(g.closedTabs) > 0 }
+func (g *EditorGroupWidget) HasClosedTabs() bool { return len(g.closedTabs.tabs) > 0 }
 
 // ReopenClosedTab reopens the most recently closed file tab at its cursor
 // position. Files deleted since are skipped, since OpenFile would start a new
 // empty file in their place. It reports whether a tab was reopened.
 func (g *EditorGroupWidget) ReopenClosedTab() bool {
-	for len(g.closedTabs) > 0 {
-		c := g.closedTabs[len(g.closedTabs)-1]
-		g.closedTabs = g.closedTabs[:len(g.closedTabs)-1]
+	history := g.closedTabs
+	for len(history.tabs) > 0 {
+		last := len(history.tabs) - 1
+		c := history.tabs[last]
+		history.tabs = history.tabs[:last]
 		if info, err := os.Stat(c.path); err != nil || info.IsDir() {
 			continue
 		}
