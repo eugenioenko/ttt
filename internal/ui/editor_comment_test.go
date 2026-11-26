@@ -442,7 +442,8 @@ func TestToggleLineCommentAlignsMixedIndentation(t *testing.T) {
 	}{
 		{"equal display indent", []string{"\tfoo()", "    bar()", "\t"}, []string{"\t// foo()", "    // bar()", "\t"}},
 		{"nested tabs", []string{"\tfoo()", "\t\tbar()", "        baz()"}, []string{"\t// foo()", "\t// \tbar()", "    //     baz()"}},
-		{"inside tab", []string{"  foo()", "\tbar()"}, []string{"  // foo()", "  //   bar()"}},
+		{"inside tab", []string{"  foo()", "\tbar()"}, []string{"//   foo()", "// \tbar()"}},
+		{"inside offset tabs", []string{"\t   foo()", "\t  \tbar()", "\t \tbaz()", ""}, []string{"\t //   foo()", "\t //  \tbar()", "\t // \tbaz()", ""}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			e := newCommentEditor(t, "a.go", slices.Clone(tc.lines), len(tc.lines)-1, len([]rune(tc.lines[len(tc.lines)-1])))
@@ -463,12 +464,8 @@ func TestToggleLineCommentAlignsMixedIndentation(t *testing.T) {
 				t.Fatalf("redo = %q, want %q", e.Buf.Lines, tc.want)
 			}
 			e.ToggleLineComment()
-			uncommented := tc.lines
-			if tc.name == "inside tab" {
-				uncommented = []string{"  foo()", "    bar()"}
-			}
-			if !slices.Equal(e.Buf.Lines, uncommented) {
-				t.Fatalf("uncomment = %q, want %q", e.Buf.Lines, uncommented)
+			if !slices.Equal(e.Buf.Lines, tc.lines) {
+				t.Fatalf("uncomment = %q, want %q", e.Buf.Lines, tc.lines)
 			}
 		})
 	}
