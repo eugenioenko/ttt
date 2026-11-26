@@ -135,3 +135,34 @@ func TestEditorSessionRestoresRelativeSaveAsPaths(t *testing.T) {
 		t.Fatal("relative Save As was not restored")
 	}
 }
+
+func TestDisabledRestoreTabsRetainsSavedSession(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	dir := t.TempDir()
+	saved, temporary := filepath.Join(dir, "saved.txt"), filepath.Join(dir, "temporary.txt")
+	for _, path := range []string{saved, temporary} {
+		if err := os.WriteFile(path, []byte("content\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	enabled := sessionTestApp(t, dir, true)
+	if err := enabled.EditorGroup.OpenFile(saved); err != nil {
+		t.Fatal(err)
+	}
+	enabled.forceQuit()
+
+	disabled := sessionTestApp(t, dir, false)
+	if got := disabled.EditorGroup.ActiveFilePath(); got != "untitled" {
+		t.Fatalf("disabled restore opened %q, want untitled", got)
+	}
+	if err := disabled.EditorGroup.OpenFile(temporary); err != nil {
+		t.Fatal(err)
+	}
+	disabled.forceQuit()
+
+	reEnabled := sessionTestApp(t, dir, true)
+	if got := reEnabled.EditorGroup.ActiveFilePath(); got != saved {
+		t.Errorf("re-enabled restore opened %q, want %q", got, saved)
+	}
+}
