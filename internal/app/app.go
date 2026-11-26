@@ -27,8 +27,6 @@ import (
 	"github.com/gdamore/tcell/v3"
 )
 
-const hoverGraceMargin = 3
-
 type App struct {
 	language        languageState
 	Root            *ui.Root
@@ -270,36 +268,6 @@ func (a *App) refreshProblems() {
 		}
 	}
 	a.Problems.SetItems(items)
-}
-
-func (a *App) checkMouseHover(mx, my int) {
-	if a.EditorGroup.Editor == nil || !a.Settings.LSP.IsHoverEnabled() {
-		a.DismissHover()
-		return
-	}
-	line, col, ok := a.EditorGroup.Editor.TextPosAt(mx, my)
-	if !ok {
-		a.DismissHover()
-		return
-	}
-	path, lang := a.editorPathLang()
-	a.scheduleHover(path, lang, line, col, mx, my, a.hoverDiagnostic(line, col))
-}
-
-func (a *App) ShowHover(text string, anchorX, anchorY int) {
-	if text != "" {
-		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
-	}
-}
-
-func (a *App) isMouseOverHover(mx, my int) bool {
-	h := a.EditorGroup.Hover
-	if h == nil {
-		return false
-	}
-	r := h.GetRect()
-	m := hoverGraceMargin
-	return mx >= r.X-m && mx < r.X+r.W+m && my >= r.Y-m && my < r.Y+r.H+m
 }
 
 func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManager *lsp.Manager, imageLayer *image.Layer) {
