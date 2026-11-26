@@ -64,6 +64,7 @@ const (
 	CommitDetailStageUnstaged
 	CommitDetailStageMixed
 	CommitDetailStageConflict
+	CommitDetailStageWorkingCopy
 )
 
 type CommitDetailContentKind uint8
@@ -900,6 +901,8 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 		stage = i18n.Text("changes.stagedState")
 	case CommitDetailStageMixed:
 		stage = i18n.Text("changes.mixed")
+	case CommitDetailStageWorkingCopy:
+		stage = i18n.Text("changes.workingCopyState")
 	}
 	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
 }
