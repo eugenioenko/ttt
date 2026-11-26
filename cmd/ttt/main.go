@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"path/filepath"
@@ -485,6 +488,13 @@ Docs: https://tttedit.dev
 	if flags.exec == "" {
 		editor.CheckForUpdatesOnStartup(time.Now())
 	}
+	shutdown, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGTERM)
+	defer stopSignals()
+	stopShutdown := context.AfterFunc(shutdown, func() {
+		stopSignals()
+		_ = app.StopExecLoop(editor)
+	})
+	defer stopShutdown()
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)
