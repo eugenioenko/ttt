@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/ui"
 )
 
 func editorTerminalKey(id string) string { return "terminal:" + id }
@@ -87,27 +88,45 @@ func (a *App) closeEditorTerminal(id string) bool {
 	if !slices.ContainsFunc(a.EditorTerminals, func(tt TerminalTab) bool { return tt.ID == id }) {
 		return false
 	}
-	if !a.EditorGroup.ClosePluginTab(editorTerminalKey(id)) {
+	g := a.editorTerminalGroup(id)
+	if g == nil || !g.ClosePluginTab(editorTerminalKey(id)) {
 		a.releaseEditorTerminal(id)
 	}
 	return true
 }
 
 func (a *App) focusEditorTerminal(id string) bool {
-	if !a.EditorGroup.FocusPluginTab(editorTerminalKey(id)) {
+	g := a.editorTerminalGroup(id)
+	if g == nil || !g.FocusPluginTab(editorTerminalKey(id)) {
 		return false
 	}
-	a.Root.SetFocus(a.EditorGroup)
+	a.activateEditorGroup(g)
+	a.Root.SetFocus(g)
 	return true
 }
 
-// resizeEditorTerminals sizes every editor terminal, shown or not, to the
-// group's content area: all tabs share it, and a hidden tab's own rect is
-// stale.
+// editorTerminalGroup looks the group up on each call because terminal tabs
+// move between groups.
+func (a *App) editorTerminalGroup(id string) *ui.EditorGroupWidget {
+	key := editorTerminalKey(id)
+	for _, g := range a.editorGroups() {
+		if g.HasPluginTab(key) {
+			return g
+		}
+	}
+	return nil
+}
+
+// resizeEditorTerminals sizes every editor terminal, shown or not, to its
+// group's content area: a hidden tab's own rect is stale.
 func (a *App) resizeEditorTerminals() {
-	area := a.EditorGroup.ContentRect()
 	for _, tt := range a.EditorTerminals {
 		tt.Term.AckUpdate()
+		g := a.editorTerminalGroup(tt.ID)
+		if g == nil {
+			continue
+		}
+		area := g.ContentRect()
 		if area.W <= 0 || area.H <= 0 {
 			continue
 		}
