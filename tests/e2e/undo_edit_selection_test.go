@@ -62,3 +62,25 @@ func TestUndoAndRedoRestoreSelectionForSurroundAndComment(t *testing.T) {
 		}
 	}
 }
+
+func TestUndoClearsRestoredSelectionForAnOlderEdit(t *testing.T) {
+	h := newTestHarness(t, 110, 28)
+	defer h.stop()
+	pasteText(h, pasteKeys("first line\nsecond line"))
+	editor := h.app.EditorGroup.Editor
+	editor.Selection.Start(1, 0)
+	h.pressRune('{')
+
+	h.exec("editor.undo")
+	if !editor.Selection.Active {
+		t.Fatal("undo did not restore the surround selection")
+	}
+
+	h.exec("editor.undo")
+	if got := editorText(h); got != "" {
+		t.Fatalf("undo of the original paste left %q", got)
+	}
+	if editor.Selection.Active {
+		t.Error("undo of an edit without a saved selection left the previous selection active")
+	}
+}

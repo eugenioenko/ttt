@@ -35,7 +35,7 @@ func (e *EditorPaneWidget) applyUndoCursor(pos *undo.CursorPos, sel selection.Se
 		return
 	}
 	e.Cursor.Line, e.Cursor.Col = pos.Line, pos.Col
-	if sel.Active && e.Selection != nil {
+	if e.Selection != nil {
 		*e.Selection = sel
 	}
 }
