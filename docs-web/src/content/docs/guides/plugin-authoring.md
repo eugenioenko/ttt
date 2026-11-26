@@ -2504,8 +2504,8 @@ end)
 
 ### The `gutter.click` event
 
-Fires via `ttt.events` when the user clicks the bookmark column, the cell just
-left of the line number. The callback receives the active file's path and the
+Fires via `ttt.events` when the user clicks the left side of the gutter,
+including the left half of the displayed number (and the middle digit for odd widths). The callback receives the active file's path and the
 clicked 1-based line. Toggle a bookmark there to give the click meaning:
 
 ```lua
@@ -2520,9 +2520,7 @@ events.on("gutter.click", function(path, line)
 end)
 ```
 
-While at least one plugin listens for `gutter.click`, a click in the bookmark
-column goes to the plugin instead of toggling a fold. Without a listener the
-click behaves as it always has.
+Click the right half of the number or the gutter space to its right to toggle a fold.
 
 ## Editor Context Menu
 
