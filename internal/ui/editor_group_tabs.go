@@ -148,6 +148,10 @@ func (g *EditorGroupWidget) SwitchToTabByPath(path string) bool {
 	return false
 }
 
+func (g *EditorGroupWidget) HasPluginTab(key string) bool {
+	return key != "" && slices.ContainsFunc(g.tabs, func(t editorTab) bool { return t.PluginKey == key })
+}
+
 func (g *EditorGroupWidget) FocusPluginTab(key string) bool {
 	if key == "" {
 		return false
