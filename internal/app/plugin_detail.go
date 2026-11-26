@@ -11,6 +11,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -34,6 +35,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	installBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: i18n.Text("general.install"),
+		Icon:  icons.PluginInstall,
 		Style: term.StyleDefault,
 		OnClick: func() {
 			if a.PluginsPanel != nil && a.PluginsPanel.OnInstall != nil {
@@ -58,6 +60,7 @@ func (a *App) OpenPluginDetail(entry plugin.RemoteRegistryEntry) {
 
 	sourceBtn := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: i18n.Text("plugins.source"),
+		Icon:  icons.PluginSource,
 		Style: term.StyleDefault,
 		OnClick: func() {
 			OpenURL(repoFolderURL(entry.Repo, entry.Path))
