@@ -501,6 +501,9 @@ func (a *App) saveAll(onDone func(), previousOverlay ui.Widget) {
 	if next < 0 {
 		for _, group := range a.editorGroups() {
 			if group != a.EditorGroup && group.AnyDirty() {
+				// Switching groups closes the search bar, so take the overlay baseline after that.
+				a.closeFindBarOnGroupChange()
+				previousOverlay = a.Root.TopOverlayWidget()
 				a.activateEditorGroup(group)
 				a.FocusEditor()
 				a.saveAll(onDone, previousOverlay)

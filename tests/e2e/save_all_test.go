@@ -89,3 +89,42 @@ func TestSaveAllFromFileMenu(t *testing.T) {
 		t.Fatalf("alpha.txt = %q, want it saved from the menu", got)
 	}
 }
+
+func TestSaveAllAcrossSplitsWithSearchBarOpen(t *testing.T) {
+	for _, bar := range []string{"search.find", "search.replace"} {
+		for _, action := range []string{"save all", "save all and quit"} {
+			t.Run(bar+"/"+action, func(t *testing.T) {
+				h := newTestHarness(t, 100, 28)
+				defer h.stop()
+				h.app.Settings.Editor.SaveAllOnQuit = true
+				alpha := filepath.Join(h.dir, "alpha.txt")
+				beta := filepath.Join(h.dir, "beta.txt")
+				h.openFile(alpha)
+				h.typeText("alpha edit")
+				h.exec("editor.split")
+				h.openFile(beta)
+				h.typeText("beta edit")
+				h.exec(bar)
+
+				if action == "save all" {
+					h.exec("file.saveAll")
+				} else {
+					h.exec("editor.quit")
+					h.pressRune('s')
+				}
+
+				for path, want := range map[string]string{alpha: "alpha edit", beta: "beta edit"} {
+					if got := readFile(t, path); !strings.Contains(got, want) {
+						t.Errorf("%s = %q, want it to contain %q", filepath.Base(path), got, want)
+					}
+				}
+				if h.app.Root.HasOverlay() {
+					t.Error("search bar should close when saving moves to another split")
+				}
+				if want := action == "save all"; *h.app.Running != want {
+					t.Errorf("running = %v, want %v", *h.app.Running, want)
+				}
+			})
+		}
+	}
+}
