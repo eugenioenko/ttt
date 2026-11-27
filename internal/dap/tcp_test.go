@@ -19,7 +19,10 @@ func TestTCPAdapterDisconnectLeavesServerAvailable(t *testing.T) {
 	defer cancel()
 	adapter := Adapter{Transport: "tcp", Address: listener.Addr().String()}
 	for range 2 {
-		session, err := adapter.Open(ctx, "", nil)
+		session, err := adapter.Open(ctx, "", nil, func(context.Context, TerminalRequest) (int, error) {
+			t.Error("TCP peer invoked local terminal")
+			return 0, nil
+		})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -31,9 +34,19 @@ func TestTCPAdapterDisconnectLeavesServerAvailable(t *testing.T) {
 		if err := peer.SetDeadline(deadline); err != nil {
 			t.Fatal(err)
 		}
+		codec := jsonrpc.NewCodec(peer, peer)
+		if session.SupportsRunInTerminal() {
+			t.Fatal("advertised local terminal capability to a TCP peer")
+		}
+		if err := codec.Send(map[string]any{"type": "request", "seq": 1, "command": "runInTerminal", "arguments": map[string]any{"args": []string{"tool"}}}); err != nil {
+			t.Fatal(err)
+		}
+		var rejection packet
+		if err := codec.ReceiveInto(&rejection); err != nil || rejection.Success || rejection.RequestSeq != 1 || rejection.Type != "response" {
+			t.Fatal(rejection, err)
+		}
 		done := make(chan error, 1)
 		go func() { done <- session.Disconnect(ctx, false) }()
-		codec := jsonrpc.NewCodec(peer, peer)
 		var request struct {
 			Seq       int
 			Command   string

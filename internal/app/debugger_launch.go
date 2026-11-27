@@ -15,6 +15,7 @@ import (
 )
 
 type debugRun struct {
+	terminalIDs    []string
 	ctx            context.Context
 	session        *dap.Session
 	thread         *int
@@ -84,7 +85,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			Default bool
 		}
 	}
-	if err = session.Call(startup, "initialize", map[string]any{"adapterID": target.Type, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err = session.Call(startup, "initialize", map[string]any{"adapterID": target.Type, "clientID": "ttt", "supportsRunInTerminalRequest": session.SupportsRunInTerminal(), "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launch := make(chan error, 1)

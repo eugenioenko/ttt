@@ -33,7 +33,7 @@ func (a Adapter) Process(folder string) (*exec.Cmd, error) {
 	return cmd, nil
 }
 
-func (a Adapter) Open(ctx context.Context, folder string, onEvent func(Event)) (*Session, error) {
+func (a Adapter) Open(ctx context.Context, folder string, onEvent func(Event), run RunInTerminal) (*Session, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -44,13 +44,14 @@ func (a Adapter) Open(ctx context.Context, folder string, onEvent func(Event)) (
 		if err != nil {
 			return nil, err
 		}
+		// A network peer must not be able to start a local terminal process.
 		return NewSession(conn, onEvent), nil
 	case "", "stdio":
 		cmd, err := a.Process(folder)
 		if err != nil {
 			return nil, err
 		}
-		return StartStdio(cmd, onEvent)
+		return StartStdio(cmd, onEvent, run)
 	default:
 		return nil, fmt.Errorf("unknown adapter transport %q", a.Transport)
 	}

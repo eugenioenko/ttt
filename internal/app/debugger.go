@@ -269,7 +269,9 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 	go func() {
 		defer close(r.closed)
 		err := r.runSession(ctx, func(ctx context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
-			return adapter.Open(ctx, t.Folder, onEvent)
+			return adapter.Open(ctx, t.Folder, onEvent, func(requestCtx context.Context, req dap.TerminalRequest) (int, error) {
+				return a.runDebugTerminal(requestCtx, r, req, deliver)
+			})
 		}, t, args, func(session *dap.Session) { deliver(func() { r.session = session; a.refreshDebugControls() }) }, func(tid int, frames []debugFrame) {
 			deliver(func() {
 				a.showDebugStop(r, tid, frames)
@@ -287,6 +289,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		canceled := ctx.Err() != nil
 		cancel()
 		deliver(func() {
+			a.closeDebugTerminals(r)
 			a.debugger.run = nil
 			a.debugger.file = ""
 			a.debugger.line = 0

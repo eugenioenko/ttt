@@ -12,6 +12,7 @@ import (
 )
 
 type packet struct {
+	Arguments  json.RawMessage
 	Type       string
 	Seq        json.Number
 	Command    string
@@ -28,6 +29,9 @@ type Event struct {
 }
 
 type Session struct {
+	runInTerminal  RunInTerminal
+	reverseCtx     context.Context
+	cancelReverse  context.CancelFunc
 	codec          *jsonrpc.Codec
 	onEvent        func(Event)
 	closeTransport func()
@@ -43,11 +47,12 @@ type Session struct {
 // NewSession takes ownership of the stream. Closing it must interrupt both reads
 // and writes. onEvent runs on the reader and must not wait for another packet.
 func NewSession(stream io.ReadWriteCloser, onEvent func(Event)) *Session {
-	return newSession(stream, stream, func() { _ = stream.Close() }, onEvent)
+	return newSession(stream, stream, func() { _ = stream.Close() }, onEvent, nil)
 }
 
-func newSession(r io.Reader, w io.Writer, closeTransport func(), onEvent func(Event)) *Session {
-	s := &Session{codec: jsonrpc.NewCodec(r, w), closeTransport: closeTransport, onEvent: onEvent,
+func newSession(r io.Reader, w io.Writer, closeTransport func(), onEvent func(Event), run RunInTerminal) *Session {
+	ctx, cancel := context.WithCancel(context.Background())
+	s := &Session{runInTerminal: run, reverseCtx: ctx, cancelReverse: cancel, codec: jsonrpc.NewCodec(r, w), closeTransport: closeTransport, onEvent: onEvent,
 		done: make(chan struct{}), writer: make(chan struct{}, 1), pending: make(map[int]chan packet)}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
@@ -60,6 +65,7 @@ func (s *Session) Close() { s.finish(io.ErrClosedPipe) }
 
 func (s *Session) finish(err error) {
 	s.closeOnce.Do(func() {
+		s.cancelReverse()
 		s.err = err
 		s.closeTransport()
 		close(s.done)
@@ -67,12 +73,17 @@ func (s *Session) finish(err error) {
 }
 
 func (s *Session) read() {
-	rejections := make(chan packet, 16)
-	defer close(rejections)
+	requests := make(chan packet, 16)
+	defer close(requests)
 	go func() {
-		for p := range rejections {
+		for p := range requests {
+			if s.reverseCtx.Err() != nil {
+				return
+			}
+			response := s.reverseResponse(s.reverseCtx, p)
 			err := s.write(context.Background(), func(seq int) any {
-				return map[string]any{"type": "response", "seq": seq, "request_seq": p.Seq, "command": p.Command, "success": false, "message": "unsupported request"}
+				response["seq"] = seq
+				return response
 			})
 			if err != nil {
 				return
@@ -99,8 +110,12 @@ func (s *Session) read() {
 				s.onEvent(Event{Name: p.Event, Body: p.Body})
 			}
 		case "request":
+			if p.Command != "runInTerminal" || !s.SupportsRunInTerminal() {
+				p.Arguments = nil
+			}
+			p.Body = nil
 			select {
-			case rejections <- packet{Seq: p.Seq, Command: p.Command}:
+			case requests <- p:
 			default:
 				s.finish(errors.New("too many unanswered DAP reverse requests"))
 				return
@@ -188,6 +203,7 @@ func (s *Session) Call(ctx context.Context, command string, args, out any) error
 }
 
 func (s *Session) Disconnect(ctx context.Context, terminateDebuggee bool) error {
+	s.cancelReverse()
 	defer s.Close()
 	return s.Call(ctx, "disconnect", map[string]bool{"terminateDebuggee": terminateDebuggee}, nil)
 }
