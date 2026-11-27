@@ -56,7 +56,7 @@ func (a *App) currentFileDebugTarget() (dap.Target, bool) {
 	}
 	for _, name := range slices.Sorted(maps.Keys(a.Settings.Debug.Adapters)) {
 		entry := a.Settings.Debug.Adapters[name]
-		if (entry.Provider != "" && entry.Provider != "generic") || (entry.Transport != "" && entry.Transport != "stdio" && entry.Transport != "tcp") || !slices.Contains(entry.Languages, language) {
+		if !slices.Contains(entry.Languages, language) {
 			continue
 		}
 		if target, ok := dap.Adapter(entry).FileTarget(folder, path, name); ok {

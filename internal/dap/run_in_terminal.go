@@ -1,6 +1,7 @@
 package dap
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -16,10 +17,31 @@ type TerminalRequest struct {
 
 type RunInTerminal func(context.Context, TerminalRequest) (int, error)
 
-func (s *Session) SupportsRunInTerminal() bool { return s.runInTerminal != nil }
+func (s *Session) SupportsRunInTerminal() bool { return s.options.RunInTerminal != nil }
 
 func (s *Session) reverseResponse(ctx context.Context, p packet) map[string]any {
 	response := map[string]any{"type": "response", "request_seq": p.Seq, "command": p.Command, "success": false}
+	if p.Command == "startDebugging" && s.SupportsStartDebugging() {
+		var req struct {
+			Request       string
+			Configuration map[string]any
+		}
+		decoder := json.NewDecoder(bytes.NewReader(p.Arguments))
+		decoder.UseNumber()
+		err := decoder.Decode(&req)
+		if err == nil && (req.Configuration == nil || (req.Request != "launch" && req.Request != "attach")) {
+			err = errors.New("invalid startDebugging request")
+		}
+		if err == nil {
+			err = s.options.StartDebugging(ctx, req.Request, req.Configuration, s.options.openChild)
+		}
+		if err == nil {
+			response["success"] = true
+		} else {
+			response["message"] = err.Error()
+		}
+		return response
+	}
 	if p.Command != "runInTerminal" || !s.SupportsRunInTerminal() {
 		response["message"] = "unsupported request"
 		return response
@@ -31,7 +53,7 @@ func (s *Session) reverseResponse(ctx context.Context, p packet) map[string]any 
 	}
 	if err == nil {
 		var pid int
-		pid, err = s.runInTerminal(ctx, req)
+		pid, err = s.options.RunInTerminal(ctx, req)
 		if err == nil {
 			response["success"] = true
 			response["body"] = map[string]int{"processId": pid}
