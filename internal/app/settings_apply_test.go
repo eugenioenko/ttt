@@ -19,11 +19,11 @@ func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.Sidebar.CommitHistoryHeight = 17
 	a := buildTestApp(t, settings)
-	if a.Changes.Split.BottomH != 17 || a.Changes.Split.BottomRatio != 0 {
-		t.Fatalf("restored split = height %d ratio %v, want height 17 ratio 0", a.Changes.Split.BottomH, a.Changes.Split.BottomRatio)
+	if a.Changes.HistoryHeight() != 17 || a.Changes.Split.BottomRatio != 0 {
+		t.Fatalf("restored history = height %d ratio %v, want height 17 ratio 0", a.Changes.HistoryHeight(), a.Changes.Split.BottomRatio)
 	}
 
-	a.Changes.Split.BottomH = 12
+	a.Changes.SetHistoryHeight(12)
 	a.persistCommitHistoryHeight()
 	if got := a.State.CommitHistoryHeight; got != 12 {
 		t.Fatalf("commitHistoryHeight = %d, want 12", got)

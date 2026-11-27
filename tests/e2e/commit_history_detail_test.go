@@ -52,16 +52,22 @@ func TestChangesHistoryUsesResponsiveHalfLayoutAndKeyboardNavigation(t *testing.
 	h.exec("sidebar.changes")
 	cp := h.app.Changes
 	want := cp.Split.GetRect().H / 2
-	if got := cp.CommitLog.GetRect().H + 1; got != want {
-		t.Fatalf("initial history section height = %d, want half-derived %d", got, want)
+	if got := cp.Split.BottomRect().H; got != want {
+		t.Fatalf("initial commit section height = %d, want half-derived %d", got, want)
+	}
+	if got, want := cp.Split.DividerScreenY(), cp.Input.GetRect().Y-1; got != want {
+		t.Fatalf("resizable divider at row %d, want %d (between changes and commit message)", got, want)
+	}
+	if got, want := cp.CommitLog.GetRect().Y, cp.Input.GetRect().Y+3; got != want {
+		t.Fatalf("history starts at row %d, want %d (input, divider, title above it)", got, want)
 	}
 
 	h.screen.SetSize(100, 40)
 	h.app.Root.SetSize(100, 40)
 	h.redraw()
 	want = cp.Split.GetRect().H / 2
-	if got := cp.CommitLog.GetRect().H + 1; got != want {
-		t.Fatalf("resized history section height = %d, want half-derived %d", got, want)
+	if got := cp.Split.BottomRect().H; got != want {
+		t.Fatalf("resized commit section height = %d, want half-derived %d", got, want)
 	}
 
 	cp.Adapter.SetFocused(true)

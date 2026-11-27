@@ -62,7 +62,7 @@ func TestCommitHistoryDragPersistsOnlyOnRelease(t *testing.T) {
 		}
 	}
 	mouse(y-3, tcell.ButtonNone)
-	if got, want := config.LoadState().CommitHistoryHeight, split.BottomH; got != want || got == 0 {
+	if got, want := config.LoadState().CommitHistoryHeight, h.app.Changes.HistoryHeight(); got != want || got == 0 {
 		t.Fatalf("saved commit history height = %d, want %d", got, want)
 	}
 }
