@@ -64,6 +64,8 @@ type Root struct {
 	linkHover        *EditorPaneWidget
 
 	HighlightDividers bool
+	dividers          []resizeDivider
+	frame             renderFrame
 	pointerX          int
 	pointerY          int
 	pointerSeen       bool
@@ -587,21 +589,24 @@ func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
 }
 
 func (r *Root) Render(cells [][]term.Cell) {
+	r.frame = renderFrame{}
 	surface := NewRenderSurface(cells, Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
+	surface.frame = &r.frame
 	// A modal overlay suppresses placements so images don't cover dialogs; unlocking first lets dialog text paint in the same frame.
 	if !r.HasOverlay() {
 		surface.SetImageLayer(r.ImageLayer)
 	} else if r.ImageLayer != nil {
 		r.ImageLayer.UnlockAll()
 	}
-	var dividers []resizeDivider
 	if r.HighlightDividers {
-		surface.dividers = &dividers
+		r.frame.dividers = &r.dividers
 	}
 	r.Main.Render(surface)
 	r.reconcilePointerCapture()
 	if r.HighlightDividers {
-		r.highlightDivider(surface, dividers)
+		r.highlightDivider(surface, r.dividers)
+		clear(r.dividers)
+		r.dividers = r.dividers[:0]
 	}
 
 	for _, overlay := range r.Overlays {

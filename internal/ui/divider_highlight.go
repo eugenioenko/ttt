@@ -12,8 +12,8 @@ type resizeDivider interface {
 }
 
 func registerDivider(surface Surface, divider resizeDivider) {
-	if rs, ok := surface.(*RenderSurface); ok && rs.dividers != nil {
-		*rs.dividers = append(*rs.dividers, divider)
+	if rs, ok := surface.(*RenderSurface); ok && rs.frame != nil && rs.frame.dividers != nil {
+		*rs.frame.dividers = append(*rs.frame.dividers, divider)
 	}
 }
 

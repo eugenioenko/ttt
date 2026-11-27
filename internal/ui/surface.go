@@ -12,8 +12,14 @@ import (
 type RenderSurface struct {
 	cells [][]term.Cell
 	clip  Rect
-	layer *tttimage.Layer
+	// Shared per-frame state stays behind one pointer: Sub allocates a
+	// surface per nested widget every frame, and a wider struct moves each
+	// of those into a larger size class.
+	frame *renderFrame
+}
 
+type renderFrame struct {
+	layer    *tttimage.Layer
 	dividers *[]resizeDivider
 }
 
@@ -23,7 +29,17 @@ func NewRenderSurface(cells [][]term.Cell, clip Rect) *RenderSurface {
 
 // Sub propagates the layer to nested surfaces; a nil layer disables graphics.
 func (s *RenderSurface) SetImageLayer(l *tttimage.Layer) {
-	s.layer = l
+	if s.frame == nil {
+		s.frame = &renderFrame{}
+	}
+	s.frame.layer = l
+}
+
+func (s *RenderSurface) layer() *tttimage.Layer {
+	if s.frame == nil {
+		return nil
+	}
+	return s.frame.layer
 }
 
 func (s *RenderSurface) Size() (w, h int) {
@@ -154,22 +170,22 @@ func (s *RenderSurface) Sub(r Rect) widgets.Surface {
 	return &RenderSurface{
 		cells: s.cells,
 		clip:  Rect{X: newX, Y: newY, W: newW, H: newH},
-		layer: s.layer,
-
-		dividers: s.dividers,
+		frame: s.frame,
 	}
 }
 
 func (s *RenderSurface) ImageReleaser() func(uint64) {
-	if s.layer == nil {
+	layer := s.layer()
+	if layer == nil {
 		return nil
 	}
-	return s.layer.Forget
+	return layer.Forget
 }
 
 // The clipped delta maps back to source pixels so the terminal crops instead of re-encoding.
 func (s *RenderSurface) PlaceImage(x, y, w, h int, src *tttimage.Source) {
-	if s.layer == nil || src == nil || src.Pix == nil {
+	layer := s.layer()
+	if layer == nil || src == nil || src.Pix == nil {
 		return
 	}
 	if w <= 0 || h <= 0 || src.W <= 0 || src.H <= 0 {
@@ -181,8 +197,8 @@ func (s *RenderSurface) PlaceImage(x, y, w, h int, src *tttimage.Source) {
 	if ex <= ix || ey <= iy {
 		return
 	}
-	s.layer.AddSource(src)
-	s.layer.Place(tttimage.Placement{
+	layer.AddSource(src)
+	layer.Place(tttimage.Placement{
 		SourceID: src.ID,
 		Cell:     tttimage.Rect{X: ix, Y: iy, W: ex - ix, H: ey - iy},
 		Src: image.Rectangle{
