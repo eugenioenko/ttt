@@ -426,6 +426,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	}
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	root.DividerHoverTask = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.DividerHighlightDelay})
 	app.appliedSettings.Terminal.ForwardShortcuts = cfg.Settings.Terminal.ForwardShortcuts
 	if stateErr != nil {
 		app.StatusWarn(i18n.Format("state.loadFailed", i18n.Args{"error": stateErr.Error()}))

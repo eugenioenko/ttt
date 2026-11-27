@@ -1,6 +1,13 @@
 package ui
 
-import "github.com/eugenioenko/ttt/internal/term"
+import (
+	"context"
+	"time"
+
+	"github.com/eugenioenko/ttt/internal/term"
+)
+
+const DividerHighlightDelay = 300 * time.Millisecond
 
 type resizeDivider interface {
 	Dragging() bool
@@ -22,23 +29,59 @@ func registerDivider(surface Surface, divider resizeDivider) {
 func (r *Root) highlightDivider(surface *RenderSurface, dividers []resizeDivider) {
 	for _, divider := range dividers {
 		if divider.Dragging() {
+			r.clearDividerHover()
+			r.hoverDivider = divider
 			paintDivider(surface, divider)
 			return
 		}
 	}
-	if !r.pointerSeen {
+	hovered := r.hoveredDivider(dividers)
+	if hovered == nil {
+		r.clearDividerHover()
 		return
+	}
+	if hovered != r.hoverDivider {
+		r.hoverDivider = nil
+		r.armDividerHover(hovered)
+	}
+	if hovered == r.hoverDivider {
+		paintDivider(surface, hovered)
+	}
+}
+
+func (r *Root) hoveredDivider(dividers []resizeDivider) resizeDivider {
+	if !r.pointerSeen {
+		return nil
 	}
 	switch r.PointerShapeAt(r.pointerX, r.pointerY) {
 	case term.PointerEWResize, term.PointerNSResize:
 	default:
-		return
+		return nil
 	}
 	for _, divider := range dividers {
 		if divider.OverDivider(r.pointerX, r.pointerY) {
-			paintDivider(surface, divider)
-			return
+			return divider
 		}
+	}
+	return nil
+}
+
+// Without a delivering task the highlight shows immediately, which keeps
+// SimScreen tests synchronous.
+func (r *Root) armDividerHover(divider resizeDivider) {
+	if r.DividerHoverTask == nil {
+		r.hoverDivider = divider
+		return
+	}
+	r.DividerHoverTask.ScheduleKey(divider,
+		func(context.Context) (struct{}, error) { return struct{}{}, nil },
+		func(struct{}, error) { r.hoverDivider = divider })
+}
+
+func (r *Root) clearDividerHover() {
+	r.hoverDivider = nil
+	if r.DividerHoverTask != nil {
+		r.DividerHoverTask.Stop()
 	}
 }
 

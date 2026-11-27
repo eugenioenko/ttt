@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"unicode"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -64,7 +65,9 @@ type Root struct {
 	linkHover        *EditorPaneWidget
 
 	HighlightDividers bool
+	DividerHoverTask  *asynctask.Task[struct{}]
 	dividers          []resizeDivider
+	hoverDivider      resizeDivider
 	frame             renderFrame
 	pointerX          int
 	pointerY          int
@@ -607,6 +610,8 @@ func (r *Root) Render(cells [][]term.Cell) {
 		r.highlightDivider(surface, r.dividers)
 		clear(r.dividers)
 		r.dividers = r.dividers[:0]
+	} else if r.hoverDivider != nil {
+		r.clearDividerHover()
 	}
 
 	for _, overlay := range r.Overlays {
