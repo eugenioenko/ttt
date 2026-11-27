@@ -104,5 +104,6 @@
     "outFiles": [
       "${workspaceFolder}/*.js"
     ]
-  }
+  },
+  "output": "count = 43"
 }

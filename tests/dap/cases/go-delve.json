@@ -96,5 +96,6 @@
   ],
   "lifecycle": {
     "program": "${workspaceFolder}/main.go"
-  }
+  },
+  "output": "count = 43"
 }

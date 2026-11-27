@@ -39,13 +39,19 @@ for (const spec of cases) {
           tui.waitFor(executionMarker(dir, file)(expected), 10000);
           tui.waitFor(`│    ${variable} `, 10000);
         }
-        tui.exec("Stop Debugging");
+        if (external) {
+          tui.exec("Stop Debugging");
+        } else {
+          tui.exec("Debug: Continue");
+          tui.panel("output");
+          tui.waitFor(`[debug:${spec.launch.name}] ${spec.output}`, 10000);
+        }
         tui.waitFor("Debug session ended", 5000);
         const ended = tui.snapshot();
         const {snapshots} = tui.run(120000);
         assert.ok(readFileSync(join(dir, file), "utf8").length > before.length);
         assert.ok(snapshots[stopped].includes(execution));
-        assert.ok(snapshots[ended].includes(breakpoint));
+        if (external) assert.ok(snapshots[ended].includes(breakpoint));
       } finally {
         rmSync(dir, {recursive: true, force: true});
       }

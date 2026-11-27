@@ -9,7 +9,7 @@ permissions:
 jobs:
   launch:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     env:
       DAP_TOOLS: /tmp/ttt-dap-tools
     steps:
@@ -17,6 +17,10 @@ jobs:
       - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
+      - uses: shivammathur/setup-php@bf6b4fbd49ca58e4608c9c89fba0b8d90bd2a39f # 2.35.5
+        with:
+          php-version: '8.3'
+          coverage: xdebug
       - run: make build
       - name: Install adapters and exercise launch and attach through the editor
         run: |

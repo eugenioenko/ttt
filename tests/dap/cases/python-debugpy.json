@@ -87,5 +87,6 @@
   "lifecycle": {
     "program": "${workspaceFolder}/example.py",
     "python": "dap-python"
-  }
+  },
+  "output": "count = 43"
 }

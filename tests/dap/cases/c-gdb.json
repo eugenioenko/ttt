@@ -88,5 +88,9 @@
       "target": "127.0.0.1:${port}"
     },
     "continueOnAttach": true
+  },
+  "output": "count = 43",
+  "lifecycle": {
+    "program": "${workspaceFolder}/c-attach"
   }
 }
