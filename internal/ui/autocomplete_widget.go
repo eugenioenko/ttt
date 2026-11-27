@@ -6,6 +6,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -201,9 +202,9 @@ func (a *AutocompleteWidget) visibleCount() int {
 func (a *AutocompleteWidget) menuWidth() int {
 	maxW := 0
 	for _, it := range a.Items {
-		w := len([]rune(it.Label)) + 5
+		w := textwidth.String(it.Label) + 5
 		if it.Detail != "" {
-			w += len([]rune(it.Detail)) + 2
+			w += textwidth.String(it.Detail) + 2
 		}
 		if w > maxW {
 			maxW = w
@@ -274,6 +275,8 @@ func (a *AutocompleteWidget) Render(surface Surface) {
 	if hasScroll {
 		contentW--
 	}
+	contentEnd := x + 1 + contentW
+	clipEnd := min(contentEnd, sw)
 
 	for i := 0; i < vis; i++ {
 		idx := a.scrollTop + i
@@ -294,12 +297,11 @@ func (a *AutocompleteWidget) Render(surface Surface) {
 			iconCell.BgStyle = term.StylePaletteSelected
 		}
 		surface.SetCell(x+2, row, iconCell)
-		surface.DrawText(x+4, row, it.Label, x+1+contentW, style)
+		labelDrawnEnd := surface.DrawText(x+4, row, it.Label, clipEnd, style)
 
 		if it.Detail != "" {
-			detailRunes := []rune(it.Detail)
-			detailX := x + 1 + contentW - len(detailRunes)
-			labelEnd := x + 4 + len([]rune(it.Label)) + 1
+			detailX := contentEnd - textwidth.String(it.Detail)
+			labelEnd := labelDrawnEnd + 1
 			if detailX < labelEnd {
 				detailX = labelEnd
 			}
@@ -308,12 +310,13 @@ func (a *AutocompleteWidget) Render(surface Surface) {
 				cell.BgStyle = term.StylePaletteSelected
 			}
 			for _, ch := range it.Detail {
-				if detailX >= x+1+contentW {
+				w := textwidth.Rune(ch)
+				if detailX+w > clipEnd {
 					break
 				}
 				cell.Ch = ch
 				surface.SetCell(detailX, row, cell)
-				detailX++
+				detailX += w
 			}
 		}
 	}
