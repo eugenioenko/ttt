@@ -12,10 +12,12 @@ import (
 type Name string
 
 const (
-	Branch Name = "branch"
-	Commit Name = "commit"
-	Lock   Name = "lock"
-	Pinned Name = "pinned"
+	Breakpoint     Name = "breakpoint"
+	DebugExecution Name = "debug-execution"
+	Branch         Name = "branch"
+	Commit         Name = "commit"
+	Lock           Name = "lock"
+	Pinned         Name = "pinned"
 
 	ChevronRight Name = "chevron-right"
 	ChevronLeft  Name = "chevron-left"
@@ -70,10 +72,12 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Branch: {Plain: "⎇", Nerd: "\ue702"},
-	Commit: {Plain: "●", Nerd: "\ueafc"},
-	Lock:   {Plain: "⚿", Nerd: ""},
-	Pinned: {Plain: "♦", Nerd: ""},
+	Breakpoint:     {Plain: "⦁", Nerd: "\U000f0765"},
+	DebugExecution: {Plain: "▶", Nerd: "\uf04b"},
+	Branch:         {Plain: "⎇", Nerd: "\ue702"},
+	Commit:         {Plain: "●", Nerd: "\ueafc"},
+	Lock:           {Plain: "⚿", Nerd: ""},
+	Pinned:         {Plain: "♦", Nerd: ""},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
 	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
@@ -147,7 +151,12 @@ func Get(mode string, name Name) string {
 	}
 	g := table[name]
 	if mode == config.IconsNerdFont && g.Nerd != "" {
-		return g.Nerd
+		if (name != DebugExecution && name != Breakpoint) || textwidth.String(g.Nerd) == 1 {
+			return g.Nerd
+		}
+	}
+	if name == DebugExecution && textwidth.Rune('▶') > 1 {
+		return ">"
 	}
 	return g.Plain
 }
