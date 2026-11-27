@@ -61,10 +61,18 @@ func (a *App) OpenFind() {
 	a.ShowFindBar(findBar)
 }
 
+func (a *App) activeEditorContentRect() ui.Rect {
+	if a.EditorGroup == nil {
+		return ui.Rect{}
+	}
+	return a.EditorGroup.ContentRect()
+}
+
 func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar := ui.NewFindBarWidget()
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
+	findBar.AnchorRect = a.activeEditorContentRect
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		if !a.EditorGroup.IsEditorActive() {
 			a.EditorGroup.SetFindSearch(query, nil, opts)
@@ -89,8 +97,9 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		a.EditorGroup.ScrollToCursor()
 	}
 	findBar.OnDismiss = func() {
-		a.DismissDialog()
+		findBar.Debounce.Stop()
 		a.EditorGroup.ClearFindHighlights()
+		a.restoreFocusAfterFindDismiss(findBar)
 	}
 	findBar.OnEditorTabChange = func() {
 		findBar.Current = 0
@@ -103,6 +112,40 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 const findRefreshDelay = 150 * time.Millisecond
 
 // Find Next/Prev refresh first if the debounced update has not run yet.
+func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
+	findBar := ui.NewFindBarWidget()
+	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
+	findBar.Borders = a.Borders
+	findBar.AnchorRect = a.activeEditorContentRect
+	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
+		leftMatches, err := ui.FindInLines(dv.LeftLines(), query, opts)
+		if err != nil {
+			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
+			return nil
+		}
+		rightMatches, _ := ui.FindInLines(dv.RightLines(), query, opts)
+		return dv.SetSearchMatches(leftMatches, rightMatches)
+	}
+	findBar.OnNavigate = func(match ui.FindMatch) {
+		dv.SetActiveMatch(findBar.Current)
+		dv.ScrollToLine(match.Line)
+	}
+	findBar.OnDismiss = func() {
+		findBar.Debounce.Stop()
+		dv.OnRecompute = nil
+		dv.ClearSearch()
+		a.restoreFocusAfterFindDismiss(findBar)
+	}
+	dv.OnRecompute = func() {
+		findBar.Refresh()
+		if len(findBar.Matches) > 0 {
+			dv.SetActiveMatch(findBar.Current)
+		}
+	}
+	a.prefillFindBar(findBar)
+	a.ShowFindBar(findBar)
+}
+
 func (a *App) scheduleFindRefresh() {
 	if a.findBar() == nil && a.EditorGroup.Editor.SearchQuery == "" {
 		return
@@ -139,6 +182,32 @@ type findBar interface {
 func (a *App) findBar() findBar {
 	bar, _ := a.Root.TopOverlayWidget().(findBar)
 	return bar
+}
+
+func (a *App) closeFindBarOnGroupChange() {
+	for _, overlay := range a.Root.Overlays {
+		var dismiss func()
+		switch bar := overlay.Widget.(type) {
+		case *ui.FindBarWidget:
+			dismiss = bar.OnDismiss
+		case *ui.ReplaceBarWidget:
+			dismiss = bar.OnDismiss
+		default:
+			continue
+		}
+		// Remove the bar before running its cleanup so it cannot restore focus to the old group.
+		a.Root.RemoveOverlay(overlay.Widget)
+		if dismiss != nil {
+			dismiss()
+		}
+		return
+	}
+}
+
+func (a *App) restoreFocusAfterFindDismiss(bar ui.Widget) {
+	if a.Root.TopOverlayWidget() == bar {
+		a.DismissDialog()
+	}
 }
 
 func (a *App) FindNext() {
@@ -190,6 +259,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar.SearchInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.ReplaceInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.Borders = a.Borders
+	bar.AnchorRect = a.activeEditorContentRect
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
 		if err != nil {
@@ -216,8 +286,8 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		a.EditorGroup.ReplaceAll(query, replacement, opts)
 	}
 	bar.OnDismiss = func() {
-		a.DismissDialog()
 		a.EditorGroup.ClearSearch()
+		a.restoreFocusAfterFindDismiss(bar)
 	}
 	return bar
 }

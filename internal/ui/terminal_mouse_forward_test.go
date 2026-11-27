@@ -1,6 +1,8 @@
 package ui
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -140,17 +142,23 @@ func TestTerminalWidget_CtrlClickStaysLocalEvenWithMouseReporting(t *testing.T) 
 	}
 }
 
-func TestTerminalWidget_SuperClickLinks(t *testing.T) {
+func TestTerminalWidget_SuperClickFileLinks(t *testing.T) {
 	dev, err := terminal.New("/bin/cat", 80, 24, 0, nil, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer dev.Close()
-	dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("https://example.com\x1b[?1006h\x1b[?1000h") })
+	dir := t.TempDir()
+	path := filepath.Join(dir, "source.go")
+	if err := os.WriteFile(path, []byte("package main"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dev.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("source.go:12:3\x1b[?1006h\x1b[?1000h") })
 	tw := NewTerminalWidget(dev, nil)
 	tw.SetRect(Rect{W: 80, H: 24})
 	opened := ""
-	tw.OnOpenURL = func(url string) { opened = url }
+	tw.WorkDir = dir
+	tw.OnOpenFile = func(file string, _, _ int) { opened = file }
 	for _, enabled := range []bool{true, false, true} {
 		tw.SuperShortcuts = enabled
 		tw.ClearSelection()
@@ -164,7 +172,7 @@ func TestTerminalWidget_SuperClickLinks(t *testing.T) {
 			t.Fatalf("enabled=%t: pointer=%q, want %q", enabled, got, wantPointer)
 		}
 		tw.HandleEvent(tcell.NewEventMouse(5, 0, tcell.Button1, tcell.ModMeta))
-		if (opened == "https://example.com") != enabled {
+		if (opened == path) != enabled {
 			t.Fatalf("enabled=%t: opened %q", enabled, opened)
 		}
 		tw.HandleEvent(tcell.NewEventMouse(5, 0, tcell.ButtonNone, tcell.ModMeta))

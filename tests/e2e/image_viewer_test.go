@@ -17,7 +17,7 @@ func writeE2EPNG(t *testing.T, path string, w, h int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { requireNoError(t, f.Close()) }()
 	if err := png.Encode(f, img); err != nil {
 		t.Fatal(err)
 	}
@@ -29,7 +29,7 @@ func TestOpenImageShowsFallbackCard(t *testing.T) {
 
 	path := filepath.Join(h.dir, "photo.png")
 	writeE2EPNG(t, path, 16, 12)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if h.app.EditorGroup.ActiveBuffer() != nil {
@@ -48,7 +48,7 @@ func TestOpenBinaryShowsBinaryTab(t *testing.T) {
 	if err := os.WriteFile(path, []byte{0x89, 'P', 'N', 'G', 0x00, 0xff, '\n', 0x00}, 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if h.app.EditorGroup.ActiveBuffer() != nil {
@@ -67,7 +67,7 @@ func TestSaveOnImageTabIsNoop(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	h.exec("file.save")
@@ -96,7 +96,7 @@ func TestClosingFindOnImageTabClearsTextHighlights(t *testing.T) {
 	img := filepath.Join(h.dir, "photo.png")
 	writeE2EPNG(t, img, 16, 12)
 
-	h.app.EditorGroup.OpenFile(text)
+	h.openFile(text)
 	h.redraw()
 	h.exec("search.find")
 	for _, r := range "foo" {
@@ -107,14 +107,14 @@ func TestClosingFindOnImageTabClearsTextHighlights(t *testing.T) {
 		t.Fatalf("find matches = %d, want 2", n)
 	}
 
-	h.app.EditorGroup.OpenFile(img)
+	h.openFile(img)
 	h.redraw()
 	h.pressKey(tcell.KeyEscape, tcell.ModNone)
 	if h.app.Root.HasOverlay() {
 		t.Fatal("Escape should close the find bar")
 	}
 
-	h.app.EditorGroup.OpenFile(text)
+	h.openFile(text)
 	h.redraw()
 	ed := h.app.EditorGroup.Editor
 	if ed.SearchQuery != "" || len(ed.SearchMatches) != 0 {

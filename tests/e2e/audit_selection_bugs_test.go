@@ -22,9 +22,9 @@ func TestBacktabExcludesColZeroSelectionLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "outdent.txt")
-	os.WriteFile(f, []byte("    aaa\n    bbb\n    ccc\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("    aaa\n    bbb\n    ccc\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	// Select line0 only: selection ends at line1 col 0, which per the

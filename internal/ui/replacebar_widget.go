@@ -17,6 +17,7 @@ type ReplaceBarWidget struct {
 	Current      int
 	Options      SearchOptions
 	Borders      *term.BorderSet
+	AnchorRect   func() Rect
 	OnSearch     func(query string, opts SearchOptions) []FindMatch
 	OnNavigate   func(match FindMatch)
 	OnReplace    func(match FindMatch, replacement string)
@@ -105,7 +106,7 @@ func (r *ReplaceBarWidget) Render(surface Surface) {
 	} else {
 		r.ReplaceInput.Actions[1].Label = i18n.Text("search.all")
 	}
-	r.findBarLayout = renderFindBar(surface, r.Borders, r.SearchInput.Text(), r.Current, len(r.Matches), true, r.OnToggleFind != nil)
+	r.findBarLayout = renderFindBar(surface, r.Borders, findBarAnchor(r.AnchorRect), r.SearchInput.Text(), r.Current, len(r.Matches), true, r.OnToggleFind != nil)
 	renderFindBarInput(surface, r.SearchInput, r.inputX, r.barRect.Y+1, r.inputW)
 	renderFindBarInput(surface, r.ReplaceInput, r.inputX, r.barRect.Y+2, max(r.barRect.X+r.barRect.W-1-r.inputX, 0))
 }

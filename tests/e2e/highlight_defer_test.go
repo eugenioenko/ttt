@@ -26,7 +26,7 @@ func TestJumpToEndOfALargeFileDefersHighlighting(t *testing.T) {
 		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
 			t.Fatal(err)
 		}
-		h.app.EditorGroup.OpenFile(path)
+		h.openFile(path)
 		h.redraw()
 		gotoLine(h, 1<<30)
 	}

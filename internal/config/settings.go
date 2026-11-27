@@ -1,12 +1,15 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"github.com/eugenioenko/ttt/internal/filewrite"
 )
 
@@ -103,8 +106,9 @@ func DefaultAutocompleteSettings() AutocompleteSettings {
 }
 
 type LSPServerConfig struct {
-	Command   []string          `json:"command"`
-	Languages map[string]string `json:"languages,omitempty"`
+	Command     []string          `json:"command"`
+	Languages   map[string]string `json:"languages,omitempty"`
+	RootMarkers []string          `json:"rootMarkers,omitempty"`
 }
 
 type LSPSettings struct {
@@ -179,6 +183,7 @@ type EditorSettings struct {
 	GutterStyle             string             `json:"gutterStyle,omitempty"`
 	BorderStyle             string             `json:"borderStyle,omitempty"`
 	BracketPairColorization bool               `json:"bracketPairColorization"`
+	FullLineSelection       bool               `json:"fullLineSelection"`
 	ShowTrailingNewline     *bool              `json:"showTrailingNewline,omitempty"`
 	MenuBar                 *bool              `json:"menuBar,omitempty"`
 	UndoDeleteCursorStart   bool               `json:"undoDeleteCursorStart,omitempty"`
@@ -500,6 +505,41 @@ func (w WelcomeSettings) IsRecentFoldersEnabled() bool {
 }
 
 const (
+	UpdateCheckEveryLaunch = "everyLaunch"
+	UpdateCheckDaily       = "daily"
+)
+
+var UpdateCheckIntervals = []string{UpdateCheckEveryLaunch, UpdateCheckDaily}
+
+// UpdateSettings controls opt-in application update checks.
+type UpdateSettings struct {
+	// StartupCheck runs a check when ttt starts. The default is off.
+	StartupCheck bool `json:"startupCheck,omitempty"`
+	// StartupCheckInterval is "everyLaunch" or "daily". Empty means daily.
+	StartupCheckInterval string `json:"startupCheckInterval,omitempty"`
+}
+
+func (u UpdateSettings) Interval() string {
+	if u.StartupCheckInterval == "" {
+		return UpdateCheckDaily
+	}
+	return u.StartupCheckInterval
+}
+
+func (u UpdateSettings) StartupCheckDue(last, now time.Time) bool {
+	if !u.StartupCheck {
+		return false
+	}
+	if last.IsZero() || last.After(now) {
+		return true
+	}
+	if u.Interval() == UpdateCheckEveryLaunch {
+		return true
+	}
+	return !now.Before(last.Add(24 * time.Hour))
+}
+
+const (
 	ModifierControl      = "control"
 	ModifierControlSuper = "control+super"
 	ModifierSuper        = "super"
@@ -511,7 +551,16 @@ type KeyboardSettings struct {
 	ModifierKey string `json:"modifierKey"`
 }
 
+type LinkSettings struct {
+	Native bool `json:"native"`
+}
+
+type DebugSettings struct {
+	Adapters map[string]debugadapter.Config `json:"adapters"`
+}
+
 type Settings struct {
+	Debug       DebugSettings    `json:"debug"`
 	Version     int              `json:"version"`
 	Theme       string           `json:"theme"`
 	DebugMode   bool             `json:"debugMode,omitempty"`
@@ -520,6 +569,7 @@ type Settings struct {
 	// These sections must NOT use omitzero: their defaults are non-zero, so an
 	// all-false/all-zero section would be omitted on save and silently revert to
 	// the defaults on the next load.
+	Links        LinkSettings         `json:"links"`
 	Appearance   AppearanceSettings   `json:"appearance"`
 	Editor       EditorSettings       `json:"editor"`
 	Keyboard     KeyboardSettings     `json:"keyboard"`
@@ -538,6 +588,7 @@ type Settings struct {
 	// means its default, so the zero value and "unset" mean the same thing.
 	Plugins      PluginSettings    `json:"plugins,omitzero"`
 	Welcome      WelcomeSettings   `json:"welcome,omitzero"`
+	Update       UpdateSettings    `json:"update,omitzero"`
 	Formatters   map[string]string `json:"formatters,omitempty"`
 	Applications []Application     `json:"applications,omitempty"`
 	// Extra holds top-level keys that are not part of the core schema — chiefly
@@ -550,9 +601,9 @@ type Settings struct {
 // knownSettingsKeys is the set of top-level JSON keys owned by the core schema.
 // Any other top-level key is preserved via Settings.Extra.
 var knownSettingsKeys = map[string]bool{
-	"version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
+	"debug": true, "links": true, "version": true, "theme": true, "debugMode": true, "reuseWindow": true, "appearance": true, "editor": true, "language": true,
 	"search": true, "quickOpen": true, "explorer": true, "sidebar": true, "panel": true, "git": true, "terminal": true, "lsp": true,
-	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "applications": true, "keyboard": true,
+	"autocomplete": true, "markdown": true, "image": true, "plugins": true, "formatters": true, "welcome": true, "update": true, "applications": true, "keyboard": true,
 }
 
 func (s Settings) MarshalJSON() ([]byte, error) {
@@ -601,6 +652,7 @@ func (s *Settings) UnmarshalJSON(data []byte) error {
 
 func DefaultSettings() Settings {
 	return Settings{
+		Links:        LinkSettings{Native: false},
 		Version:      1,
 		Theme:        "default-dark",
 		Appearance:   DefaultAppearanceSettings(),
@@ -612,6 +664,7 @@ func DefaultSettings() Settings {
 		Git:          DefaultGitSettings(),
 		Terminal:     DefaultTerminalSettings(),
 		LSP:          DefaultLSPSettings(),
+		Debug:        DebugSettings{Adapters: map[string]debugadapter.Config{}},
 		Autocomplete: DefaultAutocompleteSettings(),
 		Markdown:     DefaultMarkdownSettings(),
 		Image:        DefaultImageSettings(),
@@ -701,6 +754,9 @@ func normalizeSettings(s *Settings) {
 	if !slices.Contains(ScrollbarGlyphModes, s.Appearance.ScrollbarGlyphs) {
 		s.Appearance.ScrollbarGlyphs = ScrollbarGlyphsBlocks
 	}
+	if s.Update.StartupCheckInterval != "" && !slices.Contains(UpdateCheckIntervals, s.Update.StartupCheckInterval) {
+		s.Update.StartupCheckInterval = UpdateCheckDaily
+	}
 }
 
 func LoadSettings() Settings {
@@ -731,6 +787,46 @@ func ReadSettingsFile(path string) (Settings, error) {
 	}
 	normalizeSettings(&s)
 	return s, err
+}
+
+// ReadSettingsObject returns only keys present on disk, before defaults or normalization.
+func ReadSettingsObject(path string) (map[string]any, error) {
+	data, err := readSettingsFileBytes(path)
+	if os.IsNotExist(err) {
+		return map[string]any{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	var obj map[string]any
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	if !json.Valid(data) {
+		return nil, fmt.Errorf("%s: invalid settings JSON", path)
+	}
+	if err := decoder.Decode(&obj); err != nil {
+		return nil, err
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("%s: expected a settings object", path)
+	}
+	return obj, nil
+}
+
+func SaveSettingsObject(path string, obj map[string]any) (Settings, error) {
+	var updated = DefaultSettings()
+	data, err := json.MarshalIndent(obj, "", "  ")
+	if err == nil {
+		err = json.Unmarshal(data, &updated)
+	}
+	if err != nil {
+		return Settings{}, err
+	}
+	normalizeSettings(&updated)
+	if err := writeFileAtomically(path, append(data, '\n'), 0644); err != nil {
+		return Settings{}, err
+	}
+	return updated, nil
 }
 
 func SaveSettings(s Settings) error {

@@ -74,7 +74,7 @@ func openBenchFile(b *testing.B, h *testHarness, name string, content []byte) {
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		b.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 }
 

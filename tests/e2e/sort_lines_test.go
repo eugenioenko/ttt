@@ -11,8 +11,8 @@ func TestSortLinesAsc(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "sort.txt")
-	os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// Select all then sort ascending
@@ -32,8 +32,8 @@ func TestSortLinesAscNoSelection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "sortall.txt")
-	os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// No selection — sorts all lines (trailing empty line stays at bottom)
@@ -50,8 +50,8 @@ func TestSortLinesDesc(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "sortdesc.txt")
-	os.WriteFile(f, []byte("apple\ncherry\nbanana\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("apple\ncherry\nbanana\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -69,8 +69,8 @@ func TestReverseLines(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "reverse.txt")
-	os.WriteFile(f, []byte("first\nsecond\nthird\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("first\nsecond\nthird\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -88,8 +88,8 @@ func TestReverseLinesNoSelection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "revall.txt")
-	os.WriteFile(f, []byte("first\nsecond\nthird\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("first\nsecond\nthird\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// No selection — reverses all lines (trailing empty line stays at bottom)
@@ -106,8 +106,8 @@ func TestUniqueLines(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "unique.txt")
-	os.WriteFile(f, []byte("apple\nbanana\napple\ncherry\nbanana\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("apple\nbanana\napple\ncherry\nbanana\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.selectAll")
@@ -127,8 +127,8 @@ func TestSortLinesUndo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "sortundo.txt")
-	os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("cherry\napple\nbanana\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	// No selection — sort all lines (trailing empty line stays at bottom)

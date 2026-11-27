@@ -43,7 +43,7 @@ func TestSavedFileAppearsInVisibleChangesWithoutManualRefresh(t *testing.T) {
 	showCleanChanges(t, h)
 
 	path := filepath.Join(h.dir, "alpha.txt")
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("editor.focus")
 	h.pressKey(tcell.KeyEnd, tcell.ModNone)
 	h.pressRune('X')
@@ -80,7 +80,7 @@ func TestWatcherReconciliationInvalidatesVisibleChanges(t *testing.T) {
 	showCleanChanges(t, h)
 
 	path := filepath.Join(h.dir, "beta.txt")
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	if err := os.WriteFile(path, []byte("external\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}

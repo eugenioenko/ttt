@@ -21,7 +21,7 @@ func TestLoadManifest(t *testing.T) {
 			"system.exec": ["docker"]
 		}
 	}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -44,7 +44,7 @@ func TestLoadManifest(t *testing.T) {
 func TestLoadManifestDisplayName(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name":"my-plugin","displayName":"My Plugin","entry":"init.lua"}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -68,7 +68,7 @@ func TestManifestTitleFallsBackToName(t *testing.T) {
 func TestLoadManifestMissingName(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"entry": "main.ttt.lua"}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	_, err := LoadManifest(dir)
 	if err == nil {
@@ -79,7 +79,7 @@ func TestLoadManifestMissingName(t *testing.T) {
 func TestLoadManifestMissingEntry(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "test"}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	_, err := LoadManifest(dir)
 	if err == nil {
@@ -97,7 +97,7 @@ func TestLoadManifestMissingFile(t *testing.T) {
 func TestLoadManifestAPIVersionDefaultsToOne(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "test", "entry": "init.lua"}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -111,7 +111,7 @@ func TestLoadManifestAPIVersionDefaultsToOne(t *testing.T) {
 func TestLoadManifestAPIVersionSupported(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "test", "entry": "init.lua", "api": 1}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -125,7 +125,7 @@ func TestLoadManifestAPIVersionSupported(t *testing.T) {
 func TestLoadManifestAPIVersion2Supported(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "test", "entry": "init.lua", "api": 2}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -140,7 +140,7 @@ func TestLoadManifestAPIVersionTooNew(t *testing.T) {
 	dir := t.TempDir()
 	// One past the supported version, whatever that currently is.
 	data := fmt.Sprintf(`{"name": "test", "entry": "init.lua", "api": %d}`, SupportedAPIVersion+1)
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	_, err := LoadManifest(dir)
 	if err == nil {
@@ -151,7 +151,7 @@ func TestLoadManifestAPIVersionTooNew(t *testing.T) {
 func TestLoadManifestAPIVersionInvalid(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "test", "entry": "init.lua", "api": -1}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	_, err := LoadManifest(dir)
 	if err == nil {
@@ -162,7 +162,7 @@ func TestLoadManifestAPIVersionInvalid(t *testing.T) {
 func TestLoadManifestNetworkHosts(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "t", "entry": "init.lua", "permissions": {"network.http": ["api.github.com"]}}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -179,7 +179,7 @@ func TestLoadManifestNetworkHosts(t *testing.T) {
 func TestLoadManifestNetworkInvalid(t *testing.T) {
 	dir := t.TempDir()
 	data := `{"name": "t", "entry": "init.lua", "permissions": {"network.http": 42}}`
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 
 	_, err := LoadManifest(dir)
 	if err == nil {
@@ -218,7 +218,7 @@ func TestLoadManifestNetworkEntries(t *testing.T) {
 	} {
 		dir := t.TempDir()
 		data := `{"name": "t", "entry": "init.lua", "permissions": {"network.http": ` + tt.hosts + `}}`
-		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644)
+		requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(data), 0644))
 		if _, err := LoadManifest(dir); (err == nil) != tt.ok {
 			t.Errorf("%s: err = %v, want ok %v", tt.hosts, err, tt.ok)
 		}
@@ -227,10 +227,10 @@ func TestLoadManifestNetworkEntries(t *testing.T) {
 
 func TestLoadManifestGrammarOnly(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
 		"name": "lang-zig",
 		"grammars": [{ "path": "syntaxes/zig.json", "language": "Zig", "fileTypes": ["zig"] }]
-	}`), 0644)
+	}`), 0644))
 
 	m, err := LoadManifest(dir)
 	if err != nil {
@@ -253,9 +253,9 @@ func TestLoadManifestGrammarOnly(t *testing.T) {
 func TestLoadManifestRejectsBadGrammarPath(t *testing.T) {
 	for _, path := range []string{"", "../outside.json", "syntaxes/../../outside.json"} {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(fmt.Sprintf(`{
+		requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(fmt.Sprintf(`{
 			"name": "bad", "grammars": [{ "path": %q }]
-		}`, path)), 0644)
+		}`, path)), 0644))
 		if _, err := LoadManifest(dir); err == nil {
 			t.Errorf("path %q: expected error", path)
 		}
@@ -264,12 +264,12 @@ func TestLoadManifestRejectsBadGrammarPath(t *testing.T) {
 
 func TestLoadManifestThemes(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{
 		"name": "theme-pack", "themes": [
 			{"path": "themes/dark.json", "name": "midnight"},
 			{"path": "themes/light.json"}
 		]
-	}`), 0644)
+	}`), 0644))
 	m, err := LoadManifest(dir)
 	if err != nil {
 		t.Fatal(err)
@@ -295,7 +295,7 @@ func TestLoadManifestRejectsInvalidThemes(t *testing.T) {
 		`[{"path":"a.json","name":"same"},{"path":"b.json","name":"same"}]`,
 	} {
 		dir := t.TempDir()
-		os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{"name":"bad","themes":`+themes+`}`), 0644)
+		requireNoError(t, os.WriteFile(filepath.Join(dir, "plugin.ttt.json"), []byte(`{"name":"bad","themes":`+themes+`}`), 0644))
 		if _, err := LoadManifest(dir); err == nil {
 			t.Errorf("accepted invalid themes: %s", themes)
 		}
@@ -305,7 +305,7 @@ func TestLoadManifestRejectsInvalidThemes(t *testing.T) {
 func TestThemeFileRejectsEscapingSymlink(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "theme.json")
-	os.WriteFile(outside, []byte(`{}`), 0644)
+	requireNoError(t, os.WriteFile(outside, []byte(`{}`), 0644))
 	if err := os.Symlink(outside, filepath.Join(dir, "theme.json")); err != nil {
 		t.Skip(err)
 	}

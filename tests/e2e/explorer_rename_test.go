@@ -36,7 +36,7 @@ func TestExplorerRenameUpdatesOpenTabAndSavesToNewPath(t *testing.T) {
 	defer h.stop()
 
 	old := filepath.Join(h.dir, "alpha.txt")
-	h.app.EditorGroup.OpenFile(old)
+	h.openFile(old)
 	h.redraw()
 
 	h.renameVia(old, "renamed.txt")
@@ -68,7 +68,7 @@ func TestExplorerRenameFolderUpdatesNestedTab(t *testing.T) {
 	defer h.stop()
 
 	nested := filepath.Join(h.dir, "subdir", "nested.txt")
-	h.app.EditorGroup.OpenFile(nested)
+	h.openFile(nested)
 	h.redraw()
 
 	h.renameVia(filepath.Join(h.dir, "subdir"), "renamed-dir")
@@ -86,7 +86,7 @@ func TestExplorerRenameLeavesOtherTabsAlone(t *testing.T) {
 	defer h.stop()
 
 	openPath := filepath.Join(h.dir, "alpha.txt")
-	h.app.EditorGroup.OpenFile(openPath)
+	h.openFile(openPath)
 	h.redraw()
 
 	h.renameVia(filepath.Join(h.dir, "beta.txt"), "beta-renamed.txt")

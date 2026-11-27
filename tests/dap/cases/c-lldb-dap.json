@@ -1,0 +1,95 @@
+{
+  "name": "c-lldb-dap",
+  "requires": [
+    "install/gdb.sh",
+    "install/lldb-dap.sh"
+  ],
+  "source": "fixtures/c-counter/main.c",
+  "binary": "bin/linux-amd64/c-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb-dap": {
+          "command": [
+            "lldb-dap"
+          ],
+          "languages": [
+            "c"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "c-lldb-dap",
+    "type": "lldb-dap",
+    "request": "launch",
+    "program": "${workspaceFolder}/c-counter",
+    "sourcePath": "${workspaceFolder}"
+  },
+  "pidAttach": {
+    "arguments": {
+      "pid": "${pid}",
+      "program": "${workspaceFolder}/c-attach",
+      "sourcePath": "${workspaceFolder}"
+    }
+  },
+  "lifecycle": {
+    "program": "${workspaceFolder}/c-attach"
+  },
+  "service": {
+    "source": "fixtures/c-attach/main.c",
+    "binary": "bin/linux-amd64/c-attach",
+    "command": [
+      "./c-attach"
+    ],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
+      "gdbserver",
+      "--once",
+      "--attach",
+      "stdio",
+      "${pid}"
+    ],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/c-attach",
+      "sourcePath": "${workspaceFolder}",
+      "gdb-remote-port": "${port}",
+      "gdb-remote-host": "127.0.0.1"
+    }
+  },
+  "output": "count = 43",
+  "breakpoint": {
+    "line": 7
+  },
+  "inspection": [
+    {
+      "line": 7,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 8,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 3,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 8,
+      "variable": "count = 42"
+    }
+  ]
+}

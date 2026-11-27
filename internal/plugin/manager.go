@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"net/url"
 	"os"
 	"os/exec"
@@ -114,7 +115,9 @@ func isLinkedDir(path, pluginDir string) (bool, error) {
 }
 
 func (m *Manager) LoadAll() []*Plugin {
-	os.MkdirAll(m.pluginsDir, 0755)
+	if err := os.MkdirAll(m.pluginsDir, 0755); err != nil {
+		m.discoveryError(m.pluginsDir, err)
+	}
 
 	regPath := m.registryPath
 	reg, err := LoadRegistry(regPath)
@@ -244,6 +247,7 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 	var prev *RegistryEntry
 	if entry := m.registry.Find(p.Manifest.Name); entry != nil {
 		saved := *entry
+		saved.InstalledDefaults = maps.Clone(entry.InstalledDefaults)
 		prev = &saved
 	}
 	m.registry.AddOrUpdate(
@@ -270,8 +274,14 @@ func (m *Manager) ApproveAndLoad(p *Plugin) error {
 		return err
 	}
 
-	if err := p.CallOnInstall(); err != nil {
+	if err, cleanupErr := m.callInstallHook(p); err != nil {
 		p.Destroy()
+		if cleanupErr != nil {
+			if entry := m.registry.Find(p.Name); entry != nil {
+				entry.Enabled = false
+			}
+			return errors.Join(err, cleanupErr, m.registry.Save())
+		}
 		return errors.Join(fmt.Errorf("on_install: %w", err), m.revertApproval(p, prev))
 	}
 
@@ -483,12 +493,12 @@ func (m *Manager) Install(repoURL, repoPath string) (*Plugin, error) {
 
 	manifest, err := LoadManifest(targetDir)
 	if err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("invalid plugin: %w", err)
 	}
 
 	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("prepare language source: %w", err)
 	}
 
@@ -505,7 +515,7 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cmd := remoteGitCommand("clone", "--depth", "1", repoURL, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -528,12 +538,12 @@ func (m *Manager) installFromSubdir(repoURL, repoPath string) (*Plugin, error) {
 	}
 
 	if err := copyDir(srcDir, targetDir); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("copy plugin: %w", err)
 	}
 
 	if err := prepareLanguageSources(filepath.Dir(m.registryPath), manifest); err != nil {
-		os.RemoveAll(targetDir)
+		_ = os.RemoveAll(targetDir)
 		return nil, fmt.Errorf("prepare language source: %w", err)
 	}
 
@@ -582,10 +592,15 @@ func (m *Manager) RunUninstallHook(name string) error {
 		return systemManagedError()
 	}
 	p := m.FindPlugin(name)
-	if p == nil {
-		return nil
+	if p != nil {
+		if err := hookError(p.CallLuaFunc(p.UninstallFunc)); err != nil {
+			return err
+		}
 	}
-	return hookError(p.CallLuaFunc(p.UninstallFunc))
+	if entry := m.registry.Find(name); entry != nil {
+		return m.removeDefaults(entry.InstalledDefaults)
+	}
+	return nil
 }
 
 func (m *Manager) Uninstall(name string) error {
@@ -740,7 +755,7 @@ func (u *PluginUpdate) fetchFromSubdir() error {
 	if err != nil {
 		return fmt.Errorf("create temp dir: %w", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cmd := remoteGitCommand("clone", "--depth", "1", u.repo, tmpDir)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -757,9 +772,8 @@ func (u *PluginUpdate) fetchFromSubdir() error {
 		return fmt.Errorf("prepare language source: %w", err)
 	}
 
-	os.RemoveAll(u.dir)
-	if err := copyDir(srcDir, u.dir); err != nil {
-		return fmt.Errorf("copy plugin: %w", err)
+	if err := replacePluginDirectory(srcDir, u.dir); err != nil {
+		return err
 	}
 	u.manifest = manifest
 	return nil
@@ -784,19 +798,12 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		return &Plugin{Name: u.manifest.Name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, true, nil
 	}
 
-	// Grant before destroying the old plugin: a reduction that cannot be
-	// persisted must leave the running plugin alone.
-	granted, err := m.grant(regEntry, u.manifest.Permissions)
+	// Persist the version and grants together before destroying the running plugin.
+	granted, err := m.grantVersion(regEntry, u.manifest.Permissions, u.manifest.Version)
 	if err != nil {
 		return nil, false, err
 	}
 	if idx < 0 {
-		previousVersion := regEntry.Version
-		regEntry.Version = u.manifest.Version
-		if err := m.registry.Save(); err != nil {
-			regEntry.Version = previousVersion
-			return nil, false, err
-		}
 		return &Plugin{Name: u.name, Dir: u.dir, Repo: u.repo, RepoPath: u.repoPath, Manifest: u.manifest}, false, nil
 	}
 
@@ -818,8 +825,6 @@ func (m *Manager) ApplyUpdate(u *PluginUpdate) (*Plugin, bool, error) {
 		return nil, false, err
 	}
 	m.collectRegistrations(p)
-	regEntry.Version = u.manifest.Version
-	m.registry.Save()
 	return p, false, nil
 }
 
@@ -900,18 +905,21 @@ func (m *Manager) SetEnabled(name string, enabled bool) (*Plugin, error) {
 // otherwise a retry would see the reduced grant already applied and skip the
 // save, leaving the dropped permission in the registry forever.
 func (m *Manager) grant(entry *RegistryEntry, declared PermissionSet) (PermissionSet, error) {
+	return m.grantVersion(entry, declared, entry.Version)
+}
+
+func (m *Manager) grantVersion(entry *RegistryEntry, declared PermissionSet, version string) (PermissionSet, error) {
 	granted := IntersectPermissions(entry.Permissions, declared)
 	paths := execPathsFor(entry.ExecPaths, granted.SystemExec)
-	if entry.SystemApproval {
-		granted.SystemExec = slices.Concat(granted.SystemExec, paths)
-		return granted, nil
-	}
-	if !reflect.DeepEqual(granted, entry.Permissions) || len(paths) != len(entry.ExecPaths) {
-		previous, previousPaths := entry.Permissions, entry.ExecPaths
+	previous := *entry
+	entry.Version = version
+	if !entry.SystemApproval {
 		entry.Permissions, entry.ExecPaths = granted, paths
+	}
+	if !reflect.DeepEqual(*entry, previous) {
 		if err := m.registry.Save(); err != nil {
-			entry.Permissions, entry.ExecPaths = previous, previousPaths
-			return PermissionSet{}, fmt.Errorf("persist reduced permissions for %q: %w", entry.Name, err)
+			*entry = previous
+			return PermissionSet{}, fmt.Errorf("persist plugin state for %q: %w", entry.Name, err)
 		}
 	}
 	granted.SystemExec = slices.Concat(granted.SystemExec, paths)

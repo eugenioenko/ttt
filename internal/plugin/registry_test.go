@@ -88,7 +88,7 @@ func TestRegistryUpdatePermissions(t *testing.T) {
 
 func TestLoadRegistryInvalidJSON(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plugins.ttt.json")
-	os.WriteFile(path, []byte("not json"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("not json"), 0644))
 
 	_, err := LoadRegistry(path)
 	if err == nil {

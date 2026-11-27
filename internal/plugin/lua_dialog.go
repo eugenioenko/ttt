@@ -45,7 +45,7 @@ func setupDialogFunctions(L *lua.LState, mod *lua.LTable, p *Plugin) {
 		dialog.SetContent(panel)
 		var onClose func()
 		if fn, ok := L.GetField(cfg, "on_close").(*lua.LFunction); ok {
-			onClose = func() { p.CallLuaFunc(fn) }
+			onClose = func() { _ = p.CallLuaFunc(fn) }
 		}
 		shown := p.OpenDialog != nil && p.OpenDialog(&PluginDialogWidget{DialogWidget: dialog, Panel: panel, height: height}, onClose)
 		L.Push(lua.LBool(shown))

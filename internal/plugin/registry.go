@@ -16,17 +16,18 @@ const (
 )
 
 type RegistryEntry struct {
-	SystemManaged  bool          `json:"systemManaged,omitempty"`
-	SystemApproval bool          `json:"systemApproval,omitempty"`
-	Name           string        `json:"name"`
-	DisplayName    string        `json:"displayName,omitempty"`
-	Repo           string        `json:"repo,omitempty"`
-	Path           string        `json:"path,omitempty"`
-	Version        string        `json:"version"`
-	Enabled        bool          `json:"enabled"`
-	Permissions    PermissionSet `json:"permissions"`
-	ExecPaths      []string      `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
-	GrantsVersion  int           `json:"grantsVersion,omitempty"`
+	InstalledDefaults map[string]string `json:"installedDefaults,omitempty"`
+	SystemManaged     bool              `json:"systemManaged,omitempty"`
+	SystemApproval    bool              `json:"systemApproval,omitempty"`
+	Name              string            `json:"name"`
+	DisplayName       string            `json:"displayName,omitempty"`
+	Repo              string            `json:"repo,omitempty"`
+	Path              string            `json:"path,omitempty"`
+	Version           string            `json:"version"`
+	Enabled           bool              `json:"enabled"`
+	Permissions       PermissionSet     `json:"permissions"`
+	ExecPaths         []string          `json:"execPaths,omitempty"` // from sys.request_exec; outside Permissions, which is intersected with the manifest
+	GrantsVersion     int               `json:"grantsVersion,omitempty"`
 }
 
 // Title is the human-facing name: DisplayName when set, else the unique Name.

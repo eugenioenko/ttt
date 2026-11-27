@@ -22,7 +22,7 @@ func completionTestApp(t *testing.T, name, content string) *App {
 		t.Fatal(err)
 	}
 	a := buildTestApp(t, config.DefaultSettings())
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	t.Cleanup(func() {
 		a.CloseTasks()
 		a.EditorGroup.CloseAllTabs()
@@ -87,7 +87,7 @@ func TestAutoSuggestNeedsCursorInTypedWord(t *testing.T) {
 		{"cursor stays in the word", func(a *App) { moveCursor(a, 1, 7) }, true},
 		{"cursor moves to the line above", func(a *App) { moveCursor(a, 0, 6) }, false},
 		{"active buffer changes", func(a *App) {
-			a.EditorGroup.OpenFile(other)
+			requireNoError(t, a.EditorGroup.OpenFile(other))
 			moveCursor(a, 1, 7)
 		}, false},
 	}
@@ -141,7 +141,7 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 	}
 
 	a := prepareListenTestApp(t)
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	moveCursor(a, 1, 6)
 	startListenTestEventLoop(t, a)
 
@@ -165,7 +165,7 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 		t.Fatal(err)
 	}
 
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{
 		Locations: []lsp.Location{{
 			URI:   FileURI(second),
 			Range: lsp.Range{Start: lsp.Position{Line: 1, Character: 0}},
@@ -184,7 +184,9 @@ func TestLocationResultDismissesSignatureHelpAndCancelsInFlightRequest(t *testin
 		}
 		// Even if the user returns to the first file before a late worker finishes,
 		// the cancelled request cannot reopen the popup.
-		a.EditorGroup.OpenFile(first)
+		if err := a.EditorGroup.OpenFile(first); err != nil {
+			return err
+		}
 		moveCursor(a, 1, 6)
 		if lateRun != nil {
 			lateRun()
@@ -243,5 +245,43 @@ func TestCompletionEditCoversCharactersTypedAfterTheRequest(t *testing.T) {
 				t.Fatalf("cursor col = %d, want %d", col, tt.wantCol)
 			}
 		})
+	}
+}
+
+func TestCompletionEditClampsMultiLineRangeToCompletionLine(t *testing.T) {
+	a := completionTestApp(t, "a.tsx", "<Alert type=\"\n  <header className=\"h-16\">\n")
+	moveCursor(a, 0, 13)
+	a.insertCompletion(ui.CompletionItem{Label: "danger"}, &lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 13},
+			End:   lsp.Position{Line: 1, Character: 19},
+		},
+		NewText: "danger",
+	})
+	lines := a.EditorGroup.ActiveBuffer().Lines
+	if lines[0] != `<Alert type="danger` || lines[1] != `  <header className="h-16">` {
+		t.Fatalf("lines = %q", lines[:2])
+	}
+	if line, col := a.EditorGroup.ActiveCursor(); line != 0 || col != 19 {
+		t.Fatalf("cursor = %d:%d, want 0:19", line, col)
+	}
+}
+
+func TestCompletionEditStartingOnAnotherLineIsIgnored(t *testing.T) {
+	a := completionTestApp(t, "a.tsx", "<Alert type=\"x\n  da\"\n")
+	moveCursor(a, 1, 4)
+	a.insertCompletion(ui.CompletionItem{Label: "danger"}, &lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 13},
+			End:   lsp.Position{Line: 1, Character: 4},
+		},
+		NewText: "danger",
+	})
+	lines := a.EditorGroup.ActiveBuffer().Lines
+	if lines[0] != `<Alert type="x` || lines[1] != `  da"` {
+		t.Fatalf("lines = %q", lines[:2])
+	}
+	if line, col := a.EditorGroup.ActiveCursor(); line != 1 || col != 4 {
+		t.Fatalf("cursor = %d:%d, want 1:4", line, col)
 	}
 }

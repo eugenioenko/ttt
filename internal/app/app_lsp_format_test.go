@@ -37,7 +37,7 @@ func formatTestApp(t *testing.T) (*App, string, string) {
 		}
 	}
 	a := buildTestApp(t, config.DefaultSettings())
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	t.Cleanup(func() {
 		a.CloseTasks()
 		a.EditorGroup.CloseAllTabs()
@@ -53,7 +53,7 @@ func TestFormattingResultForAnotherFileIsDropped(t *testing.T) {
 	version := buf.Version()
 
 	// The user switches to the other file while the server formats.
-	a.EditorGroup.OpenFile(second)
+	requireNoError(t, a.EditorGroup.OpenFile(second))
 
 	a.applyFormattingResult(&FormattingResult{
 		Path:    first,
@@ -101,7 +101,7 @@ func TestFormattingResultForAReopenedBufferIsDropped(t *testing.T) {
 	if err := os.WriteFile(first, []byte("package reopened\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	if a.EditorGroup.Editor.Buf == old {
 		t.Fatal("reopening the path reused the old buffer")
 	}

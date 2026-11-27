@@ -100,10 +100,10 @@ func TestUTF16WorkspaceEditsUseUnsavedTargetBuffers(t *testing.T) {
 	}
 	a.EditorGroup.ActiveBuffer().SetLines([]string{"😀😀 target!"})
 	a.EditorGroup.ActiveBuffer().Dirty = true
-	a.EditorGroup.OpenFile(second)
+	requireNoError(t, a.EditorGroup.OpenFile(second))
 	a.EditorGroup.ActiveBuffer().SetLines([]string{"中😀😀 target!"})
 	a.EditorGroup.ActiveBuffer().Dirty = true
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	edit := &lsp.WorkspaceEdit{Changes: map[string][]lsp.TextEdit{
 		FileURI(first):  {utf16Edit(0, 5, 11, "renamed")},
 		FileURI(second): {utf16Edit(0, 6, 12, "renamed")},
@@ -114,7 +114,7 @@ func TestUTF16WorkspaceEditsUseUnsavedTargetBuffers(t *testing.T) {
 		if got := a.EditorGroup.BufferForPath(path).Lines[0]; got != want {
 			t.Fatalf("%s = %q, want %q", path, got, want)
 		}
-		a.EditorGroup.OpenFile(path)
+		requireNoError(t, a.EditorGroup.OpenFile(path))
 		a.EditorGroup.Undo()
 		if strings.Contains(a.EditorGroup.ActiveBuffer().Lines[0], "renamed") {
 			t.Fatal("workspace edit did not undo in one step")
@@ -168,12 +168,12 @@ func TestUTF16NavigationUsesUnsavedDestination(t *testing.T) {
 		}
 	}
 	a := prepareListenTestApp(t)
-	a.EditorGroup.OpenFile(second)
+	requireNoError(t, a.EditorGroup.OpenFile(second))
 	a.EditorGroup.ActiveBuffer().SetLines([]string{"😀😀 target"})
 	a.EditorGroup.ActiveBuffer().Dirty = true
-	a.EditorGroup.OpenFile(first)
+	requireNoError(t, a.EditorGroup.OpenFile(first))
 	startListenTestEventLoop(t, a)
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: []lsp.Location{{
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&LocationResult{Locations: []lsp.Location{{
 		URI: FileURI(second), Range: utf16Edit(0, 5, 11, "").Range,
 	}}}))
 	if err := runExecMain(a, func() error {

@@ -33,6 +33,7 @@ func initMenuText() {
 			ui.MenuSep(),
 			{Label: i18n.Text("general.save"), Command: "file.save"},
 			{Label: i18n.Text("menu.saveAs"), Command: "file.saveAs"},
+			{Label: i18n.Text("general.saveAll"), Command: "file.saveAll"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.openFile"), Command: "file.open"},
 			{Label: i18n.Text("general.openFolder"), Command: "workspace.openFolder"},
@@ -373,8 +374,11 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
+	if group := app.editorTabGroupAt(mx, my); group != nil && group != app.EditorGroup {
+		app.Root.SetFocus(group)
+	}
 	tabR := app.EditorGroup.TabBar.GetRect()
-	if my >= tabR.Y && my < tabR.Y+tabR.H {
+	if tabR.Contains(mx, my) {
 		ev := tcell.NewEventMouse(mx, my, tcell.Button2, 0)
 		app.EditorGroup.TabBar.HandleEvent(ev)
 		return
@@ -393,14 +397,26 @@ func handleRightClick(app *App, mx, my int) {
 		}
 	}
 
-	if content := app.EditorGroup.ActiveTextSelection(); content != nil {
+	var clickedGroup *ui.EditorGroupWidget
+	for _, group := range app.editorGroups() {
+		if group.ContentRect().Contains(mx, my) {
+			clickedGroup = group
+			break
+		}
+	}
+	if clickedGroup == nil {
+		return
+	}
+	app.Root.SetFocus(clickedGroup)
+
+	if content := clickedGroup.ActiveTextSelection(); content != nil {
 		if w, ok := content.(ui.Widget); ok && w.HandleEvent(tcell.NewEventMouse(mx, my, tcell.Button2, 0)) != ui.EventIgnored {
 			return
 		}
 		openContextMenu(app, textContentContextMenu, mx, my)
-	} else if app.EditorGroup.ActiveCommitDetailWidget() != nil {
+	} else if clickedGroup.ActiveCommitDetailWidget() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(commitDetailContextMenu), mx, my)
-	} else if app.EditorGroup.ActiveDiffModeSurface() != nil || app.EditorGroup.ActiveDiffContextSurface() != nil {
+	} else if clickedGroup.ActiveDiffModeSurface() != nil || clickedGroup.ActiveDiffContextSurface() != nil {
 		openContextMenu(app, app.withActiveDiffViewMenu(diffContextMenu), mx, my)
 	} else {
 		openEditorContextMenu(app, mx, my)

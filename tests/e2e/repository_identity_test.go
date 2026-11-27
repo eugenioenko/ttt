@@ -39,12 +39,12 @@ func TestLinkedWorktreeBranchFollowsActiveFileAndClearsOutsideRepository(t *test
 		t.Fatal(err)
 	}
 
-	h.app.EditorGroup.OpenFile(linkedFile)
+	h.openFile(linkedFile)
 	h.app.SyncRepositoryBranch()
 	h.redraw()
 	h.assertContains("linkedbranch")
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.app.SyncRepositoryBranch()
 	h.redraw()
 	h.assertNotContains("linkedbranch")

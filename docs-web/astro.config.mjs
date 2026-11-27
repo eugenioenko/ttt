@@ -6,6 +6,7 @@ export default defineConfig({
   image: { service: passthroughImageService() },
   integrations: [
     starlight({
+      components: { Footer: './src/components/Footer.astro' },
       customCss: ['./src/styles/custom.css'],
       title: 'TTT Editor',
       favicon: '/favicon.svg',
@@ -28,6 +29,7 @@ export default defineConfig({
             { label: 'File Explorer & Workspaces', link: '/guides/workspaces/' },
             { label: 'Search', link: '/guides/search/' },
             { label: 'Git Integration', link: '/guides/git/' },
+            { label: 'Debugging', link: '/guides/debugging/' },
             { label: 'Integrated Terminal', link: '/guides/terminal/' },
             { label: 'LSP', link: '/guides/lsp/' },
             { label: 'Themes', link: '/guides/themes/' },

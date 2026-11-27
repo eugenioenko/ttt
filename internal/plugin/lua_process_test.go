@@ -132,8 +132,8 @@ func blockingSpawnedProcess(t *testing.T) *mockSpawnedProcess {
 		waited: make(chan struct{}),
 	}
 	t.Cleanup(func() {
-		stdoutWriter.Close()
-		stderrWriter.Close()
+		_ = stdoutWriter.Close()
+		_ = stderrWriter.Close()
 		waitFor(t, mp.waited, "process reaping")
 	})
 	return mp

@@ -53,17 +53,17 @@ func TestWordWrapBreakLanguageOverride(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "compact")
 	g.WordWrap, g.WordWrapBreak = true, config.WordWrapBreakWord
 	g.LanguageOverrides = map[string]config.EditorLanguageOverride{"go": {WordWrapBreak: config.WordWrapBreakCharacter}}
-	g.OpenFile(md)
+	requireNoError(t, g.OpenFile(md))
 	if !g.Editor.WrapWords {
 		t.Fatal("markdown should inherit word breaks")
 	}
-	g.OpenFile(goFile)
+	requireNoError(t, g.OpenFile(goFile))
 	if g.Editor.WrapWords {
 		t.Fatal("go override should break at characters")
 	}
 	g.WordWrapBreak = config.WordWrapBreakCharacter
 	g.LanguageOverrides = nil
-	g.OpenFile(md)
+	requireNoError(t, g.OpenFile(md))
 	if g.Editor.WrapWords {
 		t.Fatal("global character setting ignored")
 	}

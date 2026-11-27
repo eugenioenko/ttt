@@ -1,0 +1,109 @@
+{
+  "name": "ts-js-debug",
+  "requires": [
+    "install/js-debug.sh"
+  ],
+  "source": "fixtures/ts-counter/main.ts",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "pwa-node": {
+          "command": [
+            "js-debug-adapter",
+            "${socket}",
+            "127.0.0.1"
+          ],
+          "transport": "listen",
+          "addressPattern": "^Debug server listening at (.+)$",
+          "provider": "jsdebug",
+          "languages": [
+            "typescript",
+            "javascript"
+          ],
+          "fileLaunch": {
+            "program": "${file}"
+          }
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "ts-js-debug",
+    "type": "pwa-node",
+    "request": "launch",
+    "program": "${workspaceFolder}/main.js",
+    "outFiles": [
+      "${workspaceFolder}/*.js"
+    ]
+  },
+  "pidAttach": {
+    "arguments": {
+      "processId": "${pid}",
+      "port": "${port}",
+      "outFiles": [
+        "${workspaceFolder}/*.js"
+      ]
+    },
+    "portFile": "port"
+  },
+  "service": {
+    "source": "fixtures/ts-attach/app.ts",
+    "command": [
+      "node",
+      "--inspect=127.0.0.1:0",
+      "app.js"
+    ],
+    "line": 10,
+    "nextLine": 11,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "command": [
+      "node",
+      "--inspect=127.0.0.1:0",
+      "app.js"
+    ],
+    "portFile": "port",
+    "arguments": {
+      "address": "127.0.0.1",
+      "port": "${port}",
+      "outFiles": [
+        "${workspaceFolder}/*.js"
+      ]
+    },
+    "externalAdapter": true
+  },
+  "breakpoint": {
+    "line": 6
+  },
+  "inspection": [
+    {
+      "line": 6,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 7,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 2,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 8,
+      "variable": "count = 43"
+    }
+  ],
+  "lifecycle": {
+    "program": "${workspaceFolder}/app.js",
+    "outFiles": [
+      "${workspaceFolder}/*.js"
+    ]
+  },
+  "output": "count = 43"
+}

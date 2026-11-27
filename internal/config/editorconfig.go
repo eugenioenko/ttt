@@ -66,7 +66,7 @@ func isRoot(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -89,7 +89,7 @@ func parseEditorConfigFile(path string) []editorConfigSection {
 	if err != nil {
 		return nil
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var sections []editorConfigSection
 	var current *editorConfigSection

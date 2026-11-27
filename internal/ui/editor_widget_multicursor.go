@@ -267,7 +267,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 		cs.Line = e.Buf.ClampLine(cs.Line)
 		lineLen := len([]rune(e.Buf.Lines[cs.Line]))
 		if cs.Col < lineLen {
-			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col}
+			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col, Forward: true}
 			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			e.shiftLaterCursors(i, cs.Line, cs.Col, -1)

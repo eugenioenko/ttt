@@ -1,0 +1,94 @@
+{
+  "name": "php-xdebug",
+  "requires": [
+    "install/php-debug.sh"
+  ],
+  "source": "fixtures/php-counter/main.php",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "php": {
+          "command": [
+            "php-debug-adapter"
+          ],
+          "languages": [
+            "php"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "php-xdebug",
+    "type": "php",
+    "request": "launch",
+    "xdebugSettings": {
+      "breakpoint_include_return_value": 0
+    },
+    "program": "${workspaceFolder}/main.php",
+    "cwd": "${workspaceFolder}",
+    "hostname": "127.0.0.1",
+    "port": 0,
+    "env": {
+      "XDEBUG_MODE": "debug",
+      "XDEBUG_CONFIG": "client_host=127.0.0.1 client_port=${port}"
+    },
+    "runtimeArgs": [
+      "-dxdebug.start_with_request=yes"
+    ]
+  },
+  "pidAttach": {
+    "skip": "PHP Debug accepts incoming Xdebug connections through a launch listener"
+  },
+  "lifecycle": {
+    "program": "${workspaceFolder}/main.php",
+    "cwd": "${workspaceFolder}",
+    "hostname": "127.0.0.1",
+    "port": 0,
+    "env": {
+      "XDEBUG_MODE": "debug",
+      "XDEBUG_CONFIG": "client_host=127.0.0.1 client_port=${port}"
+    },
+    "runtimeArgs": [
+      "-dxdebug.start_with_request=yes"
+    ],
+    "args": [
+      "service"
+    ]
+  },
+  "service": {
+    "source": "fixtures/php-counter/main.php",
+    "line": 16,
+    "locals": {
+      "$value": "42"
+    }
+  },
+  "addressAttach": {
+    "skip": "Xdebug initiates connections to the adapter listener"
+  },
+  "output": "count = 43",
+  "breakpoint": {
+    "line": 7
+  },
+  "inspection": [
+    {
+      "line": 7,
+      "variable": "$count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 8,
+      "variable": "$count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 3,
+      "variable": "$value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 9,
+      "variable": "$count = 43"
+    }
+  ]
+}

@@ -2,7 +2,11 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
+	"path/filepath"
+	"time"
 )
 
 type State struct {
@@ -15,17 +19,35 @@ type State struct {
 	PanelWidth          int      `json:"panelWidth,omitempty"`
 	RecentFolders       []string `json:"recentFolders,omitempty"`
 	RecentCommands      []string `json:"recentCommands,omitempty"`
+	LastUpdateCheckAt   string   `json:"lastUpdateCheckAt,omitempty"`
 }
 
 func LoadState() State {
-	var s State
-	paths := configPaths()
-	if data, err := readFirst(paths, "state.json"); err == nil {
-		if json.Unmarshal(data, &s) != nil {
-			return State{}
-		}
-	}
+	s, _ := ReadState()
 	return s
+}
+
+func ReadState() (State, error) {
+	return readStateFrom(configPaths())
+}
+
+func readStateFrom(dirs []string) (State, error) {
+	for _, dir := range dirs {
+		path := filepath.Join(dir, "state.json")
+		data, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			return State{}, err
+		}
+		var s State
+		if err := json.Unmarshal(data, &s); err != nil {
+			return State{}, fmt.Errorf("%s: %w", path, err)
+		}
+		return s, nil
+	}
+	return State{}, nil
 }
 
 func SaveState(s State) error {
@@ -36,4 +58,26 @@ func SaveState(s State) error {
 	}
 	data = append(data, '\n')
 	return os.WriteFile(path, data, 0644)
+}
+
+func (s State) LastUpdateCheckTime() time.Time {
+	if s.LastUpdateCheckAt == "" {
+		return time.Time{}
+	}
+	parsed, err := time.Parse(time.RFC3339Nano, s.LastUpdateCheckAt)
+	if err != nil {
+		parsed, err = time.Parse(time.RFC3339, s.LastUpdateCheckAt)
+		if err != nil {
+			return time.Time{}
+		}
+	}
+	return parsed
+}
+
+func (s *State) SetLastUpdateCheckTime(t time.Time) {
+	if t.IsZero() {
+		s.LastUpdateCheckAt = ""
+		return
+	}
+	s.LastUpdateCheckAt = t.UTC().Format(time.RFC3339Nano)
 }

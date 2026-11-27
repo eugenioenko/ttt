@@ -595,7 +595,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 					// Close runs, and the callback may open or close tabs.
 					panel.OnClose = func() {
 						p.SafePostAsync(&PluginAsyncResult{Plugin: p, Callback: func() {
-							p.CallLuaFunc(fn)
+							_ = p.CallLuaFunc(fn)
 						}})
 					}
 				}
@@ -804,7 +804,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		L.SetField(mod, "set_timeout", L.NewFunction(func(L *lua.LState) int {
 			ms := L.CheckInt(1)
 			fn := L.CheckFunction(2)
-			id := p.SetTimeout(ms, func() { p.CallLuaFunc(fn) })
+			id := p.SetTimeout(ms, func() { _ = p.CallLuaFunc(fn) })
 			L.Push(lua.LNumber(id))
 			return 1
 		}))
@@ -812,7 +812,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 		L.SetField(mod, "set_interval", L.NewFunction(func(L *lua.LState) int {
 			ms := L.CheckInt(1)
 			fn := L.CheckFunction(2)
-			id := p.SetInterval(ms, func() { p.CallLuaFunc(fn) })
+			id := p.SetInterval(ms, func() { _ = p.CallLuaFunc(fn) })
 			L.Push(lua.LNumber(id))
 			return 1
 		}))
@@ -838,7 +838,7 @@ func setupTTTModule(L *lua.LState, p *Plugin) {
 					if mine != gen {
 						return
 					}
-					p.CallLuaFunc(fn, args...)
+					_ = p.CallLuaFunc(fn, args...)
 				})
 				return 0
 			}))

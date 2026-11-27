@@ -114,7 +114,7 @@ func (a *App) RunRepoTask(task RepoTask) {
 				break
 			}
 		}
-		screen.PostEvent(tcell.NewEventInterrupt(&RepoOpResult{Task: task, Err: failed}))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(&RepoOpResult{Task: task, Err: failed}))
 	}()
 }
 

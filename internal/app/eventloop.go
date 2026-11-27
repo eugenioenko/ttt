@@ -19,6 +19,7 @@ import (
 )
 
 type highlightStep struct{}
+type eventLoopShutdown struct{}
 
 const highlightStepBudget = 4 * time.Millisecond
 
@@ -35,7 +36,7 @@ func RunEventLoop(
 	defer app.Root.CancelPointerCapture()
 	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
-		defer app.Watcher.Close()
+		defer func() { _ = app.Watcher.Close() }()
 	}
 	if app.Repository != nil {
 		defer app.Repository.Close()
@@ -236,6 +237,12 @@ func RunEventLoop(
 					if pev == nil || !*running {
 						break
 					}
+					if interrupt, ok := pev.(*tcell.EventInterrupt); ok {
+						if _, shutdown := interrupt.Data().(eventLoopShutdown); shutdown {
+							*running = false
+							return
+						}
+					}
 					if pe, ok := pev.(*tcell.EventPaste); ok && !pe.Start() {
 						break
 					}
@@ -277,13 +284,16 @@ func RunEventLoop(
 			var execErr error
 			skipRedraw := false
 			switch v := tev.Data().(type) {
+			case eventLoopShutdown:
+				*running = false
+				return
 			case *taskDelivery:
 				v.run()
 			case *highlightStep:
 				// Short steps keep input responsive while a large file catches up;
 				// the frame is redrawn once the deferred lines are ready.
 				if highlight.Step(highlightStepBudget) {
-					screen.PostEvent(tcell.NewEventInterrupt(v))
+					_ = screen.PostEvent(tcell.NewEventInterrupt(v))
 					skipRedraw = true
 				}
 			case string:
@@ -385,13 +395,9 @@ func RunEventLoop(
 			case *FormattingResult:
 				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
-				var lines []string
-				if len(v.Diagnostics) > 0 {
-					lines = app.lspLines(v.Path)
-				}
-				for _, group := range app.editorGroups() {
-					group.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, LspToUIDiagnostics(v.Diagnostics, lines))
-				}
+				app.applyLSPDiagnostics(v)
+			case *LSPRootStopped:
+				app.handleLSPRootStopped(v)
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:
@@ -447,7 +453,7 @@ func RunEventLoop(
 			case *PluginUpdateResult:
 				app.HandlePluginUpdateResult(v)
 			case *RemoteRegistryResult:
-				app.handleRemoteRegistryResult(v)
+				app.HandleRemoteRegistryResult(v)
 			case *PrFetchResult:
 				if v.Err != nil {
 					app.StatusError(i18n.Format("status.prFetchFailed", i18n.Args{"error": v.Err.Error()}))
@@ -476,21 +482,6 @@ func RunEventLoop(
 			if execRequest != nil {
 				execRequest.complete(execErr)
 			}
-		}
-	}
-}
-
-func resizeTerminals(app *App) {
-	app.resizeEditorTerminals()
-	if !app.ContentSplit.ShowBottom {
-		return
-	}
-	r := app.ContentSplit.BottomRect()
-	for _, tt := range app.Terminals {
-		tt.Term.AckUpdate()
-		content := app.TerminalPanel.ContentRectFor(tt.Widget, ui.Rect{W: r.W, H: r.H - 2}, tt.Widget.ScrollbarVisible())
-		if content.W > 0 && content.H > 0 {
-			tt.Term.Resize(content.W, content.H)
 		}
 	}
 }

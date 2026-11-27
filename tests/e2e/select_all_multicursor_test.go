@@ -14,8 +14,8 @@ func TestSelectAllCollapsesMultiCursors(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "words.txt")
-	os.WriteFile(f, []byte("foo bar\nbaz foo\nend foo"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("foo bar\nbaz foo\nend foo"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	editor := h.app.EditorGroup.Editor

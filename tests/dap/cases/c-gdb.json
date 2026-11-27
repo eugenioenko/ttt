@@ -1,0 +1,96 @@
+{
+  "name": "c-gdb",
+  "requires": [
+    "install/gdb.sh"
+  ],
+  "source": "fixtures/c-counter/main.c",
+  "binary": "bin/linux-amd64/c-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "gdb": {
+          "command": [
+            "gdb",
+            "-q",
+            "-nx",
+            "-i",
+            "dap"
+          ],
+          "languages": [
+            "c"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "c-gdb",
+    "type": "gdb",
+    "request": "launch",
+    "program": "${workspaceFolder}/c-counter"
+  },
+  "breakpoint": {
+    "line": 7
+  },
+  "inspection": [
+    {
+      "line": 7,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 8,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 3,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 8,
+      "variable": "count = 42"
+    }
+  ],
+  "service": {
+    "source": "fixtures/c-attach/main.c",
+    "binary": "bin/linux-amd64/c-attach",
+    "command": [
+      "./c-attach"
+    ],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "pidAttach": {
+    "arguments": {
+      "pid": "${pid}",
+      "program": "${workspaceFolder}/c-attach"
+    },
+    "continueOnAttach": true
+  },
+  "addressAttach": {
+    "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
+      "gdbserver",
+      "--once",
+      "--attach",
+      "stdio",
+      "${pid}"
+    ],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/c-attach",
+      "target": "127.0.0.1:${port}"
+    },
+    "continueOnAttach": true
+  },
+  "output": "count = 43",
+  "lifecycle": {
+    "program": "${workspaceFolder}/c-attach"
+  }
+}

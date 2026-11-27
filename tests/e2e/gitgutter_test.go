@@ -12,12 +12,12 @@ import (
 func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
-	os.WriteFile(filepath.Join(h.dir, ".gitignore"), []byte("*.log\n"), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, ".gitignore"), []byte("*.log\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	os.WriteFile(filepath.Join(h.dir, "app.log"), []byte("one\ntwo\n"), 0644)
-	os.WriteFile(filepath.Join(h.dir, "new.txt"), []byte("one\ntwo\n"), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, "app.log"), []byte("one\ntwo\n"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, "new.txt"), []byte("one\ntwo\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "new.txt"))
+	h.openFile(filepath.Join(h.dir, "new.txt"))
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
 	h.redraw()
@@ -27,7 +27,7 @@ func TestGitGutterSkipsIgnoredFiles(t *testing.T) {
 		t.Fatalf("untracked file gutter = %v for %d lines, want every line added", changes, len(lines))
 	}
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "app.log"))
+	h.openFile(filepath.Join(h.dir, "app.log"))
 	h.app.SyncRepositoryBranch()
 	h.app.RequestGitGutterForActiveFile()
 	h.redraw()
@@ -50,12 +50,12 @@ func TestGitGutterUnchangedCommittedFiles(t *testing.T) {
 			h := newTestHarness(t, 100, 30)
 			defer h.stop()
 			path := filepath.Join(h.dir, "file.txt")
-			os.WriteFile(path, []byte(tc.content), 0644)
-			os.WriteFile(filepath.Join(h.dir, ".gitattributes"), []byte("file.txt -text\n"), 0644)
+			requireNoError(t, os.WriteFile(path, []byte(tc.content), 0644))
+			requireNoError(t, os.WriteFile(filepath.Join(h.dir, ".gitattributes"), []byte("file.txt -text\n"), 0644))
 			initializeHarnessRepository(t, h.dir)
 
 			h.app.EditorGroup.ShowTrailingNewline = tc.trailingNewline
-			h.app.EditorGroup.OpenFile(path)
+			h.openFile(path)
 			h.app.SyncRepositoryBranch()
 			h.app.RequestGitGutterForActiveFile()
 			h.redraw()

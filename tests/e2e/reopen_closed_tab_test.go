@@ -23,8 +23,8 @@ func TestReopenClosedTabRestoresFileAndCursor(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 	p := writeTabFiles(t, h.dir, "a.txt", "b.txt")
-	h.app.EditorGroup.OpenFile(p[0])
-	h.app.EditorGroup.OpenFile(p[1])
+	h.openFile(p[0])
+	h.openFile(p[1])
 	h.app.EditorGroup.GoToLineCol(2, 4)
 	h.exec("tab.close")
 	if got := h.app.EditorGroup.ActiveFilePath(); got == p[1] {
@@ -41,7 +41,7 @@ func TestReopenClosedTabRestoresFileAndCursor(t *testing.T) {
 	}
 	tabs := h.app.EditorGroup.TabCount()
 	c := writeTabFiles(t, h.dir, "c.txt")[0]
-	h.app.EditorGroup.OpenFile(c)
+	h.openFile(c)
 	if got := h.app.EditorGroup.TabCount(); got != tabs+1 {
 		t.Errorf("tabs = %d after opening another file, want %d: the reopened tab must not be a preview", got, tabs+1)
 	}
@@ -52,8 +52,8 @@ func TestReopenClosedTabAfterCloseAllGoesNewestFirst(t *testing.T) {
 	defer h.stop()
 	p := writeTabFiles(t, h.dir, "a.txt", "b.txt", "gone.txt")
 	for _, f := range p {
-		h.app.EditorGroup.OpenFile(f)
-		h.app.EditorGroup.OpenFile(f) // a second open keeps the preview tab
+		h.openFile(f)
+		h.openFile(f) // a second open keeps the preview tab
 
 	}
 	h.exec("tab.closeAll")

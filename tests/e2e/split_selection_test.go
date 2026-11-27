@@ -11,8 +11,8 @@ func TestSplitSelectionToLines(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "split.txt")
-	os.WriteFile(f, []byte("line1\nline2\nline3\nline4\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("line1\nline2\nline3\nline4\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	editor := h.app.EditorGroup.Editor
@@ -47,8 +47,8 @@ func TestSplitSelectionToLines_NoSelection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "nosplit.txt")
-	os.WriteFile(f, []byte("line1\nline2\nline3\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("line1\nline2\nline3\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	editor := h.app.EditorGroup.Editor
@@ -66,8 +66,8 @@ func TestSplitSelectionToLines_SingleLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "single.txt")
-	os.WriteFile(f, []byte("hello world\nline2\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello world\nline2\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	editor := h.app.EditorGroup.Editor
@@ -90,8 +90,8 @@ func TestSplitSelectionToLines_TypeAtAllCursors(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "typesplit.txt")
-	os.WriteFile(f, []byte("aaa\nbbb\nccc\nddd\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("aaa\nbbb\nccc\nddd\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	editor := h.app.EditorGroup.Editor

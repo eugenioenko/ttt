@@ -64,6 +64,7 @@ const (
 	CommitDetailStageUnstaged
 	CommitDetailStageMixed
 	CommitDetailStageConflict
+	CommitDetailStageWorkingCopy
 )
 
 type CommitDetailContentKind uint8
@@ -176,6 +177,7 @@ type CommitDetailWidget struct {
 	gutterHighlight    bool
 	colorNumbers       bool
 	indentGuides       bool
+	fullLineSelection  bool
 	chevronCollapsed   rune
 	chevronExpanded    rune
 	gutterStyle        string
@@ -353,6 +355,15 @@ func (d *CommitDetailWidget) SetIndentGuides(enabled bool) {
 	}
 }
 
+func (d *CommitDetailWidget) SetFullLineSelection(enabled bool) {
+	d.fullLineSelection = enabled
+	for i := range d.Files {
+		if d.Files[i].view != nil {
+			d.Files[i].view.SetFullLineSelection(enabled)
+		}
+	}
+}
+
 func (d *CommitDetailWidget) SetDiffColorGutterNumbers(enabled bool) {
 	d.colorNumbers = enabled
 	d.applyViewOptions()
@@ -386,6 +397,7 @@ func (d *CommitDetailWidget) applyViewOptions() {
 		v.gapChevron = d.chevronCollapsed
 		v.minGutter = d.gutterW
 		v.SetIndentGuides(d.indentGuides)
+		v.SetFullLineSelection(d.fullLineSelection)
 		v.applyOverlayOptions()
 	}
 }
@@ -854,6 +866,7 @@ func (d *CommitDetailWidget) fileView(file *CommitDetailFile) *DiffEditorWidget 
 	}
 	v.SetSyntaxHighlight(d.SyntaxHighlight && file.Path != "")
 	v.SetIndentGuides(d.indentGuides)
+	v.SetFullLineSelection(d.fullLineSelection)
 	v.mode = d.mode
 	v.wrapMode = d.wrapMode
 	v.focusLeft = false
@@ -888,6 +901,8 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 		stage = i18n.Text("changes.stagedState")
 	case CommitDetailStageMixed:
 		stage = i18n.Text("changes.mixed")
+	case CommitDetailStageWorkingCopy:
+		stage = i18n.Text("changes.workingCopyState")
 	}
 	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
 }

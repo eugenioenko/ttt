@@ -48,7 +48,7 @@ func (a *App) RequestDocumentSymbols(path, lang string) {
 	} else if !samePath || a.Symbols.Tree.ItemCount() == 0 {
 		a.Symbols.SetStatus(i18n.Text("status.loadingSymbols"))
 	}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	manager := a.LspManager
 	lines := a.lspLines(path)
 	a.scheduleSymbols(path, func(ctx context.Context) (symbolsReply, error) {

@@ -26,7 +26,7 @@ func replacePluginContributionFiles(kind, name string, files map[string][]byte) 
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func() { _ = root.Close() }()
 	for _, dir := range []string{kind, filepath.Join(kind, "plugins")} {
 		if err := root.Mkdir(dir, 0755); err != nil && !os.IsExist(err) {
 			return err
@@ -49,7 +49,7 @@ func replacePluginContributionFiles(kind, name string, files map[string][]byte) 
 	cleanup := true
 	defer func() {
 		if cleanup {
-			root.RemoveAll(stage)
+			_ = root.RemoveAll(stage)
 		}
 	}()
 	next := filepath.Join(stage, "next")

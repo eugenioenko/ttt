@@ -13,9 +13,9 @@ func TestTabIndentDetection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "tabs.go")
-	os.WriteFile(f, []byte("func main() {\n\tfmt.Println()\n\tif true {\n\t\treturn\n\t}\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("func main() {\n\tfmt.Println()\n\tif true {\n\t\treturn\n\t}\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	if !h.app.EditorGroup.Editor.UseTabs {
@@ -28,9 +28,9 @@ func TestSpaceIndentDetection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "spaces.py")
-	os.WriteFile(f, []byte("def main():\n  print('hello')\n  if True:\n    return\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("def main():\n  print('hello')\n  if True:\n    return\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	if h.app.EditorGroup.Editor.UseTabs {
@@ -46,9 +46,9 @@ func TestTabKeyInsertsTabChar(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "tabkey.go")
-	os.WriteFile(f, []byte("func main() {\n\tfmt.Println()\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("func main() {\n\tfmt.Println()\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	// Go to end of first line
@@ -73,9 +73,9 @@ func TestTabKeyInsertsSpaces(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "spacetab.py")
-	os.WriteFile(f, []byte("def main():\n    pass\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("def main():\n    pass\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	// Go to end of first line
@@ -102,9 +102,9 @@ func TestEnterPreservesTabIndent(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "enter_tab.go")
-	os.WriteFile(f, []byte("func main() {\n\tif true {\n\t}\n}\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("func main() {\n\tif true {\n\t}\n}\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.redraw()
 
 	// Move to end of line 1 ("\tif true {") - after the opening brace
@@ -146,8 +146,8 @@ func TestIndentPickerChangesTabSize(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "size.go")
-	os.WriteFile(f, []byte("package main\n\nfunc main() {\n    fmt.Println()\n}\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("package main\n\nfunc main() {\n    fmt.Println()\n}\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	if h.app.EditorGroup.Editor.TabSize != 4 {

@@ -155,6 +155,8 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleGutterAdded, theme.Diff.GutterAdded)
 	applyStyleDef(&m, term.StyleGutterDeleted, theme.Diff.GutterDeleted)
 	applyStyleDef(&m, term.StyleGutterModified, theme.Diff.GutterModified)
+	applyStyleDef(&m, term.StyleDebugBreakpoint, theme.Editor.DebugBreakpoint)
+	applyStyleDef(&m, term.StyleDebugExecution, theme.Editor.DebugExecution)
 	applyStyleDef(&m, term.StyleGutterBookmark, theme.Diff.GutterBookmark)
 	applyStyleDef(&m, term.StyleHighlight, theme.Editor.Highlight)
 	applyStyleDef(&m, term.StyleHighlightStrong, theme.Editor.HighlightStrong)

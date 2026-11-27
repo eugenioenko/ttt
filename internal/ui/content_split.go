@@ -79,6 +79,10 @@ func (cs *ContentSplitWidget) TopBorder() (int, bool) {
 	if cs.ShowBottom && cs.Bottom != nil && cs.Position == SplitRight {
 		return 0, true
 	}
+	return cs.LeftTopBorder()
+}
+
+func (cs *ContentSplitWidget) LeftTopBorder() (int, bool) {
 	offset, corner := 2, true
 	if provider, ok := cs.Top.(topBorderProvider); ok {
 		offset, corner = provider.TopBorder()

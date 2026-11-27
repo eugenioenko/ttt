@@ -11,8 +11,8 @@ func TestCloseAllTabsNoDirty(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "clean.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("tab.closeAll")
@@ -29,8 +29,8 @@ func TestCloseAllTabsDirtyShowsDialog(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "dirty.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('X')
@@ -54,11 +54,11 @@ func TestCloseOtherTabsDirtyShowsDialog(t *testing.T) {
 
 	a := filepath.Join(h.dir, "a.txt")
 	b := filepath.Join(h.dir, "b.txt")
-	os.WriteFile(a, []byte("aaa\n"), 0644)
-	os.WriteFile(b, []byte("bbb\n"), 0644)
+	requireNoError(t, os.WriteFile(a, []byte("aaa\n"), 0644))
+	requireNoError(t, os.WriteFile(b, []byte("bbb\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(a)
-	h.app.EditorGroup.OpenFile(b)
+	h.openFile(a)
+	h.openFile(b)
 	h.redraw()
 
 	// b is active (last opened). Dirty it.
@@ -66,7 +66,7 @@ func TestCloseOtherTabsDirtyShowsDialog(t *testing.T) {
 	h.redraw()
 
 	// Switch to a so b becomes "other"
-	h.app.EditorGroup.OpenFile(a)
+	h.openFile(a)
 	h.redraw()
 
 	active := h.app.EditorGroup.ActiveFileName()
@@ -88,11 +88,11 @@ func TestCloseAllSavedKeepsDirty(t *testing.T) {
 
 	clean := filepath.Join(h.dir, "clean.txt")
 	dirty := filepath.Join(h.dir, "dirty.txt")
-	os.WriteFile(clean, []byte("clean\n"), 0644)
-	os.WriteFile(dirty, []byte("dirty\n"), 0644)
+	requireNoError(t, os.WriteFile(clean, []byte("clean\n"), 0644))
+	requireNoError(t, os.WriteFile(dirty, []byte("dirty\n"), 0644))
 
-	h.app.EditorGroup.OpenFile(clean)
-	h.app.EditorGroup.OpenFile(dirty)
+	h.openFile(clean)
+	h.openFile(dirty)
 	h.redraw()
 
 	h.pressRune('X')

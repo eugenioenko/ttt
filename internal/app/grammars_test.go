@@ -52,16 +52,16 @@ func TestPluginGrammarInstallAndUninstall(t *testing.T) {
 		highlight.SetExternalGrammars(nil)
 	})
 
-	os.MkdirAll(filepath.Join(cfgDir, "grammars"), 0755)
-	os.WriteFile(filepath.Join(cfgDir, "grammars", "manual.json"), []byte(`{"scopeName": "source.bar", "fileTypes": ["bar"], "patterns": []}`), 0644)
+	requireNoError(t, os.MkdirAll(filepath.Join(cfgDir, "grammars"), 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(cfgDir, "grammars", "manual.json"), []byte(`{"scopeName": "source.bar", "fileTypes": ["bar"], "patterns": []}`), 0644))
 	manual := config.GrammarSetting{Path: "grammars/manual.json"}
 	settings := config.DefaultSettings()
 	settings.Editor.Grammars = []config.GrammarSetting{manual}
 	a := buildTestApp(t, settings)
 
 	src := filepath.Join(t.TempDir(), "main.foo")
-	os.WriteFile(src, []byte("foo\n"), 0644)
-	a.EditorGroup.OpenFile(src)
+	requireNoError(t, os.WriteFile(src, []byte("foo\n"), 0644))
+	requireNoError(t, a.EditorGroup.OpenFile(src))
 	if got := activeLanguage(a); got != "" {
 		t.Fatalf("language before install = %q, want none", got)
 	}
@@ -106,13 +106,13 @@ func TestGrammarSettingsAppliedFromSettings(t *testing.T) {
 		config.OverrideConfigDir = ""
 		highlight.SetExternalGrammars(nil)
 	})
-	os.MkdirAll(filepath.Join(cfgDir, "grammars"), 0755)
-	os.WriteFile(filepath.Join(cfgDir, "grammars", "foo.json"), []byte(fooGrammarJSON), 0644)
+	requireNoError(t, os.MkdirAll(filepath.Join(cfgDir, "grammars"), 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(cfgDir, "grammars", "foo.json"), []byte(fooGrammarJSON), 0644))
 
 	a := buildTestApp(t, config.DefaultSettings())
 	src := filepath.Join(t.TempDir(), "main.foo")
-	os.WriteFile(src, []byte("foo\n"), 0644)
-	a.EditorGroup.OpenFile(src)
+	requireNoError(t, os.WriteFile(src, []byte("foo\n"), 0644))
+	requireNoError(t, a.EditorGroup.OpenFile(src))
 
 	s := *a.Settings
 	s.Editor.Grammars = []config.GrammarSetting{{Path: "grammars/foo.json"}, {Path: "grammars/broken.json"}}
@@ -179,10 +179,10 @@ func TestPluginGrammarSymlinkOutsidePluginIsRejected(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 
 	secret := filepath.Join(t.TempDir(), "secret.json")
-	os.WriteFile(secret, []byte(fooGrammarJSON), 0644)
+	requireNoError(t, os.WriteFile(secret, []byte(fooGrammarJSON), 0644))
 	p := newGrammarPlugin(t, "sneaky")
 	link := filepath.Join(p.Dir, "syntaxes", "foo.json")
-	os.Remove(link)
+	requireNoError(t, os.Remove(link))
 	if err := os.Symlink(secret, link); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}

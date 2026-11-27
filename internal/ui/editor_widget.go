@@ -46,6 +46,7 @@ type EditorPaneWidget struct {
 	UseTabs                 bool
 	LineNumbers             bool
 	IndentGuides            bool
+	FullLineSelection       bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool
@@ -92,6 +93,7 @@ type EditorPaneWidget struct {
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
+	BookmarkOverlay         func(int) (Bookmark, bool)
 	Bookmarks               map[int]Bookmark
 	OnBookmarkChange        func(line int, action string, b Bookmark)
 	OnGutterClick           func(line int) bool
@@ -106,6 +108,7 @@ type EditorPaneWidget struct {
 	links                   editorLinks
 	LinkWorkDir             string
 	ControlModifiers        *tcell.ModMask
+	NativeLinks             bool
 	OnOpenURL               func(string)
 	OnOpenFile              func(string, int, int)
 	OnLinkHover             func(*EditorPaneWidget)
@@ -177,12 +180,7 @@ func (e *EditorPaneWidget) GutterWidth() int {
 	}
 }
 
-func (e *EditorPaneWidget) bookmarkColumn() int {
-	if e.GutterStyle == "extended" {
-		return 1
-	}
-	return 0
-}
+const bookmarkColumn = 0
 
 func (e *EditorPaneWidget) validBookmarkLine(line int) bool {
 	return e.Buf != nil && line >= 0 && line < len(e.Buf.Lines)
@@ -479,6 +477,16 @@ func (e *EditorPaneWidget) refreshFolds() {
 }
 
 func (e *EditorPaneWidget) ExecCommand(cmd undo.EditCommand) { e.exec(cmd) }
+
+func (e *EditorPaneWidget) undoSelectionPosition() *undo.EditPosition {
+	if e.Selection == nil || !e.Selection.Active {
+		return nil
+	}
+	return &undo.EditPosition{
+		Cursor:    undo.CursorPos{Line: e.Cursor.Line, Col: e.Cursor.Col},
+		Selection: *e.Selection,
+	}
+}
 
 func (e *EditorPaneWidget) FlushOnChange() {
 	if e.bufferDirty {

@@ -188,7 +188,12 @@ func newCatalog(raw map[string]*textmate.RawGrammar, fileTypes, languages map[st
 		return grammars.Load(scopeName)
 	}
 	return &grammarCatalog{
-		registry:  textmate.NewRegistry(textmate.RegistryOptions{LoadGrammar: load}),
+		registry: textmate.NewRegistry(textmate.RegistryOptions{
+			LoadGrammar: load,
+			HasGrammar: func(scopeName string) bool {
+				return raw[scopeName] != nil || grammars.Has(scopeName)
+			},
+		}),
 		fileTypes: fileTypes,
 		languages: languages,
 	}

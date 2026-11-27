@@ -26,7 +26,7 @@ func newTestWatcher(t *testing.T) (*Watcher, <-chan string) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { w.Close() })
+	t.Cleanup(func() { _ = w.Close() })
 	return w, ch
 }
 
@@ -37,7 +37,7 @@ func newTestDirWatcher(t *testing.T) (*Watcher, <-chan string) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	t.Cleanup(func() { w.Close() })
+	t.Cleanup(func() { _ = w.Close() })
 	return w, ch
 }
 
@@ -261,7 +261,9 @@ func TestWatcherNotifiesWhileAFileKeepsChanging(t *testing.T) {
 			return err
 		}
 		_, err = f.WriteString("line\n")
-		f.Close()
+		if closeErr := f.Close(); err == nil {
+			err = closeErr
+		}
 		return err
 	})
 	defer func() { close(stop); <-done }()

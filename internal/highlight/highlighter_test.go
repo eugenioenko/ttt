@@ -93,6 +93,11 @@ func TestHighlightMarkdown(t *testing.T) {
 	assertSpanStyle(t, h, "some *italic* text", term.StyleSyntaxItalic)
 	assertSpanStyle(t, h, "inline `code` here", term.StyleSyntaxCode)
 	assertSpanStyle(t, h, "[link](https://example.com)", term.StyleSyntaxLink)
+
+	lines := []string{"```go", "package main", "```"}
+	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxKeyword {
+		t.Errorf("fenced Go style = %v, want keyword from the embedded Go grammar", got)
+	}
 }
 
 func TestHighlightDiff(t *testing.T) {

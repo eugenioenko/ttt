@@ -512,7 +512,7 @@ func TestStatusFilesDeleted(t *testing.T) {
 	gitRun(t, dir, "commit", "-m", "init")
 
 	// Delete the file (unstaged delete)
-	os.Remove(filepath.Join(dir, "doomed.txt"))
+	requireNoError(t, os.Remove(filepath.Join(dir, "doomed.txt")))
 
 	files, err := StatusFiles(dir)
 	if err != nil {
@@ -749,7 +749,7 @@ func TestStatusFilesMultiple(t *testing.T) {
 	// Modify one
 	writeFile(t, dir, "will_modify.txt", "changed\n")
 	// Delete one
-	os.Remove(filepath.Join(dir, "will_delete.txt"))
+	requireNoError(t, os.Remove(filepath.Join(dir, "will_delete.txt")))
 	// Add untracked
 	writeFile(t, dir, "brand_new.txt", "new\n")
 

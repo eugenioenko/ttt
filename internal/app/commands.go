@@ -25,6 +25,8 @@ func RegisterCommands(app *App) {
 	registerPluginCommands(app)
 	registerOutputCommands(app)
 	registerDebugCommands(app)
+	registerDebuggerCommands(app)
+	app.ensureDebugPanel()
 	registerWidgetCallbacks(app)
 	RegisterEscapeDismissers(app)
 	app.syncApps()
@@ -34,7 +36,9 @@ func RegisterCommands(app *App) {
 func (a *App) RebindKeys() {
 	a.Root.ClearKeys()
 	a.Reg.ClearAllShortcuts()
-	config.ParseKeyBindings(a.Keybindings)
+	if err := config.ParseKeyBindings(a.Keybindings); err != nil {
+		a.StatusWarn(err.Error())
+	}
 	BindKeys(a.Root, a.Reg, a.Keybindings)
 	a.refreshSettingsShortcuts()
 }

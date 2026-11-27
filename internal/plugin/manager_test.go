@@ -1133,7 +1133,7 @@ func makeRegistryUnwritable(t *testing.T, path string) {
 	t.Cleanup(func() { _ = os.Chmod(path, 0644) })
 	probe, err := os.OpenFile(path, os.O_WRONLY, 0)
 	if err == nil {
-		probe.Close()
+		_ = probe.Close()
 		t.Skip("this filesystem still allows writing a read-only file")
 	}
 }
@@ -1439,7 +1439,7 @@ func TestRevertApprovalReportsAFailedSave(t *testing.T) {
 	if err := os.Chmod(regDir, 0o500); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(regDir, 0o700) })
+	t.Cleanup(func() { _ = os.Chmod(regDir, 0o700) })
 
 	err := m.revertApproval(&Plugin{Name: "p", Dir: dir, Manifest: Manifest{Name: "p"}}, nil)
 	if err == nil || !strings.Contains(err.Error(), "undo approval") {
@@ -1481,5 +1481,48 @@ func TestFailedOnInstallRestoresThePreviousApproval(t *testing.T) {
 	}
 	if again := NewManager(pluginsDir, regPath).LoadAll(); len(again) != 1 {
 		t.Errorf("pending on next startup = %d, want 1", len(again))
+	}
+}
+
+func TestDisabledPluginUninstallKeepsOnlyUserSettings(t *testing.T) {
+	m, dir := newTestManager(t)
+	settings := &mockSettingsAPI{store: map[string]any{"test.existing": "mine"}}
+	m.SetSettingsAPI(settings)
+	location := writePluginDir(t, dir, "defaults")
+	manifest := `{"name":"defaults","version":"1","entry":"main.ttt.lua","permissions":{"settings":true,"settings_keys":["test.*"]}}`
+	code := `local ttt=require("ttt")
+ local settings=require("ttt.settings")
+ ttt.on_install(function()
+   for _,key in ipairs({"test.clean","test.modified","test.existing"}) do settings.set_default(key, "initial") end
+ end)`
+	for name, contents := range map[string]string{"plugin.ttt.json": manifest, "main.ttt.lua": code} {
+		if err := os.WriteFile(filepath.Join(location, name), []byte(contents), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	pending := m.LoadAll()
+	if len(pending) != 1 {
+		t.Fatal(pending)
+	}
+	if err := m.ApproveAndLoad(pending[0]); err != nil {
+		t.Fatal(err)
+	}
+	if settings.store["test.clean"] != "initial" || settings.store["test.existing"] != "mine" {
+		t.Fatal(settings.store)
+	}
+	settings.store["test.modified"] = "edited"
+	if _, err := m.SetEnabled("defaults", false); err != nil {
+		t.Fatal(err)
+	}
+	m.Shutdown()
+	restarted := NewManager(dir, m.registryPath)
+	restarted.SetSettingsAPI(settings)
+	restarted.LoadAll()
+	defer restarted.Shutdown()
+	if err := restarted.RunUninstallHook("defaults"); err != nil {
+		t.Fatal(err)
+	}
+	if len(settings.store) != 2 || settings.store["test.modified"] != "edited" || settings.store["test.existing"] != "mine" {
+		t.Fatal(settings.store)
 	}
 }

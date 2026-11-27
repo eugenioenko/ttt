@@ -23,7 +23,7 @@ func TestWordWrapColumnLanguageLifecycle(t *testing.T) {
 		if err := os.WriteFile(path, []byte(strings.Repeat("x", 200)), 0644); err != nil {
 			t.Fatal(err)
 		}
-		h.app.EditorGroup.OpenFile(path)
+		h.openFile(path)
 		h.app.EditorGroup.CommitActiveTab()
 	}
 	check := func(want int, wrap bool) {

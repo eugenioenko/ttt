@@ -1,0 +1,103 @@
+{
+  "name": "cpp-codelldb",
+  "requires": [
+    "install/codelldb.sh",
+    "install/gdb.sh"
+  ],
+  "source": "fixtures/cpp-counter/main.cpp",
+  "binary": "bin/linux-amd64/cpp-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb": {
+          "command": [
+            "codelldb",
+            "--port",
+            "${port}"
+          ],
+          "transport": "server",
+          "languages": [
+            "cpp"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "cpp-codelldb",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/cpp-counter"
+  },
+  "pidAttach": {
+    "arguments": {
+      "pid": "${pid}"
+    }
+  },
+  "lifecycle": {
+    "program": "${workspaceFolder}/cpp-counter",
+    "args": [
+      "service"
+    ]
+  },
+  "service": {
+    "source": "fixtures/cpp-counter/main.cpp",
+    "binary": "bin/linux-amd64/cpp-counter",
+    "command": [
+      "./cpp-counter",
+      "service"
+    ],
+    "line": 23,
+    "nextLine": 24,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
+      "gdbserver",
+      "--once",
+      "--attach",
+      "stdio",
+      "${pid}"
+    ],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/cpp-counter",
+      "targetCreateCommands": [
+        "target create ${workspaceFolder}/cpp-counter"
+      ],
+      "processCreateCommands": [
+        "gdb-remote 127.0.0.1:${port}"
+      ]
+    },
+    "continueOnAttach": true
+  },
+  "output": "count = 43",
+  "breakpoint": {
+    "line": 31
+  },
+  "inspection": [
+    {
+      "line": 31,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 32,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 8,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 32,
+      "variable": "count = 42"
+    }
+  ]
+}

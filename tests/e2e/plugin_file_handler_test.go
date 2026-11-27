@@ -50,7 +50,7 @@ func TestPluginFileHandlerOpensBinaryFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	h.assertContains("PDF page 1 of 3")
 	h.assertContains("paper.pdf")
@@ -59,7 +59,7 @@ func TestPluginFileHandlerOpensBinaryFile(t *testing.T) {
 		t.Errorf("file.open received %q, want %q", got, pdf)
 	}
 
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	if got := p.State.GetGlobal("opens").String(); got != "1" {
 		t.Errorf("reopening the file called open %s times, want 1", got)
@@ -76,7 +76,7 @@ func TestPluginFileHandlerErrorFallsBackToBinaryCard(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 	h.assertContains("Binary file")
 	if p.LastError == nil {
@@ -93,7 +93,7 @@ func TestPluginFileHandlerIgnoresTextAndDisabledPlugins(t *testing.T) {
 	if err := os.WriteFile(txt, []byte("plain text\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(txt)
+	h.openFile(txt)
 	h.redraw()
 	h.assertContains("plain text")
 
@@ -102,7 +102,7 @@ func TestPluginFileHandlerIgnoresTextAndDisabledPlugins(t *testing.T) {
 	if err := os.WriteFile(pdf, []byte("%PDF-1.7\n\x00\x01"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	h.assertContains("Binary file")
 	h.assertNotContains("PDF page 1 of 3")
@@ -116,7 +116,7 @@ func TestPluginFileHandlerTabSurvivesReloadAndDisable(t *testing.T) {
 	if err := os.WriteFile(pdf, []byte("%PDF-1.7\n\x00\x01\x02\xff"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	h.assertContains("PDF page 1 of 3")
 
@@ -147,7 +147,7 @@ func TestPluginFileHandlerTabReleasedWhenPluginIsDisabledByErrors(t *testing.T) 
 	if err := os.WriteFile(pdf, []byte("%PDF-1.7\n\x00\x01\x02\xff"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(pdf)
+	h.openFile(pdf)
 	h.redraw()
 	h.assertContains("PDF page 1 of 3")
 

@@ -573,3 +573,30 @@ func TestApplicationArgsRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeLinkSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{}`, false},
+		{`{"links":{}}`, false},
+		{`{"links":{"native":true}}`, true},
+		{`{"links":{"native":false}}`, false},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0600); err != nil {
+			t.Fatal(err)
+		}
+		s := LoadSettings()
+		if s.Links.Native != tc.want || s.Extra["links"] != nil {
+			t.Fatalf("%s: links=%+v extra=%v", tc.json, s.Links, s.Extra)
+		}
+		if err := SaveSettings(s); err != nil {
+			t.Fatal(err)
+		}
+		if LoadSettings().Links.Native != tc.want {
+			t.Fatal("links.native did not survive save/load")
+		}
+	}
+}

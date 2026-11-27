@@ -31,7 +31,7 @@ bin/ttt ~/projectA ~/projectB file.go
 
 ## Architecture
 
-[`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and the architecture convergence plan. The codebase uses dependency zones rather than a strict linear layer chain: domain, services, presentation kernel, product presentation, application, plugin host, and platform.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and known boundary violations. The codebase uses dependency zones rather than a strict linear layer chain: domain, shared foundations, services, presentation kernel, product presentation, application, plugin host, and platform.
 
 Known boundary violations and explicit boundary decisions are documented there. Highlighting is presentation-owned at `internal/highlight`; grammar selection, caching, and TextMate scope to `term.Style` mapping stay together there. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers merely to satisfy the old layer diagram.
 
@@ -52,11 +52,13 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 **Services**: external-process and external-state integration, exposing typed operations and results without owning widgets.
 
+- **`internal/scm/`**: source-control provider contracts (status, staging, baselines, history, revisions) implemented by `git` and `jj`.
 - **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
 - **`internal/jj/`**: Jujutsu CLI adapter for the `internal/scm` provider contracts. `scm.Providers` tries jj before git, so colocated workspaces use jj.
 - **`internal/github/`**: `gh` CLI wrapper for pull requests.
 - **`internal/jsonrpc/`**: JSON-RPC 2.0 with Content-Length framing: `Codec` and a bidirectional `Conn` (calls, notifications, and peer requests). Transport-agnostic; used by LSP and the plugin `ttt.rpc` module.
 - **`internal/lsp/`**: language server client (see LSP Integration).
+- **`internal/search/`**: ripgrep argument building and JSON result parsing for global search and replace.
 - **`internal/terminal/`**: integrated terminal emulator. Wraps `eugenioenko/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/watcher/`**: fsnotify-based reporting of on-disk changes to open files and watched directories.
 - **`internal/workspace/`**: multi-folder workspaces. `Folder` and `Workspace` track project roots, with `IsRepo` git detection, `FolderForFile` lookup (longest-prefix match), and JSON `.ttt` workspace files. Falls back to `cwd` when no folders are given.
@@ -70,6 +72,8 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - **`internal/view/`**: viewport (scrolling, cursor-to-screen mapping) and the segment-based status bar.
 - **`internal/widgets/`**: reusable widget primitives backing both the Plugin Widget API and core panels (tree, table, list, input, dialog, dropdown, tabs, stacks, scrollview, markdown, and so on). `surface.go`/`virtual_surface.go` provide the drawing surface abstraction; `focus.go` handles focus traversal.
 - **`internal/markdown/`**: goldmark-based markdown to styled lines.
+- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
+- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
 
 **Product presentation**:
 
@@ -88,11 +92,10 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 - **`cmd/ttt/main.go`**: entry point. Parses flags (`--workspace`, `--exec`, `--size`, and so on), sets up the screen, logging, and panic handling, constructs `App`, and wires the plugin host APIs.
 
-**Not yet assigned a zone in ARCHITECTURE.md**:
+**Shared foundations**:
 
 - **`internal/config/`**: settings, keybindings (`DefaultKeybindings()`), themes (`theme.go`), and `.editorconfig` support.
-- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
-- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
+- **`internal/filewrite/`**: atomic file replacement shared by buffer and config saves.
 
 ### Design Principles
 

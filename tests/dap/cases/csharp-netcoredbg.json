@@ -1,0 +1,85 @@
+{
+  "name": "csharp-netcoredbg",
+  "requires": [
+    "install/netcoredbg.sh"
+  ],
+  "workspacePath": "/proc/self/cwd",
+  "source": "fixtures/csharp/Fixture.cs",
+  "binary": "bin/linux-amd64/csharp",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "coreclr": {
+          "command": [
+            "netcoredbg",
+            "--interpreter=vscode"
+          ],
+          "languages": [
+            "csharp"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "csharp-netcoredbg",
+    "type": "coreclr",
+    "request": "launch",
+    "program": "${workspaceFolder}/csharp/Fixture.dll",
+    "cwd": "${workspaceFolder}"
+  },
+  "pidAttach": {
+    "arguments": {
+      "processId": "${pid}"
+    }
+  },
+  "lifecycle": {
+    "program": "${workspaceFolder}/csharp/Fixture.dll",
+    "args": [
+      "service"
+    ],
+    "cwd": "${workspaceFolder}"
+  },
+  "service": {
+    "source": "fixtures/csharp/Fixture.cs",
+    "binary": "bin/linux-amd64/csharp",
+    "command": [
+      "dotnet",
+      "csharp/Fixture.dll",
+      "service"
+    ],
+    "line": 41,
+    "nextLine": 42,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "skip": "NetCoreDbg attaches to a CLR process by PID; its server port is an adapter endpoint"
+  },
+  "output": "count = 43",
+  "breakpoint": {
+    "line": 21
+  },
+  "inspection": [
+    {
+      "line": 21,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 22,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 9,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 22,
+      "variable": "count = 42"
+    }
+  ]
+}

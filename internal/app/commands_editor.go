@@ -175,7 +175,9 @@ func (a *App) CloseAllTabs() {
 func (a *App) OpenFile() {
 	a.ShowFilePicker(i18n.Text("general.openFile"), i18n.Text("general.open"), "", func(path string) {
 		// Not validating the path here: ShowFilePicker already checks that it exists and is a regular file. OpenFile treats a missing path as a new file.
-		a.EditorGroup.OpenFile(path)
+		if err := a.EditorGroup.OpenFile(path); err != nil {
+			return
+		}
 		a.Root.SetFocus(a.EditorGroup)
 	})
 }
@@ -396,6 +398,9 @@ func (a *App) doSaveFile(onSaved func()) {
 }
 
 func (a *App) afterFileSave(path, lang string) {
+	if filepath.Base(path) == "launch.json" {
+		a.refreshDebugConfiguration()
+	}
 	if lang != "" {
 		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.ScheduleDiagnosticPull(true)
@@ -456,7 +461,7 @@ func (a *App) quitWithAction(onQuit func()) {
 		buttons = append(buttons, i18n.Text("dialog.saveAllQuit"))
 		callbacks = append(callbacks, func() {
 			cancel()
-			a.saveAllAndQuit(onQuit, a.Root.TopOverlayWidget())
+			a.saveAll(onQuit, a.Root.TopOverlayWidget())
 		})
 	}
 	hint := ""
@@ -469,7 +474,14 @@ func (a *App) quitWithAction(onQuit func()) {
 	dialog.OnDismiss = cancel
 }
 
-func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
+func (a *App) SaveAll() {
+	if a.Root.HasModalOverlay() {
+		return
+	}
+	a.saveAll(nil, a.Root.TopOverlayWidget())
+}
+
+func (a *App) saveAll(onDone func(), previousOverlay ui.Widget) {
 	if a.Root.TopOverlayWidget() != previousOverlay {
 		return
 	}
@@ -489,17 +501,22 @@ func (a *App) saveAllAndQuit(onQuit func(), previousOverlay ui.Widget) {
 	if next < 0 {
 		for _, group := range a.editorGroups() {
 			if group != a.EditorGroup && group.AnyDirty() {
+				// Switching groups closes the search bar, so take the overlay baseline after that.
+				a.closeFindBarOnGroupChange()
+				previousOverlay = a.Root.TopOverlayWidget()
 				a.activateEditorGroup(group)
 				a.FocusEditor()
-				a.saveAllAndQuit(onQuit, previousOverlay)
+				a.saveAll(onDone, previousOverlay)
 				return
 			}
 		}
-		onQuit()
+		if onDone != nil {
+			onDone()
+		}
 		return
 	}
 	a.EditorGroup.SwitchTab(next)
-	a.saveFile(func() { a.saveAllAndQuit(onQuit, previousOverlay) })
+	a.saveFile(func() { a.saveAll(onDone, previousOverlay) })
 }
 
 // hunkStarts returns the buffer-line indices (0-based) at which each diff hunk
@@ -935,6 +952,12 @@ func registerEditorCommands(app *App) {
 		ID: "file.saveAs", Title: i18n.Text("command.saveAs"),
 		Keywords: []string{"file", "write", "export"},
 		Handler:  app.SaveFileAs,
+	})
+
+	reg.Register(command.Command{
+		ID: "file.saveAll", Title: i18n.Text("general.saveAll"),
+		Keywords: []string{"file", "write"},
+		Handler:  app.SaveAll,
 	})
 
 	reg.Register(command.Command{

@@ -227,13 +227,13 @@ func TestRPCWriteFailuresCloseTransport(t *testing.T) {
 
 func TestRPCWriterTimeoutWithoutSocketDeadline(t *testing.T) {
 	local, peer := net.Pipe()
-	defer local.Close()
-	defer peer.Close()
+	defer func() { _ = local.Close() }()
+	defer func() { _ = peer.Close() }()
 	failure := make(chan error, 1)
 	var once sync.Once
 	writer := rpcWriter{
 		transport: struct{ io.ReadWriteCloser }{local}, timeout: 20 * time.Millisecond,
-		onError: func(err error) { once.Do(func() { failure <- err; local.Close() }) },
+		onError: func(err error) { once.Do(func() { failure <- err; _ = local.Close() }) },
 	}
 	done := make(chan error, 1)
 	go func() { _, err := writer.Write([]byte("blocked")); done <- err }()
@@ -261,7 +261,7 @@ func TestRPCNotifyDoesNotBlockLuaOnNonReadingPeer(t *testing.T) {
 			t.Fatalf("notification rejected: %v", h.global("notify_err"))
 		}
 	case <-time.After(time.Second):
-		h.peer.Close()
+		_ = h.peer.Close()
 		<-done
 		t.Fatal("notification blocked the Lua thread while the peer was not reading")
 	}
@@ -296,7 +296,7 @@ func TestRPCReadLoopExitClosesTransport(t *testing.T) {
 			case "oversized":
 				_, _ = h.peer.Write([]byte("Content-Length: 1000000000\r\n"))
 			case "EOF":
-				h.peer.Close()
+				requireNoError(t, h.peer.Close())
 			}
 			h.pumpUntil(func() bool { return h.global("closed") != lua.LNil })
 			select {

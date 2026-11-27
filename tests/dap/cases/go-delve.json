@@ -1,0 +1,101 @@
+{
+  "name": "go-delve",
+  "externalTerminal": true,
+  "requires": [
+    "install/delve.sh"
+  ],
+  "source": "fixtures/go-counter/main.go",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "go": {
+          "command": [
+            "dlv",
+            "dap",
+            "--listen=unix:${socket}"
+          ],
+          "transport": "listen",
+          "addressPattern": "^DAP server listening at: (.+)$",
+          "provider": "delve",
+          "languages": [
+            "go"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "go-delve",
+    "type": "go",
+    "request": "launch",
+    "program": "${workspaceFolder}/."
+  },
+  "pidAttach": {
+    "arguments": {
+      "processId": "${pid}"
+    }
+  },
+  "service": {
+    "source": "fixtures/go-attach/main.go",
+    "command": [
+      "./go-probe"
+    ],
+    "build": [
+      "go",
+      "build",
+      "-gcflags=all=-N -l",
+      "-o",
+      "go-probe",
+      "main.go"
+    ],
+    "line": 18,
+    "nextLine": 19,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "command": [
+      "dlv",
+      "exec",
+      "./go-probe",
+      "--headless",
+      "--accept-multiclient",
+      "--listen=127.0.0.1:0"
+    ],
+    "portPattern": "listening at: 127\\.0\\.0\\.1:(\\d+)",
+    "arguments": {
+      "mode": "remote",
+      "host": "127.0.0.1",
+      "port": "${port}"
+    }
+  },
+  "breakpoint": {
+    "line": 10
+  },
+  "inspection": [
+    {
+      "line": 10,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 11,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 5,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 11,
+      "variable": "count = 42"
+    }
+  ],
+  "lifecycle": {
+    "program": "${workspaceFolder}/main.go"
+  },
+  "output": "count = 43"
+}
