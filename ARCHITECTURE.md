@@ -62,7 +62,7 @@ Callers own serialization, symlink resolution, metadata, retries, and recovery.
 ### Services
 
 Packages: `internal/scm`, `internal/git`, `internal/jj`, `internal/github`,
-`internal/jsonrpc`, `internal/lsp`, `internal/search`, `internal/terminal`,
+`internal/dap`, `internal/jsonrpc`, `internal/lsp`, `internal/search`, `internal/terminal`,
 `internal/watcher`, `internal/workspace`, `internal/trash`, and
 `internal/update`. Test helpers: `internal/gittest`, `internal/jjtest`.
 
