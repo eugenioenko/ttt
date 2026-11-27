@@ -59,6 +59,12 @@ Custom bindings with a modified second key after the forwarding prefix are overr
 
 **Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**, `terminal.toggleShortcutForwarding`) switches the mode for the current TTT session without changing the saved default and shows a short status notification. It applies to all terminals in that session and resets on restart. Unrelated settings changes keep the current mode; changing the forwarding default applies that new value immediately. The shortcut remains active while terminal forwarding is enabled so you can toggle back. It follows the selected Ctrl/Mod/Super preference and can be rebound in the keybindings editor. The command is also available from the command palette.
 
+## Mouse support on Windows 10
+
+The console host built into Windows 10 does not pass mouse-tracking requests through, so programs running in the integrated terminal, such as a nested TTT or Neovim, receive no mouse input. Windows 11 is not affected.
+
+To fix this on Windows 10, place `conpty.dll` and `OpenConsole.exe` in the same folder as `ttt.exe`. TTT then uses them instead of the built-in console host. Both files come from Microsoft's [`Microsoft.Windows.Console.ConPTY`](https://www.nuget.org/packages/Microsoft.Windows.Console.ConPTY) package: download the `.nupkg` (a zip archive) and copy `runtimes/win-x64/native/conpty.dll` and `build/native/runtimes/x64/OpenConsole.exe`, or the `arm64` versions for an ARM build of TTT. Restart TTT after adding them. If either file is missing or cannot be loaded, TTT uses the system console host.
+
 ## Bottom Panel
 
 Toggle the bottom panel with **Ctrl+K B**. It contains three tabs:

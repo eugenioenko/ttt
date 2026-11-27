@@ -26,3 +26,5 @@ require (
 	golang.org/x/crypto v0.51.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 )
+
+replace github.com/aymanbagabas/go-pty => github.com/eugenioenko/go-pty v0.2.4-0.20261123001431-f0e5d6b20888
