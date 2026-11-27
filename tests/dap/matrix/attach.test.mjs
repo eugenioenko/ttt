@@ -85,7 +85,7 @@ for (const spec of cases) {
           tui.waitFor("⏵   ⏏");
           tui.exec("Debug: Continue");
         }
-        for (const [key, value] of Object.entries(spec.service.locals)) tui.waitFor(`│    ${key} = ${value} `, 10000);
+        for (const [key, value] of Object.entries(spec.service.locals)) tui.waitFor(`│  ${key} = ${value} `, 10000);
         tui.press("f10");
         tui.waitFor(executionMarker(dir, file)(spec.service.nextLine));
         tui.exec("Detach Debugger");
