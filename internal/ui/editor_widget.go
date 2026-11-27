@@ -91,6 +91,7 @@ type EditorPaneWidget struct {
 	searchByLine            map[int][]int
 	diagByLine              map[int][]int
 	LineChanges             []diff.LineChangeKind
+	BookmarkOverlay         func(int) (Bookmark, bool)
 	Bookmarks               map[int]Bookmark
 	OnBookmarkChange        func(line int, action string, b Bookmark)
 	OnGutterClick           func(line int) bool

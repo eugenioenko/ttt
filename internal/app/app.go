@@ -28,6 +28,7 @@ import (
 )
 
 type App struct {
+	debugger debuggerState
 	Root     *ui.Root
 	RootBox  *widgets.VStackWidget
 	Screen   *term.TcellScreen
@@ -353,13 +354,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
 		}
 	}
-	a.EditorGroup.OnGutterClick = func(path string, line int) bool {
-		if a.PluginManager == nil || !a.PluginManager.HasEventListeners("gutter.click") {
-			return false
-		}
-		a.PluginManager.DispatchEvent("gutter.click", path, line+1)
-		return true
-	}
+	a.wireDebuggerGutter(a.EditorGroup)
 
 	lspManager.OnLog = func(server, level, message string) {
 		a.LogOutputAsync(level, "lsp:"+server, message)

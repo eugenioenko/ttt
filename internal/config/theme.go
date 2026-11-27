@@ -74,15 +74,17 @@ type DiagnosticStyles struct {
 }
 
 type EditorStyles struct {
-	LineNumber    StyleDef         `json:"lineNumber"`
-	IndentGuide   StyleDef         `json:"indentGuide,omitempty"`
-	ActiveLine    StyleDef         `json:"activeLine"`
-	Selection     StyleDef         `json:"selection"`
-	SearchMatch   StyleDef         `json:"searchMatch"`
-	SearchActive  StyleDef         `json:"searchActive"`
-	BracketMatch  StyleDef         `json:"bracketMatch"`
-	BracketColors []string         `json:"bracketColors,omitempty"`
-	Diagnostics   DiagnosticStyles `json:"diagnostics"`
+	DebugBreakpoint StyleDef         `json:"debugBreakpoint,omitempty"`
+	DebugExecution  StyleDef         `json:"debugExecution,omitempty"`
+	LineNumber      StyleDef         `json:"lineNumber"`
+	IndentGuide     StyleDef         `json:"indentGuide,omitempty"`
+	ActiveLine      StyleDef         `json:"activeLine"`
+	Selection       StyleDef         `json:"selection"`
+	SearchMatch     StyleDef         `json:"searchMatch"`
+	SearchActive    StyleDef         `json:"searchActive"`
+	BracketMatch    StyleDef         `json:"bracketMatch"`
+	BracketColors   []string         `json:"bracketColors,omitempty"`
+	Diagnostics     DiagnosticStyles `json:"diagnostics"`
 	// Highlight and HighlightStrong are the backgrounds plugins decorate
 	// lines and text with.
 	Highlight       StyleDef `json:"highlight,omitempty"`
@@ -445,6 +447,8 @@ func (t *ThemeConfig) ResolveColors() {
 	fillBg(&t.Editor.Highlight, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.15, t.Editor.ActiveLine.Bg))
 	fillBg(&t.Editor.HighlightStrong, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.30, t.Editor.ActiveLine.Bg))
 	fillBg(&t.Editor.Note, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.10, t.Editor.ActiveLine.Bg))
+	fillFg(&t.Editor.DebugBreakpoint, "#f14c4c")
+	fillFg(&t.Editor.DebugExecution, "#ffd700")
 	fillFg(&t.Editor.Note, t.Default.Fg)
 	fillFg(&t.Success, "#73c991")
 	fillFg(&t.Danger, "#f14c4c")

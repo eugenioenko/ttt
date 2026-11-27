@@ -313,8 +313,14 @@ func (e *EditorPaneWidget) Render(surface Surface) {
 					surface.SetCell(0, y, term.Cell{Ch: ch, Style: style})
 				}
 			}
-			if len(e.Bookmarks) > 0 && lineIdx < totalLines && !isWrapContinuation {
-				if b, ok := e.Bookmarks[lineIdx]; ok {
+			if lineIdx < totalLines && !isWrapContinuation {
+				b, ok := e.Bookmarks[lineIdx]
+				if e.BookmarkOverlay != nil {
+					if overlay, exists := e.BookmarkOverlay(lineIdx); exists {
+						b, ok = overlay, true
+					}
+				}
+				if ok {
 					surface.SetCell(bookmarkColumn, y, term.Cell{Ch: b.Icon, Style: b.Style, BgStyle: bookmarkBg})
 				}
 			}
