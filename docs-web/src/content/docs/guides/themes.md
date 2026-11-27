@@ -310,6 +310,8 @@ When a theme has `tokenColors`, they decide every token's color the way VS Code 
 | `success`, `danger`, `warning` | Semantic colors used for status indicators and messages |
 | `conflict` | Color for merge-conflicted files, e.g. in the explorer's git status decoration |
 | `border` | Color for UI borders and dividers |
+| `borderActive` | Border of the active editor group when editors are split. Defaults to the `default` foreground |
+| `borderHover` | Divider under the pointer or being dragged, when `appearance.highlightDividers` is on. Defaults to the `diff.gutterBookmark` color |
 | `statusBar` | Status bar at the bottom of the editor |
 | `tabs` | Active and inactive editor tab colors |
 | `sidebar` | File explorer sidebar: section headers, items, and selected item |

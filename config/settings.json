@@ -11,7 +11,8 @@
     "icons": "none",
     "scrollbarGlyphs": "blocks",
     "pointerShapes": true,
-    "highlightActiveGroupBorder": true
+    "highlightActiveGroupBorder": true,
+    "highlightDividers": false
   },
   "editor": {
     "autoClosing": {

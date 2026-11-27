@@ -13,6 +13,8 @@ type RenderSurface struct {
 	cells [][]term.Cell
 	clip  Rect
 	layer *tttimage.Layer
+
+	dividers *[]resizeDivider
 }
 
 func NewRenderSurface(cells [][]term.Cell, clip Rect) *RenderSurface {
@@ -153,6 +155,8 @@ func (s *RenderSurface) Sub(r Rect) widgets.Surface {
 		cells: s.cells,
 		clip:  Rect{X: newX, Y: newY, W: newW, H: newH},
 		layer: s.layer,
+
+		dividers: s.dividers,
 	}
 }
 

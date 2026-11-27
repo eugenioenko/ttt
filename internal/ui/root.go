@@ -62,6 +62,11 @@ type Root struct {
 	button1Held      bool
 	focusClaimed     bool
 	linkHover        *EditorPaneWidget
+
+	HighlightDividers bool
+	pointerX          int
+	pointerY          int
+	pointerSeen       bool
 }
 
 func NewRoot(main Widget) *Root {
@@ -260,6 +265,8 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	if !ok {
 		return r.dispatch(ev)
 	}
+	r.pointerX, r.pointerY = mev.Position()
+	r.pointerSeen = true
 	held := mev.Buttons()&tcell.Button1 != 0
 	pressed := held && !r.button1Held
 	released := !held && r.button1Held
@@ -587,8 +594,15 @@ func (r *Root) Render(cells [][]term.Cell) {
 	} else if r.ImageLayer != nil {
 		r.ImageLayer.UnlockAll()
 	}
+	var dividers []resizeDivider
+	if r.HighlightDividers {
+		surface.dividers = &dividers
+	}
 	r.Main.Render(surface)
 	r.reconcilePointerCapture()
+	if r.HighlightDividers {
+		r.highlightDivider(surface, dividers)
+	}
 
 	for _, overlay := range r.Overlays {
 		overlay.Widget.SetRect(Rect{X: 0, Y: 0, W: r.Width, H: r.Height})

@@ -324,6 +324,7 @@ type ThemeConfig struct {
 	Hover          HoverStyles   `json:"hover"`
 	Border         StyleDef      `json:"border"`
 	BorderActive   StyleDef      `json:"borderActive"`
+	BorderHover    StyleDef      `json:"borderHover"`
 	Diff           DiffStyles    `json:"diff"`
 	Scrollbar      StyleDef      `json:"scrollbar"`
 	Syntax         SyntaxStyles  `json:"syntax"`
@@ -444,6 +445,7 @@ func (t *ThemeConfig) ResolveColors() {
 	t.Diff.GutterAdded.Fg = contrastSafeForeground(t.Diff.GutterAdded.Fg, t.Diff.Added.Bg, t.Default.Fg)
 	t.Diff.GutterDeleted.Fg = contrastSafeForeground(t.Diff.GutterDeleted.Fg, t.Diff.Deleted.Bg, t.Default.Fg)
 	fillFg(&t.Diff.GutterBookmark, "#3794ff")
+	fillFg(&t.BorderHover, t.Diff.GutterBookmark.Fg)
 	fillBg(&t.Editor.Highlight, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.15, t.Editor.ActiveLine.Bg))
 	fillBg(&t.Editor.HighlightStrong, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.30, t.Editor.ActiveLine.Bg))
 	fillBg(&t.Editor.Note, mixThemeColor(t.Default.Bg, t.Diff.GutterBookmark.Fg, 0.10, t.Editor.ActiveLine.Bg))

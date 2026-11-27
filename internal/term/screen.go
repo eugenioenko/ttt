@@ -117,6 +117,7 @@ const (
 	StyleIndentGuide
 	StyleDebugBreakpoint
 	StyleDebugExecution
+	StyleBorderHover
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase

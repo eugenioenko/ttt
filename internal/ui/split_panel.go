@@ -64,6 +64,7 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 	}
 	bs := term.StyleBorder
 	r := s.GetRect()
+	registerDivider(surface, s)
 
 	if !s.ShowLeft {
 		widgets.InvalidatePointerInteraction(s.Left)
