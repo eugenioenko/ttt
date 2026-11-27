@@ -50,17 +50,33 @@ func (a *App) breakpointIcon(path string, p *debugBreakpoint) icons.Name {
 }
 
 func (a *App) debugBindingEvent(peer *debugRun, reason string, b debugBinding) {
+	var fallback map[int]debugBinding
+	var fallbackLine int
+	if reason == "removed" {
+		b.Verified = false
+	}
 	for path, lines := range peer.bindings {
 		for line, old := range lines {
-			if old.ID != nil && b.ID != nil && *old.ID == *b.ID || b.Source.Path == path && b.Line == line {
-				if reason == "removed" {
-					b.Verified = false
+			if old.ID != nil && b.ID != nil {
+				if *old.ID == *b.ID {
+					lines[line] = b
+					a.refreshDebugPanel()
+					return
 				}
-				lines[line] = b
-				a.refreshDebugPanel()
-				return
+				continue
+			}
+			if path == b.Source.Path && line == b.Line {
+				fallback = lines
+				fallbackLine = line
 			}
 		}
+	}
+	if fallback != nil {
+		if b.ID == nil {
+			b.ID = fallback[fallbackLine].ID
+		}
+		fallback[fallbackLine] = b
+		a.refreshDebugPanel()
 	}
 }
 
@@ -74,10 +90,7 @@ func (a *App) restoreBreakpoints() {
 	}
 	slices.Sort(roots)
 	key := a.Workspace.FilePath
-	if key == "" {
-		if len(roots) == 0 {
-			return
-		}
+	if key == "" && len(roots) > 0 {
 		data, _ := json.Marshal(roots)
 		key = string(data)
 	}
@@ -90,12 +103,17 @@ func (a *App) restoreBreakpoints() {
 	a.debugger.closedSources = nil
 	for path, lines := range a.State.Breakpoints[key] {
 		points := make(map[int]*debugBreakpoint)
-		for _, line := range lines {
-			if line > 0 {
-				points[line] = &debugBreakpoint{runtimeLine: line}
+		for _, saved := range lines {
+			if saved.Line > 0 {
+				points[saved.Line] = &debugBreakpoint{runtimeLine: saved.Line, confirm: saved.NeedsConfirmation}
 			}
 		}
 		a.debugger.points[path] = points
+		if a.EditorGroup != nil {
+			if buf := a.editorBufferForPath(path); buf != nil {
+				a.trackDebugSource(path, buf)
+			}
+		}
 	}
 	a.refreshDebugPanel()
 }
@@ -111,11 +129,11 @@ func (a *App) persistBreakpoints() {
 		return
 	}
 	if state.Breakpoints == nil {
-		state.Breakpoints = make(map[string]map[string][]int)
+		state.Breakpoints = make(map[string]map[string][]config.SavedBreakpoint)
 	}
-	snapshot := make(map[string][]int)
+	snapshot := make(map[string][]config.SavedBreakpoint)
 	for path, points := range a.debugger.points {
-		snapshot[path] = slices.Sorted(maps.Keys(points))
+		snapshot[path] = savedDebugPoints(points)
 	}
 	if len(snapshot) == 0 {
 		delete(state.Breakpoints, key)
@@ -126,6 +144,14 @@ func (a *App) persistBreakpoints() {
 	if err := config.SaveState(state); err != nil {
 		a.StatusError(err.Error())
 	}
+}
+
+func savedDebugPoints(points map[int]*debugBreakpoint) []config.SavedBreakpoint {
+	saved := make([]config.SavedBreakpoint, 0, len(points))
+	for _, line := range slices.Sorted(maps.Keys(points)) {
+		saved = append(saved, config.SavedBreakpoint{Line: line, NeedsConfirmation: points[line].confirm})
+	}
+	return saved
 }
 
 func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
@@ -142,7 +168,7 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 		return
 	}
 	points := a.debugger.points[path]
-	previousLines := slices.Sorted(maps.Keys(points))
+	previousLines := savedDebugPoints(points)
 	resync := false
 	replayed := prev.buf == now.buf && b.ChangesSince(prev.version, func(c buffer.Change) {
 		shifted := make(map[int]*debugBreakpoint, len(points))
@@ -190,7 +216,7 @@ func (a *App) updateDebugSource(path string, b *buffer.Buffer) {
 			a.queueDebugPoints(r)
 		}
 	}
-	if !slices.Equal(previousLines, slices.Sorted(maps.Keys(points))) {
+	if !slices.Equal(previousLines, savedDebugPoints(points)) {
 		a.persistBreakpoints()
 	}
 	a.refreshDebugPanel()
@@ -212,8 +238,13 @@ func (a *App) checkDebugSource(path string) {
 	info, err := os.Stat(path)
 	last, closed := a.debugger.closedSources[path]
 	if err != nil || !info.Mode().IsRegular() || closed && (last == nil || !os.SameFile(last, info) || last.Size() != info.Size() || !last.ModTime().Equal(info.ModTime())) {
+		changed := false
 		for _, p := range a.debugger.points[path] {
+			changed = changed || !p.confirm
 			p.confirm = true
+		}
+		if changed {
+			a.persistBreakpoints()
 		}
 	}
 	if b := a.editorBufferForPath(path); b != nil {

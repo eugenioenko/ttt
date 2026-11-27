@@ -419,8 +419,12 @@ func (a *App) selectDebugThread(tid int) {
 	if r == nil || r.thread == nil || r.busy || r.stepping || *r.thread == tid {
 		return
 	}
+	generation := r.generation
 	a.beginDebugInspection()
 	debugQuery(a, r, "stackTrace", map[string]int{"threadId": tid, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
+		if r.generation != generation || r.busy || r.stepping {
+			return
+		}
 		for i := range result.StackFrames {
 			p := result.StackFrames[i].Source.Path
 			if p != "" && !filepath.IsAbs(p) {

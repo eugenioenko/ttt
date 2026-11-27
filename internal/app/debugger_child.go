@@ -128,15 +128,12 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			ready <- nil
 			ready = nil
 		}
-	}, func(tid int, frames []debugFrame, all bool) {
+	}, func(tid int, frames []debugFrame, threads []debugThread) {
 		deliver(func() {
 			a.debugger.selected = peer
-			peer.threads = nil
+			peer.threads = threads
 			peer.frames = frames
 			a.showDebugStop(peer, tid, frames)
-			if all {
-				debugQuery(a, peer, "threads", nil, func(result struct{ Threads []debugThread }) { peer.threads = result.Threads; a.refreshDebugPanel() })
-			}
 		})
 	}, func() {
 		deliver(func() {

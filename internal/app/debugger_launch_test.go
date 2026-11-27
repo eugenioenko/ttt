@@ -17,7 +17,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done", "superseded"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -30,7 +30,13 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			hit := false
 			err := run.runSession(ctx, func(_ context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
 				return dap.StartStdio(cmd, onEvent, nil)
-			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(*dap.Session) {}, func(_ int, frames []debugFrame, _ bool) { hit = len(frames) > 0 && frames[0].Line == 7; cancel() }, func() {})
+			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(*dap.Session) {}, func(id int, frames []debugFrame, threads []debugThread) {
+				if mode == "individual" && (id != 2 || len(threads) != 2) {
+					return
+				}
+				hit = len(frames) > 0 && frames[0].Line == 7
+				cancel()
+			}, func() {})
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}
@@ -85,6 +91,9 @@ func simulateConfiguringAdapter(mode string) {
 	if mode != "filters-only" {
 		body["threadId"] = 0
 	}
+	if mode == "individual" {
+		body["allThreadsStopped"] = false
+	}
 	send(map[string]any{"type": "event", "event": "stopped", "body": body})
 	id := 0
 	if mode == "filters-only" {
@@ -96,6 +105,12 @@ func simulateConfiguringAdapter(mode string) {
 	if json.Unmarshal(stack.Arguments, &trace) != nil || trace.ThreadID == nil || *trace.ThreadID != id {
 		fail()
 	}
+	if mode == "individual" {
+		body["threadId"] = 2
+		send(map[string]any{"type": "event", "event": "stopped", "body": body})
+		reply(stack, nil)
+		stack = read("stackTrace")
+	}
 	if mode == "superseded" {
 		send(map[string]string{"type": "event", "event": "continued"})
 		send(map[string]any{"type": "response", "request_seq": stack.Seq, "success": false, "message": "already running"})
@@ -103,5 +118,8 @@ func simulateConfiguringAdapter(mode string) {
 		stack = read("stackTrace")
 	}
 	reply(stack, map[string]any{"stackFrames": []any{map[string]any{"line": 7, "source": map[string]string{"path": "main.c"}}}})
+	if mode != "individual" {
+		reply(read("threads"), map[string]any{"threads": []any{map[string]int{"id": id}}})
+	}
 	reply(read("disconnect"), nil)
 }

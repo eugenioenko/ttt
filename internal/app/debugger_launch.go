@@ -44,7 +44,7 @@ type debugRun struct {
 	cancel    context.CancelFunc
 }
 
-func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame, bool), resumed func()) error {
+func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame, []debugThread), resumed func()) error {
 	var initial map[string][]int
 	select {
 	case initial = <-r.points:
@@ -63,6 +63,15 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	var paused bool
 	var pausedThread *int
 	stops := make(chan stopEvent, 1)
+	var pausedIDs []int
+	queueStop := func(all bool, id *int, gen uint64) {
+		select {
+		case <-stops:
+		default:
+		}
+		stops <- stopEvent{all, id, gen}
+	}
+
 	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	session, err := open(startup, func(e dap.Event) {
@@ -74,8 +83,27 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		case "continued":
 			eventMu.Lock()
 			generation++
-			paused = false
-			resumed()
+			var body struct {
+				ThreadID            *int
+				AllThreadsContinued bool
+			}
+			_ = json.Unmarshal(e.Body, &body)
+			if body.ThreadID != nil && !body.AllThreadsContinued {
+				pausedIDs = slices.DeleteFunc(pausedIDs, func(id int) bool { return id == *body.ThreadID })
+			} else {
+				pausedIDs = nil
+			}
+			if len(pausedIDs) > 0 {
+				id := pausedIDs[0]
+				if pausedThread != nil && slices.Contains(pausedIDs, *pausedThread) {
+					id = *pausedThread
+				}
+				pausedThread = &id
+				queueStop(false, &id, generation)
+			} else {
+				paused = false
+				resumed()
+			}
 			eventMu.Unlock()
 		case "stopped":
 			var body struct {
@@ -83,14 +111,13 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				AllThreadsStopped bool
 			}
 			if json.Unmarshal(e.Body, &body) == nil {
-				select {
-				case <-stops:
-				default:
-				}
 				eventMu.Lock()
 				generation++
 				paused, pausedThread = true, body.ThreadID
-				stops <- stopEvent{body.AllThreadsStopped, body.ThreadID, generation}
+				if body.ThreadID != nil && !slices.Contains(pausedIDs, *body.ThreadID) {
+					pausedIDs = append(pausedIDs, *body.ThreadID)
+				}
+				queueStop(body.AllThreadsStopped, body.ThreadID, generation)
 				eventMu.Unlock()
 			}
 		}
@@ -218,6 +245,10 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		case event := <-stops:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
 			tid, frames, err := stoppedFrames(request, session, event.threadID)
+			var listed struct{ Threads []debugThread }
+			if event.all && err == nil {
+				_ = session.Call(request, "threads", nil, &listed)
+			}
 			finish()
 			// Keep the freshness check and UI delivery ordered against a concurrent resume.
 			eventMu.Lock()
@@ -236,7 +267,24 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 						frames[i].Source.Path = filepath.Join(r.folder, p)
 					}
 				}
-				stopped(*tid, frames, event.all)
+				if event.all && len(listed.Threads) > 0 {
+					pausedIDs = nil
+				}
+				if !slices.Contains(pausedIDs, *tid) {
+					pausedIDs = append(pausedIDs, *tid)
+				}
+				for _, t := range listed.Threads {
+					if !slices.Contains(pausedIDs, t.ID) {
+						pausedIDs = append(pausedIDs, t.ID)
+					}
+				}
+				threads := slices.Clone(listed.Threads)
+				for _, id := range pausedIDs {
+					if !slices.ContainsFunc(threads, func(t debugThread) bool { return t.ID == id }) {
+						threads = append(threads, debugThread{ID: id, Name: fmt.Sprint(id)})
+					}
+				}
+				stopped(*tid, frames, threads)
 			}
 			eventMu.Unlock()
 		}
