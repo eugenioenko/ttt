@@ -1,0 +1,16 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch ttt",
+      "type": "go",
+      "request": "launch",
+      "program": "${workspaceFolder}/cmd/ttt",
+      "console": "externalTerminal",
+      "args": ["--new-window", "."],
+      "env": {
+        "TTT_CONFIG_DIR": "${workspaceFolder}/.config/ttt-debug"
+      }
+    }
+  ]
+}
