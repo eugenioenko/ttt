@@ -357,6 +357,31 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 | `lsp.notifyAvailability` | bool | `true` | Show a notification when a language server binary is not installed |
 | `lsp.servers` | object | `{}` | Map of server key to `{ "command": [...], "languages": {...} }`. Configured automatically by LSP plugins (e.g. `lsp-go`, `lsp-typescript`). The optional `languages` field maps file extensions to language IDs for servers handling multiple file types. The optional `rootMarkers` field lists files or globs, in priority order, that mark a project root; each root gets its own server ([Project roots](/guides/lsp/#project-roots-the-rootmarkers-field)). |
 
+## Debug adapters
+
+`debug.adapters` defaults to `{}`. Each key names a `type` in a workspace launch configuration. For example, this entry describes a GDB adapter for C and C++:
+
+```json
+{
+  "debug": {
+    "adapters": {
+      "gdb": { "command": ["gdb", "-i", "dap"], "languages": ["c", "cpp"] }
+    }
+  }
+}
+```
+
+| Adapter field | Meaning |
+| --- | --- |
+| `command`, `cwd`, `env` | Adapter executable and arguments, optional working directory, and environment overrides. |
+| `transport` | `stdio` (default), `server` (command contains `${port}`), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
+| `languages` | Language IDs associated with the adapter. |
+| `provider` | Defaults to `generic`. Adapter-specific hooks use an explicit `delve`, `jsdebug`, or `debugpy` value. |
+| `fileLaunch` | Optional launch arguments for a single file. Recipes support `${file}`, `${fileDirname}`, and `${workspaceFolder}`. |
+| `fileLaunchOverrides` | Ordered entries with a filename glob in `pattern` and replacement fields in `arguments`. The first matching glob applies. |
+
+Workspace targets come from `.ttt/launch.json`, with `.vscode/launch.json` as a fallback. The generic provider passes adapter-specific arguments through and expands `${workspaceFolder}`. Task execution and interactive input substitution are unsupported.
+
 ## Search
 
 | Key | Type | Default | Description |

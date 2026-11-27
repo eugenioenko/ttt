@@ -9,6 +9,7 @@ require (
 	github.com/eugenioenko/xterm-go v0.1.3
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/gdamore/tcell/v3 v3.4.1
+	github.com/tidwall/jsonc v0.3.2
 	github.com/yuin/goldmark v1.8.2
 	github.com/yuin/gopher-lua v1.1.2
 	golang.org/x/sys v0.47.0
