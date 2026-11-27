@@ -27,9 +27,10 @@ type debugVariable struct {
 	VariablesReference int
 }
 type debugInspection struct {
-	frames []debugFrame
-	scopes []*widgets.TreeNode
-	values map[*widgets.TreeNode]debugVariable
+	frameID int
+	frames  []debugFrame
+	scopes  []*widgets.TreeNode
+	values  map[*widgets.TreeNode]debugVariable
 }
 
 type debugSidebar struct {
@@ -197,6 +198,9 @@ func (a *App) publishDebugInspection(next *debugInspection) {
 	p.debugInspection = *next
 	p.stale = false
 	a.refreshDebugPanel()
+	if p.stack != nil && len(next.frames) > 0 {
+		p.stack.SelectByID(fmt.Sprintf("frame:%d", next.frameID))
+	}
 }
 
 func (a *App) clearDebugInspection() {
@@ -237,6 +241,7 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 	}()
 }
 func (a *App) loadDebugFrame(r *debugRun, next *debugInspection, f debugFrame) {
+	next.frameID = f.ID
 	if f.Source.Path != "" && f.Line > 0 {
 		a.revealDebugLocation(f.Source.Path, f.Line)
 	}

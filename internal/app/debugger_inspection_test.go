@@ -3,7 +3,12 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/config/debugadapter"
 	"net"
+	"os"
+	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -102,5 +107,73 @@ func TestStepPublishesStackAndExpandedVariablesTogether(t *testing.T) {
 	}
 	if _, ok := p.values[old]; ok {
 		t.Fatal("previous stop's variable reference survived")
+	}
+}
+
+func TestSteppingSelectsFrameProvidingLocals(t *testing.T) {
+	a := buildTestApp(t, config.DefaultSettings())
+	_, r, codec, queued := inspectionTestPeer(t)
+	a.debugger.run = r
+	a.tasks.post = func(fn func()) error { queued <- fn; return nil }
+	a.ensureDebugPanel()
+	frames := []debugFrame{{ID: 0, Name: "callee"}, {ID: 42, Name: "caller"}}
+	p := &a.debugger.panel
+	check := func(id int, label string) {
+		t.Helper()
+		var req struct {
+			Seq       int
+			Command   string
+			Arguments struct{ FrameID int }
+		}
+		if err := codec.ReceiveInto(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req.Command != "scopes" || req.Arguments.FrameID != id {
+			t.Fatal(req)
+		}
+		if err := codec.Send(map[string]any{"type": "response", "success": true, "request_seq": req.Seq, "body": map[string]any{"scopes": []any{map[string]string{"name": label}}}}); err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case apply := <-queued:
+			apply()
+		case <-r.ctx.Done():
+			t.Fatal(r.ctx.Err())
+		}
+		if p.frameNodes[p.stack.Selected()].ID != id || len(p.scopes) != 1 || p.scopes[0].Label != label || p.stack.Selected() == nil {
+			t.Fatalf("selection and locals diverged for %s", label)
+		}
+	}
+	a.showDebugStop(r, 1, frames)
+	check(0, "callee locals")
+	p.stack.SelectByID("frame:42")
+	p.stack.ActivateSelected()
+	check(42, "caller locals")
+	r.stepping = true
+	a.debugResumed(r)
+	a.showDebugStop(r, 1, frames)
+	check(0, "new callee locals")
+}
+
+func TestDebugFileOutsideWorkspaceKeepsOnlyItsBreakpoints(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Debug.Adapters["fixture"] = debugadapter.Config{Languages: []string{"c"}, FileLaunch: map[string]any{"program": "${file}"}}
+	a := buildTestApp(t, settings)
+	file := filepath.Join(t.TempDir(), "outside.c")
+	if err := os.WriteFile(file, []byte("int main(void) {}"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.EditorGroup.OpenFile(file); err != nil {
+		t.Fatal(err)
+	}
+	target, ok := a.currentFileDebugTarget()
+	if !ok || a.Workspace.FolderForFile(file) != nil || target.File != file {
+		t.Fatal(target, ok)
+	}
+	run := debugRun{file: target.File, folder: target.Folder, languages: []string{"c"}, points: make(chan map[string][]int, 1)}
+	a.debugger.points = map[string][]int{file: {1}, filepath.Join(target.Folder, "other.c"): {3}}
+	a.queueDebugPoints(&run)
+	if got := <-run.points; !reflect.DeepEqual(got, map[string][]int{file: {1}}) {
+		t.Fatal(got)
 	}
 }

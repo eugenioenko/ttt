@@ -107,7 +107,7 @@ func (a *App) queueDebugPoints(r *debugRun) {
 	points := make(map[string][]int)
 	for path, lines := range a.debugger.points {
 		owner := a.Workspace.FolderForFile(path)
-		if owner == nil || owner.Path != r.folder {
+		if path != r.file && (owner == nil || owner.Path != r.folder) {
 			continue
 		}
 		lang := highlight.DetectLanguageID(path, nil)
@@ -214,7 +214,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &debugRun{ctx: ctx, cancel: cancel, folder: t.Folder, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
+	r := &debugRun{ctx: ctx, cancel: cancel, folder: t.Folder, file: t.File, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
 	a.debugger.run = r
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()

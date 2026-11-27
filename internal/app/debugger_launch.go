@@ -22,6 +22,7 @@ type debugRun struct {
 	generation     uint64
 	busy, stepping bool
 
+	file      string
 	folder    string
 	languages []string
 	points    chan map[string][]int
@@ -33,7 +34,13 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 	initial := <-r.points
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
-	stops := make(chan *int, 1)
+	type stopEvent struct {
+		threadID   *int
+		generation uint64
+	}
+	var eventMu sync.Mutex
+	var generation uint64
+	stops := make(chan stopEvent, 1)
 	session, err := dap.StartStdio(cmd, func(e dap.Event) {
 		switch e.Name {
 		case "initialized":
@@ -41,7 +48,10 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 		case "terminated":
 			endOnce.Do(func() { close(terminated) })
 		case "continued":
+			eventMu.Lock()
+			generation++
 			resumed()
+			eventMu.Unlock()
 		case "stopped":
 			var body struct{ ThreadID *int }
 			if json.Unmarshal(e.Body, &body) == nil {
@@ -49,7 +59,10 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 				case <-stops:
 				default:
 				}
-				stops <- body.ThreadID
+				eventMu.Lock()
+				generation++
+				stops <- stopEvent{body.ThreadID, generation}
+				eventMu.Unlock()
 			}
 		}
 	})
@@ -144,11 +157,18 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 				return err
 			}
 			sent = next
-		case id := <-stops:
+		case event := <-stops:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
-			tid, frames, err := stoppedFrames(request, session, id)
+			tid, frames, err := stoppedFrames(request, session, event.threadID)
 			finish()
+			// Keep the freshness check and UI delivery ordered against a concurrent resume.
+			eventMu.Lock()
+			if generation != event.generation {
+				eventMu.Unlock()
+				continue
+			}
 			if err != nil {
+				eventMu.Unlock()
 				return err
 			}
 			if tid != nil {
@@ -160,6 +180,7 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 				}
 				stopped(*tid, frames)
 			}
+			eventMu.Unlock()
 		}
 	}
 }
