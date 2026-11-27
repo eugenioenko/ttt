@@ -538,7 +538,7 @@ func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) erro
 	if err != nil {
 		return err
 	}
-	defer root.Close()
+	defer func(root *os.Root) { _ = root.Close() }(root)
 	if !r.contains(real) {
 		// The first missing component is the grant itself, not its parent.
 		if err := root.Mkdir(first, 0755); err != nil {
@@ -548,7 +548,7 @@ func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) erro
 		if err != nil {
 			return err
 		}
-		defer granted.Close()
+		defer func() { _ = granted.Close() }()
 		root, missing = granted, rest
 	}
 	if missing != "" {
@@ -567,7 +567,7 @@ func openPluginWriteAnchor(path string) (*os.Root, error) {
 	}
 	rel, err := filepath.Rel(volume, path)
 	if err != nil {
-		root.Close()
+		_ = root.Close()
 		return nil, err
 	}
 	if rel == "." {
@@ -577,7 +577,7 @@ func openPluginWriteAnchor(path string) (*os.Root, error) {
 	// a symlink instead of following it from a broader directory handle.
 	for _, name := range strings.Split(rel, string(filepath.Separator)) {
 		next, err := openPluginWriteDir(root, name)
-		root.Close()
+		_ = root.Close()
 		if err != nil {
 			return nil, err
 		}
@@ -600,11 +600,11 @@ func openPluginWriteDir(root *os.Root, name string) (*os.Root, error) {
 	}
 	after, err := dir.Stat(".")
 	if err != nil {
-		dir.Close()
+		_ = dir.Close()
 		return nil, err
 	}
 	if !os.SameFile(before, after) {
-		dir.Close()
+		_ = dir.Close()
 		return nil, fmt.Errorf("access denied: directory %q changed", name)
 	}
 	return dir, nil

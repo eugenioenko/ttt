@@ -59,7 +59,7 @@ func readSettingsFileBytes(path string) ([]byte, error) {
 		_ = windows.CloseHandle(handle)
 		return nil, &os.PathError{Op: "open", Path: path, Err: windows.ERROR_INVALID_HANDLE}
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		return nil, &os.PathError{Op: "read", Path: path, Err: err}

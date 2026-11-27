@@ -44,7 +44,7 @@ func inspectorWebsocket(ctx context.Context, pid, port int, address string) (str
 	if err != nil {
 		return "", err
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	var targets []struct{ ID, Type, WebSocketDebuggerURL string }
 	if response.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("inspector discovery: %s", response.Status)

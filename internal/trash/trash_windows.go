@@ -62,7 +62,7 @@ func recycle(ctx context.Context, path string) error {
 	if err := checkHRESULT(result); err != nil {
 		return err
 	}
-	defer operation.call(2) // IUnknown.Release
+	defer func() { _ = operation.call(2) }() // IUnknown.Release
 	const (
 		fofSilent              = 0x0004
 		fofNoConfirmation      = 0x0010
@@ -87,7 +87,7 @@ func recycle(ctx context.Context, path string) error {
 	if err := checkHRESULT(result); err != nil {
 		return err
 	}
-	defer item.call(2)
+	defer func() { _ = item.call(2) }()
 	if err := operation.call(18, uintptr(unsafe.Pointer(item)), 0); err != nil { // DeleteItem
 		return err
 	}

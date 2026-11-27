@@ -2,12 +2,9 @@ package trash
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 func Move(path string) error {
@@ -32,19 +29,4 @@ func MoveContext(ctx context.Context, path string) error {
 		return &os.PathError{Op: "trash", Path: path, Err: err}
 	}
 	return nil
-}
-
-func run(ctx context.Context, name string, args ...string) ([]byte, error) {
-	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-	output, err := exec.CommandContext(ctx, name, args...).CombinedOutput()
-	if err != nil {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		if detail := strings.TrimSpace(string(output)); detail != "" {
-			return nil, fmt.Errorf("%s: %w: %s", name, err, detail)
-		}
-	}
-	return output, err
 }

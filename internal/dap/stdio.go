@@ -26,7 +26,7 @@ func startStdio(cmd *exec.Cmd, onEvent func(Event), options SessionOptions) (*Se
 	if err != nil {
 		return nil, err
 	}
-	defer childOut.Close()
+	defer func() { _ = childOut.Close() }()
 	cmd.Stdout = childOut
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
