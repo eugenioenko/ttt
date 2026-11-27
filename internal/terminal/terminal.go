@@ -112,7 +112,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 			cmd.Dir = dir
 		}
 	}
-	cmd.Env = os.Environ()
+	cmd.Env = append(os.Environ(), "TERM=xterm-256color")
 	for _, entry := range env {
 		if entry == "" {
 			continue
@@ -126,7 +126,6 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 			})
 		}
 	}
-	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	if err := pt.Resize(cols, rows); err != nil {
 		_ = pt.Close()

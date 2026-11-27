@@ -147,7 +147,7 @@ func TestStdioAdapter(t *testing.T) {
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStdioAdapter$")
 	cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CHILD=1", "GORACE=atexit_sleep_ms=0")
-	s, err := StartStdio(cmd, nil)
+	s, err := StartStdio(cmd, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestStdioAdapterExitWithInheritedStdout(t *testing.T) {
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestStdioAdapterExitWithInheritedStdout$")
 	cmd.Env = append(os.Environ(), "TTT_TEST_DAP_STDOUT=adapter", "GORACE=atexit_sleep_ms=0")
-	s, err := StartStdio(cmd, nil)
+	s, err := StartStdio(cmd, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

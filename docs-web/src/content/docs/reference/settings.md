@@ -395,6 +395,8 @@ For a GDB process picker, add the following entry to the launch file's `configur
 
 To attach to a running gdbserver, replace `pid` with `"target": "127.0.0.1:2345"` and supply `program` for the local binary with debug symbols. The sidebar's Detach action requests that the adapter leave the target running. When the *DAP adapter itself* is already listening, configure its `debug.adapters` entry with `"transport": "tcp"` and `"address": "host:port"`.
 
+Local stdio adapters can use DAP `runInTerminal` to open the debuggee in ttt’s integrated terminal. The request supplies the working directory, literal argument list, and environment overrides. A null environment value removes an inherited variable. External terminal requests and shell-interpreted arguments are unsupported. TCP adapters cannot start local terminal processes.
+
 ## Search
 
 | Key | Type | Default | Description |
