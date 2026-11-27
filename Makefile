@@ -54,7 +54,7 @@ fmt-check:
 	if [ -n "$$files" ]; then echo "Not gofmt-formatted (run make fmt):"; echo "$$files"; exit 1; fi
 
 lint: fmt-check
-	golangci-lint run
+	bash scripts/golangci-lint.sh run
 
 vet:
 	go vet ./...

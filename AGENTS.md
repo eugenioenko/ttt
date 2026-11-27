@@ -29,6 +29,8 @@ bin/ttt --workspace project.ttt
 bin/ttt ~/projectA ~/projectB file.go
 ```
 
+`make lint` downloads and caches the official golangci-lint binary pinned in `.golangci-version`; both CI lint passes read the same file. The first local run needs `curl` and network access. Use `GOOS=windows make lint` to check Windows-only code from another host.
+
 ## Architecture
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and known boundary violations. The codebase uses dependency zones rather than a strict linear layer chain: domain, shared foundations, services, presentation kernel, product presentation, application, plugin host, and platform.

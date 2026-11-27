@@ -159,17 +159,21 @@ jobs:
       - name: gofmt
         run: make fmt-check
 
+      - name: Read golangci-lint version
+        id: lint-version
+        run: echo "version=$(cat .golangci-version)" >> "$GITHUB_OUTPUT"
+
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
-          version: latest
+          version: ${{ steps.lint-version.outputs.version }}
 
       - name: golangci-lint (Windows)
         uses: golangci/golangci-lint-action@v9
         env:
           GOOS: windows
         with:
-          version: latest
+          version: ${{ steps.lint-version.outputs.version }}
 
   test:
     needs: classify
