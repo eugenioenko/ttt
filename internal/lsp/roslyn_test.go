@@ -180,9 +180,10 @@ func (w *signalingWriteCloser) Write(p []byte) (int, error) {
 func TestOpenRoslynWorkspaceStopsWhenCanceled(t *testing.T) {
 	root := t.TempDir()
 	writeMarkerFile(t, filepath.Join(root, "App.sln"))
-	clientR, clientW := io.Pipe()
+	_, clientW := io.Pipe()
 	writer := &signalingWriteCloser{PipeWriter: clientW, started: make(chan struct{})}
-	c := newClient(clientR, writer, ClientHooks{})
+	c := newClient(blockingReader(t), writer, ClientHooks{})
+	t.Cleanup(c.Close)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
