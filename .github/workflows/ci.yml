@@ -164,6 +164,13 @@ jobs:
         with:
           version: latest
 
+      - name: golangci-lint (Windows)
+        uses: golangci/golangci-lint-action@v9
+        env:
+          GOOS: windows
+        with:
+          version: latest
+
   test:
     needs: classify
     if: needs.classify.outputs.runtime == 'true'

@@ -19,7 +19,11 @@ func TestPIDMustOwnInspectorPort(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() {
+		if err := listener.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	for pid, want := range map[int]bool{os.Getpid(): true, os.Getppid(): false} {
 		got, err := ownsInspectorListener(context.Background(), pid, listener.Addr().(*net.TCPAddr).Port, listener.Addr().String())
 		if err != nil || got != want {

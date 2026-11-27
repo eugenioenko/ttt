@@ -14,7 +14,11 @@ func TestTCPAdapterDisconnectLeavesServerAvailable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer listener.Close()
+	defer func() {
+		if err := listener.Close(); err != nil {
+			t.Error(err)
+		}
+	}()
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
 	adapter := Adapter{Transport: "tcp", Address: listener.Addr().String()}

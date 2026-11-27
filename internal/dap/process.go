@@ -118,7 +118,7 @@ func socketProcess(ctx context.Context, cmd *exec.Cmd, address string, pattern *
 	reader, writer := io.Pipe()
 	cmd.Stdout = writer
 	go func() {
-		defer reader.Close()
+		defer func() { _ = reader.Close() }()
 		lines := bufio.NewReaderSize(reader, 64*1024)
 		partial := false
 		for {
