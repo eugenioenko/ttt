@@ -11,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -24,9 +25,10 @@ type hoverKey struct {
 }
 
 type hoverState struct {
-	task  *asynctask.Task[string]
-	delay time.Duration
-	tab   tabHoverKey
+	task   *asynctask.Task[string]
+	delay  time.Duration
+	button *widgets.ButtonWidget
+	tab    tabHoverKey
 }
 
 type tabHoverKey struct {
@@ -113,6 +115,30 @@ func (a *App) ensureHoverTask() {
 func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	mx, my := ev.Position()
 	btn := ev.Buttons()
+	if btn == 0 {
+		if b := a.debugButtonAt(mx, my); b != nil {
+			if a.hover.button != b {
+				a.DismissHover()
+				a.ensureHoverTask()
+				a.hover.button = b
+				label := b.Config.Label
+				if key := a.KeyFor(b.Config.Command); key != "" {
+					label += " (" + key + ")"
+				}
+				a.hover.task.ScheduleKey(b, func(context.Context) (string, error) { return escapeMarkdown(label), nil }, func(text string, err error) {
+					if err == nil && a.hover.button == b && a.debugButtonAt(mx, my) == b {
+						rect := b.GetRect()
+						a.Root.ButtonHover = ui.NewHoverWidget(text, rect.X, rect.Y)
+						a.Root.ButtonHover.Borders = a.Borders
+					}
+				})
+			}
+			return
+		}
+	}
+	if a.hover.button != nil {
+		a.DismissHover()
+	}
 	// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
 	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) {
 		for _, group := range a.editorGroups() {
@@ -133,6 +159,19 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 	} else if !a.isMouseOverHover(mx, my) && !hover.IsDragging() {
 		a.DismissHover()
 	}
+}
+
+func (a *App) debugButtonAt(x, y int) *widgets.ButtonWidget {
+	p := a.debugger.panel
+	if p.toolbar == nil || !p.controls.active || !a.Sidebar.Visible || a.Sidebar.ActivePanel != "debug" || a.Root.HasOverlay() || !p.toolbar.GetRect().Contains(x, y) {
+		return nil
+	}
+	for _, child := range p.toolbar.Children {
+		if b, ok := child.(*widgets.ButtonWidget); ok && b.GetRect().Contains(x, y) {
+			return b
+		}
+	}
+	return nil
 }
 
 func (a *App) checkMouseHover(mx, my int) {
@@ -272,5 +311,7 @@ func (a *App) stopHoverTask() {
 func (a *App) DismissHover() {
 	a.hoverEditorGroup().Hover = nil
 	a.hover.tab = tabHoverKey{}
+	a.hover.button = nil
+	a.Root.ButtonHover = nil
 	a.stopHoverTask()
 }

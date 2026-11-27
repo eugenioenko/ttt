@@ -136,6 +136,9 @@ func (a *App) refreshDebugControls() {
 	if p.controls == state && len(p.toolbar.Children) > 0 {
 		return
 	}
+	if a.hover.button != nil {
+		a.DismissHover()
+	}
 	p.controls = state
 	p.toolbar.Children = nil
 	button := func(id, label string, icon icons.Name, enabled bool) {

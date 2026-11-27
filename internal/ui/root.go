@@ -39,6 +39,7 @@ type chordState struct {
 
 type Root struct {
 	Main             Widget
+	ButtonHover      *HoverWidget
 	DebugToolbar     *DebugToolbar
 	toolbarPress     bool
 	Overlays         []Overlay
@@ -613,6 +614,10 @@ func (r *Root) Render(cells [][]term.Cell) {
 	_, menuOpen := r.TopOverlayWidget().(*ContextMenuWidget)
 	if r.DebugToolbar != nil && (!r.HasOverlay() || menuOpen) {
 		r.DebugToolbar.render(surface)
+	}
+
+	if r.ButtonHover != nil && !r.HasOverlay() {
+		r.ButtonHover.Render(surface)
 	}
 
 	for _, overlay := range r.Overlays {
