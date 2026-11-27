@@ -5,6 +5,7 @@ import {mkdtempSync, readFileSync, rmSync} from "node:fs";
 import {tmpdir} from "node:os";
 import {join} from "node:path";
 import {test} from "node:test";
+import {fileURLToPath} from "node:url";
 import {setTimeout as delay} from "node:timers/promises";
 import * as tui from "../../functional/tui.js";
 import {cases, copyTarget, executionMarker, startEditor} from "./harness.js";
@@ -49,7 +50,8 @@ for (const spec of cases) {
         await waitUntil(pulse, "target heartbeat");
         const vars = {"${pid}": mode === "picker" ? "${command:pickProcess}" : target.pid};
         if (mode === "address") {
-          const server = start(cfg.command.map(arg => String(vars[arg] ?? arg)));
+          const fixtures = fileURLToPath(new URL("../fixtures/", import.meta.url));
+          const server = start(cfg.command.map(arg => String(vars[arg] ?? arg.replaceAll("${fixtures}/", fixtures))));
           let output = "";
           for (const stream of [server.stdout, server.stderr]) stream.on("data", data => {output += data;});
           const pattern = new RegExp(cfg.portPattern);

@@ -74,10 +74,12 @@
   },
   "addressAttach": {
     "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
       "gdbserver",
       "--once",
       "--attach",
-      "127.0.0.1:0",
+      "stdio",
       "${pid}"
     ],
     "portPattern": "Listening on port (\\d+)",
