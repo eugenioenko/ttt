@@ -44,6 +44,22 @@ func TestToggleBookmarkCommand(t *testing.T) {
 	}
 }
 
+func TestToggleBookmarkOnReadOnlyPane(t *testing.T) {
+	g, a, _ := openBookmarkFiles(t)
+	requireNoError(t, g.OpenFileReadOnly(a, ""))
+	g.Editor.Cursor.Line = 2
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); !ok {
+		t.Fatal("toggle did not add a bookmark in a read-only pane")
+	}
+
+	g.ToggleBookmark()
+	if _, ok := g.Editor.GetBookmark(2); ok {
+		t.Fatal("toggle did not remove a bookmark in a read-only pane")
+	}
+}
+
 func TestJumpBookmarkWrapsAtBothEnds(t *testing.T) {
 	g, a, _ := openBookmarkFiles(t)
 	g.OpenFile(a)

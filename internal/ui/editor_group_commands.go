@@ -263,8 +263,10 @@ func (g *EditorGroupWidget) TrimTrailingWhitespaceLines() {
 	}
 }
 
+// Bookmarks are view state, not buffer content, so read-only panes accept
+// them exactly like editable ones.
 func (g *EditorGroupWidget) ToggleBookmark() {
-	if e := g.editableKeyEditor(); e != nil {
+	if e := g.keyEditor(); e != nil {
 		e.ToggleBookmark()
 	}
 }
