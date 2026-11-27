@@ -180,8 +180,40 @@ func TestCloseReleasesPendingCalls(t *testing.T) {
 func TestUnsupportedAdapterRequest(t *testing.T) {
 	_, a := pipeSession(t, nil)
 	a.send(map[string]any{"type": "request", "seq": 19, "command": "runInTerminal"})
+	a.send(map[string]any{"type": "event", "event": "output"})
 	p := a.receive()
 	if p.Type != "response" || p.RequestSeq != 19 || p.Command != "runInTerminal" || p.Success || p.Message == "" {
 		t.Fatal(p)
+	}
+}
+
+func TestStdioAdapterExitWithInheritedStdout(t *testing.T) {
+	switch os.Getenv("TTT_TEST_DAP_STDOUT") {
+	case "descendant":
+		time.Sleep(5 * time.Second)
+		os.Exit(0)
+	case "adapter":
+		child := exec.Command(os.Args[0], "-test.run=^TestStdioAdapterExitWithInheritedStdout$")
+		child.Env = append(os.Environ(), "TTT_TEST_DAP_STDOUT=descendant")
+		child.Stdout = os.Stdout
+		if child.Start() != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStdioAdapterExitWithInheritedStdout$")
+	cmd.Env = append(os.Environ(), "TTT_TEST_DAP_STDOUT=adapter", "GORACE=atexit_sleep_ms=0")
+	s, err := StartStdio(cmd, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	select {
+	case <-s.Done():
+		if !cmd.ProcessState.Success() {
+			t.Fatal(cmd.ProcessState)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("adapter exit hidden by descendant")
 	}
 }

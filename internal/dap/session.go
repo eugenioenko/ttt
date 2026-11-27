@@ -3,6 +3,7 @@ package dap
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"sync"
@@ -66,6 +67,19 @@ func (s *Session) finish(err error) {
 }
 
 func (s *Session) read() {
+	rejections := make(chan packet, 16)
+	defer close(rejections)
+	go func() {
+		for p := range rejections {
+			err := s.write(context.Background(), func(seq int) any {
+				return map[string]any{"type": "response", "seq": seq, "request_seq": p.Seq, "command": p.Command, "success": false, "message": "unsupported request"}
+			})
+			if err != nil {
+				return
+			}
+		}
+	}()
+
 	for {
 		var p packet
 		if err := s.codec.ReceiveInto(&p); err != nil {
@@ -85,11 +99,10 @@ func (s *Session) read() {
 				s.onEvent(Event{Name: p.Event, Body: p.Body})
 			}
 		case "request":
-			// No reverse-request capability is advertised by this client yet.
-			err := s.write(context.Background(), func(seq int) any {
-				return map[string]any{"type": "response", "seq": seq, "request_seq": p.Seq, "command": p.Command, "success": false, "message": "unsupported request"}
-			})
-			if err != nil {
+			select {
+			case rejections <- packet{Seq: p.Seq, Command: p.Command}:
+			default:
+				s.finish(errors.New("too many unanswered DAP reverse requests"))
 				return
 			}
 		}

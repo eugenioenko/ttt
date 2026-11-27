@@ -1,6 +1,8 @@
 package dap
 
 import (
+	"errors"
+	"os"
 	"os/exec"
 	"time"
 )
@@ -8,13 +10,20 @@ import (
 // StartStdio owns the command and its pipes. Callers may set Dir, Env and Stderr
 // before starting the adapter.
 func StartStdio(cmd *exec.Cmd, onEvent func(Event)) (*Session, error) {
+	if cmd.Stdout != nil {
+		return nil, errors.New("DAP adapter stdout already set")
+	}
 	if cmd.WaitDelay == 0 {
 		cmd.WaitDelay = time.Second
 	}
-	stdout, err := cmd.StdoutPipe()
+	// Wait must reap the adapter even if a descendant inherits stdout. Owning
+	// this pipe lets the reader drain the final frame after Wait returns.
+	stdout, childOut, err := os.Pipe()
 	if err != nil {
 		return nil, err
 	}
+	defer childOut.Close()
+	cmd.Stdout = childOut
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		_ = stdout.Close()
@@ -25,12 +34,25 @@ func StartStdio(cmd *exec.Cmd, onEvent func(Event)) (*Session, error) {
 		_ = stdout.Close()
 		return nil, err
 	}
-	return newSession(stdout, stdin, func() {
+	exited := make(chan struct{})
+	s := newSession(stdout, stdin, func() {
 		_ = stdin.Close()
 		_ = stdout.Close()
-		// Give a disconnected adapter time to exit, then reap it even if it ignores EOF.
-		kill := time.AfterFunc(time.Second, func() { _ = cmd.Process.Kill() })
+		select {
+		case <-exited:
+		case <-time.After(time.Second):
+			_ = cmd.Process.Kill()
+			<-exited
+		}
+	}, onEvent)
+	go func() {
 		_ = cmd.Wait()
-		kill.Stop()
-	}, onEvent), nil
+		close(exited)
+		select {
+		case <-s.Done():
+		case <-time.After(time.Second):
+			_ = stdout.Close()
+		}
+	}()
+	return s, nil
 }
