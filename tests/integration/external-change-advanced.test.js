@@ -51,32 +51,18 @@ describe("advanced external file change scenarios", () => {
     expect(snap).not.toContain("EXTERNAL_OVERWRITE");
   });
 
-  it("handles external file deletion gracefully", () => {
+  it("warns about external file deletion and preserves the buffer", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "deleteme.txt", "CONTENT_BEFORE_DELETE");
 
     tui.start(file);
     tui.waitFor("CONTENT_BEFORE_DELETE");
 
-    // Delete the file from outside the editor
     unlinkSync(file);
+    tui.waitFor("deleteme.txt was deleted on disk");
 
-    // Give the editor time to handle the deletion event
-    try {
-      tui.waitStable(1000);
-    } catch {
-      // Session may have exited if the editor cannot handle deletion
-    }
-
-    // The editor should not crash; the buffer content should still be visible
-    let snap;
-    try {
-      snap = tui.snapshot();
-    } catch {
-      // If snapshot fails, the session exited — that's acceptable behavior
-      // as long as it didn't crash ungracefully
-      return;
-    }
+    const snap = tui.snapshot();
+    expect(snap).toContain("deleteme.txt was deleted on disk");
     expect(snap).toContain("CONTENT_BEFORE_DELETE");
   });
 

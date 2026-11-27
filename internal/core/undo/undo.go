@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/selection"
 )
 
 // EditCommand defines the interface for undoable buffer edits.
@@ -16,12 +17,13 @@ type EditCommand interface {
 // UndoStack manages undo and redo stacks with automatic grouping of
 // consecutive character inserts and deletes.
 type UndoStack struct {
-	undo           []EditCommand
-	redo           []EditCommand
-	grouping       bool
-	savePoint      int
-	inTransaction  bool
-	transactionIdx int
+	undo             []EditCommand
+	redo             []EditCommand
+	grouping         bool
+	savePoint        int // Undo-stack boundary; -1 means it is no longer reachable.
+	inTransaction    bool
+	transactionDepth int
+	transactionIdx   int
 	// DeleteCursorStart controls where the cursor lands after undoing a
 	// DeleteSelectionCommand. When true, cursor goes to the start of the
 	// restored text (Emacs convention); when false, to the end (default).
@@ -30,20 +32,36 @@ type UndoStack struct {
 
 func (s *UndoStack) BeginTransaction() {
 	s.grouping = false
+	if s.transactionDepth == 0 {
+		s.transactionIdx = len(s.undo)
+	}
+	s.transactionDepth++
 	s.inTransaction = true
-	s.transactionIdx = len(s.undo)
 }
 
 func (s *UndoStack) EndTransaction() {
-	if !s.inTransaction {
+	if s.transactionDepth == 0 {
 		return
 	}
-	idx := s.transactionIdx
-	s.inTransaction = false
+	s.transactionDepth--
 	s.grouping = false
-
+	if s.transactionDepth > 0 {
+		// Inner scope of a nested transaction: keep the outer transaction
+		// active and preserve its start index.
+		return
+	}
+	s.inTransaction = false
+	idx := s.transactionIdx
 	if idx >= len(s.undo) {
 		return
+	}
+	// Boundaries inside the batch disappear; boundaries at its end or in redo shift.
+	if s.savePoint > idx {
+		if s.savePoint < len(s.undo) {
+			s.savePoint = -1
+		} else {
+			s.savePoint -= len(s.undo) - idx - 1
+		}
 	}
 
 	cmds := make([]EditCommand, len(s.undo)-idx)
@@ -57,6 +75,7 @@ func (s *UndoStack) MarkSaved() {
 	s.savePoint = len(s.undo)
 }
 
+// AtSavePoint compares history boundaries, not buffer contents.
 func (s *UndoStack) AtSavePoint() bool {
 	return len(s.undo) == s.savePoint
 }
@@ -67,6 +86,10 @@ func (s *UndoStack) AtSavePoint() bool {
 func (s *UndoStack) Push(cmd EditCommand) {
 	if IsNoop(cmd) {
 		return
+	}
+	// A saved boundary in the redo history is lost when this edit discards it.
+	if s.savePoint > len(s.undo) {
+		s.savePoint = -1
 	}
 	s.redo = nil
 	if s.grouping {
@@ -133,30 +156,53 @@ type CursorPos struct {
 	Line, Col int
 }
 
+type EditPosition struct {
+	Cursor    CursorPos
+	Selection selection.Selection
+}
+
 // Undo undoes the last command and returns where the cursor should be placed.
 func (s *UndoStack) Undo(b *buffer.Buffer) *CursorPos {
+	pos, _ := s.UndoWithSelection(b)
+	return pos
+}
+
+func (s *UndoStack) UndoWithSelection(b *buffer.Buffer) (*CursorPos, selection.Selection) {
 	if len(s.undo) == 0 {
-		return nil
+		return nil, selection.Selection{}
 	}
 	s.grouping = false
 	cmd := s.undo[len(s.undo)-1]
 	s.undo = s.undo[:len(s.undo)-1]
 	cmd.Undo(b)
 	s.redo = append(s.redo, cmd)
-	return clampCursorPos(b, s.cursorAfterUndo(cmd))
+	if batch, ok := cmd.(*BatchCommand); ok && batch.Before != nil {
+		before := *batch.Before
+		return clampCursorPos(b, &before.Cursor), before.Selection
+	}
+	return clampCursorPos(b, s.cursorAfterUndo(cmd)), selection.Selection{}
 }
 
 // Redo re-applies the last undone command and returns where the cursor should be placed.
 func (s *UndoStack) Redo(b *buffer.Buffer) *CursorPos {
+	pos, _ := s.RedoWithSelection(b)
+	return pos
+}
+
+func (s *UndoStack) RedoWithSelection(b *buffer.Buffer) (*CursorPos, selection.Selection) {
 	if len(s.redo) == 0 {
-		return nil
+		return nil, selection.Selection{}
 	}
 	s.grouping = false
 	cmd := s.redo[len(s.redo)-1]
 	s.redo = s.redo[:len(s.redo)-1]
 	cmd.Apply(b)
 	s.undo = append(s.undo, cmd)
-	return clampCursorPos(b, cursorAfterRedo(cmd))
+	if batch, ok := cmd.(*BatchCommand); ok && batch.After != nil {
+		after := *batch.After
+		return clampCursorPos(b, &after.Cursor), after.Selection
+	}
+	return clampCursorPos(b, cursorAfterRedo(cmd)), selection.Selection{}
 }
 
 // lineCursor lets a command defined outside this package report a cursor.
@@ -183,6 +229,9 @@ func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *InsertRuneCommand:
 		return &CursorPos{c.Line, c.Col}
 	case *DeleteRuneCommand:
+		if c.Forward {
+			return &CursorPos{c.Line, c.Col}
+		}
 		return &CursorPos{c.Line, c.Col + 1}
 	case *InsertStringCommand:
 		return &CursorPos{c.Line, c.Col}
@@ -193,7 +242,7 @@ func (s *UndoStack) cursorAfterUndo(cmd EditCommand) *CursorPos {
 	case *JoinNextLineCommand:
 		return &CursorPos{c.Line, c.JoinCol}
 	case *DeleteSelectionCommand:
-		if s.DeleteCursorStart {
+		if c.Forward || s.DeleteCursorStart {
 			return &CursorPos{c.StartLine, c.StartCol}
 		}
 		return &CursorPos{c.EndLine, c.EndCol}
@@ -281,6 +330,7 @@ func (c *InsertRuneCommand) Undo(b *buffer.Buffer) {
 type DeleteRuneCommand struct {
 	Line, Col int
 	Rune      rune
+	Forward   bool // the Delete key: the cursor sat on Col, not after it
 }
 
 func (c *DeleteRuneCommand) Apply(b *buffer.Buffer) {
@@ -496,6 +546,7 @@ func IsNoop(cmd EditCommand) bool {
 type DeleteSelectionCommand struct {
 	StartLine, StartCol int
 	EndLine, EndCol     int
+	Forward             bool
 	Deleted             string
 	applied             bool
 }
@@ -650,6 +701,8 @@ func (c *PasteCommand) Undo(b *buffer.Buffer) {
 
 type BatchCommand struct {
 	Commands []EditCommand
+	Before   *EditPosition
+	After    *EditPosition
 }
 
 func (c *BatchCommand) Apply(b *buffer.Buffer) {

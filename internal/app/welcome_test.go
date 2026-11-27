@@ -5,10 +5,25 @@ import (
 	"slices"
 	"strconv"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/icons"
 )
 
+func TestWelcomeNavigationHintUsesConfiguredIcons(t *testing.T) {
+	t.Cleanup(func() { icons.Configure("", nil) })
+	if warnings := icons.Configure("", map[string]string{"arrow-up": "u", "arrow-down": "d"}); len(warnings) != 0 {
+		t.Fatal(warnings)
+	}
+	if got := welcomeNavigationHint(false); got != "ud select   enter open" {
+		t.Fatalf("navigation hint = %q", got)
+	}
+	if got := welcomeNavigationHint(true); got != "ud select   enter open   c copy path" {
+		t.Fatalf("copy hint = %q", got)
+	}
+}
+
 func TestPushRecent(t *testing.T) {
-	got := pushRecent([]string{"/a", "/b", "/c"}, []string{"/c", "/d"})
+	got := pushRecent([]string{"/a", "/b", "/c"}, []string{"/c", "/d"}, maxRecentFolders)
 	if want := []string{"/c", "/d", "/a", "/b"}; !slices.Equal(got, want) {
 		t.Fatalf("pushRecent = %v, want %v", got, want)
 	}
@@ -16,7 +31,7 @@ func TestPushRecent(t *testing.T) {
 	for i := range maxRecentFolders + 5 {
 		many = append(many, strconv.Itoa(i))
 	}
-	if got := pushRecent(many, []string{"new"}); len(got) != maxRecentFolders || got[0] != "new" {
+	if got := pushRecent(many, []string{"new"}, maxRecentFolders); len(got) != maxRecentFolders || got[0] != "new" {
 		t.Fatalf("pushRecent over the cap = %v", got)
 	}
 }

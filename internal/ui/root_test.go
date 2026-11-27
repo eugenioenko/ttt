@@ -122,7 +122,7 @@ func TestRootClickWorksAfterAMenuOpenedByAClickClosesWithTheKeyboard(t *testing.
 			opened++
 			menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
 			menu.OnExec = func(string) { root.PopOverlay() }
-			menu.OnDismiss = root.PopOverlay
+			menu.OnDismiss = func() { root.PopOverlay() }
 			root.PushOverlay(Overlay{Widget: menu, Modal: true})
 		}
 		x := bar.ItemSpans()[0].Start
@@ -153,7 +153,7 @@ func TestRootGivesTheReleaseToMainWhenAPassThroughOverlayIgnoredThePress(t *test
 	bar.OnSelect = func(int) {
 		opened++
 		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "New", Command: "new"}}, 0, 1)
-		menu.OnDismiss = root.PopOverlay
+		menu.OnDismiss = func() { root.PopOverlay() }
 		root.PushOverlay(Overlay{Widget: menu, Modal: true})
 	}
 	x := bar.ItemSpans()[0].Start
@@ -428,9 +428,33 @@ type rawKeysWidget struct {
 	mockWidget
 }
 
+func TestEditorChordSkipsRawKeysButWorksInEditor(t *testing.T) {
+	root := NewRoot(&mockWidget{})
+	terminal := &rawKeysWidget{mockWidget{focusable: true}}
+	root.SetFocus(terminal)
+	fired := 0
+	root.AddEditorChordKey([]GlobalKeyBinding{
+		{Key: tcell.KeyCtrlL, Mod: tcell.ModCtrl},
+		{Key: tcell.KeyRune, Rune: 'f'},
+	}, func() { fired++ })
+	prefix := makeKeyEvent(tcell.KeyCtrlL, tcell.ModCtrl)
+	continuation := tcell.NewEventKey(tcell.KeyRune, "f", 0)
+	root.HandleEvent(prefix)
+	root.HandleEvent(continuation)
+	if fired != 0 || terminal.eventCount != 2 {
+		t.Fatalf("raw keys captured: fired=%d events=%d", fired, terminal.eventCount)
+	}
+	root.SetFocus(&mockWidget{focusable: true})
+	root.HandleEvent(prefix)
+	root.HandleEvent(continuation)
+	if fired != 1 {
+		t.Fatal("editor chord did not run with editor focus")
+	}
+}
+
 func (w *rawKeysWidget) WantsRawKeys() bool { return true }
 
-func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
+func TestRawKeyConsumerRunsConfiguredChords(t *testing.T) {
 	root := NewRoot(&mockWidget{})
 	root.SetSize(80, 24)
 	root.SetFocus(&mockWidget{focusable: true})
@@ -446,13 +470,49 @@ func TestRawKeyConsumerGetsChordKeys(t *testing.T) {
 	terminal := &rawKeysWidget{mockWidget{focusable: true}}
 	root.SetFocus(terminal)
 	root.HandleEvent(makeKeyEvent(tcell.KeyEnter, 0))
+	if fired || terminal.eventCount != 1 {
+		t.Fatal("focus change must drop the pending chord and send Enter to the terminal")
+	}
 	root.HandleEvent(makeKeyEvent(tcell.KeyCtrlK, tcell.ModCtrl))
 	root.HandleEvent(makeKeyEvent(tcell.KeyEnter, 0))
 
-	if fired {
-		t.Fatal("chord fired while terminal focused")
+	if !fired || terminal.eventCount != 1 {
+		t.Fatal("configured chord must run without sending its keys to the terminal")
 	}
-	if terminal.eventCount != 3 {
-		t.Fatalf("terminal got %d keys, want 3", terminal.eventCount)
+	root.KeyInterceptor = func(*tcell.EventKey) bool {
+		t.Fatal("plugin interceptor must not receive terminal keys")
+		return true
+	}
+	root.HandleEvent(makeKeyEvent(tcell.KeyCtrlK, tcell.ModCtrl))
+	mismatch := makeKeyEvent(tcell.KeyUp, 0)
+	root.HandleEvent(mismatch)
+	if root.chord != nil || terminal.lastEvent != mismatch {
+		t.Fatal("mismatched continuation must clear the chord and reach the terminal unchanged")
+	}
+	root.ClearKeys()
+	unbound := makeKeyEvent(tcell.KeyCtrlK, tcell.ModCtrl)
+	root.HandleEvent(unbound)
+	if terminal.lastEvent != unbound || terminal.eventCount != 3 {
+		t.Fatal("unbound Ctrl+K must reach the terminal unchanged")
+	}
+}
+
+func TestRemoveLowerOverlayKeepsReturnFocusOfOverlayAbove(t *testing.T) {
+	main := &mockWidget{}
+	origin := &mockWidget{focusable: true}
+	drawer := &mockWidget{focusable: true}
+	dialog := &mockWidget{focusable: true}
+
+	root := NewRoot(main)
+	root.SetFocus(origin)
+	root.PushOverlay(Overlay{Widget: drawer})
+	root.SetFocus(drawer)
+	root.PushOverlay(Overlay{Widget: dialog, Modal: true})
+
+	if got := root.RemoveOverlay(drawer); got != origin {
+		t.Fatalf("RemoveOverlay(drawer) returned %v, want origin", got)
+	}
+	if got := root.PopOverlay(); got != origin {
+		t.Fatalf("PopOverlay() returned %v, want origin after drawer removal", got)
 	}
 }

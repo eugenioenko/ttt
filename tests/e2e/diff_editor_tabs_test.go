@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"os"
 	"path/filepath"
@@ -38,7 +39,7 @@ func TestCommitDiffOpensOnTheDiffEditor(t *testing.T) {
 	write(numberedLines(30, 15, "CHANGED 15"))
 	harnessGit(t, h.dir, "commit", "-qam", "change line 15")
 
-	h.app.OpenCommitDiff(h.dir, "HEAD", "HEAD", git.FileStatus{Path: "code.txt", Status: "M"}, false)
+	h.app.OpenCommitDiff(h.dir, "HEAD", "HEAD", scm.Change{Path: "code.txt", Kind: scm.Modified}, false)
 	h.redraw()
 	dv := h.app.EditorGroup.ActiveDiffWidget()
 	if dv == nil {
@@ -98,6 +99,13 @@ func TestFindBarSearchesBothSidesOfADiffTab(t *testing.T) {
 		t.Fatalf("find matches left %v right %v, want one per side", dv.SearchMatchesLeft, dv.SearchMatchesRight)
 	}
 	h.assertContains("1/2")
+	h.pressKey(tcell.KeyF3, tcell.ModNone)
+	h.assertContains("2/2")
+	if current := findBarWidget(t, h).Current; current != 1 {
+		t.Fatalf("diff find current = %d, want 1", current)
+	}
+	h.pressKey(tcell.KeyF3, tcell.ModShift)
+	h.assertContains("1/2")
 }
 
 func TestDiffFindBarIsNotRefreshedByEditorTabChanges(t *testing.T) {
@@ -124,7 +132,7 @@ func TestDiffFindBarIsNotRefreshedByEditorTabChanges(t *testing.T) {
 	if err := os.WriteFile(path, []byte("other\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if findBar.Current != 1 {

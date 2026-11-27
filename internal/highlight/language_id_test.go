@@ -7,6 +7,7 @@ func TestDetectLanguageID(t *testing.T) {
 		{"main.ts", "", "typescript"}, {"README.md", "", "markdown"},
 		{"main.go", "", "go"}, {"main.tsx", "", "typescriptreact"},
 		{"main.jsx", "", "javascriptreact"}, {"README.md.bak", "", "markdown"},
+		{"header.h", "", "cpp"},
 		{"script", "#!/usr/bin/env python3", "python"}, {"unknown.zzzz", "", ""},
 	} {
 		if got := DetectLanguageID(tc.path, []string{tc.first}); got != tc.want {

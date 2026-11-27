@@ -9,6 +9,10 @@ import (
 )
 
 func gitCommandContext(ctx context.Context, args ...string) *exec.Cmd {
+	return gitMutationCommandContext(ctx, readOnlyArgs(args)...)
+}
+
+func gitMutationCommandContext(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.WaitDelay = time.Second
 	return cmd

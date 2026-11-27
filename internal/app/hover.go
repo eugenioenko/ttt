@@ -3,11 +3,18 @@ package app
 import (
 	"context"
 	"log/slog"
+	"strings"
 	"time"
+	"unicode"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
+
+const hoverGraceMargin = 3
 
 type hoverKey struct {
 	Path, Language, Server, WorkDir, Diagnostic string
@@ -19,6 +26,14 @@ type hoverKey struct {
 type hoverState struct {
 	task  *asynctask.Task[string]
 	delay time.Duration
+	tab   tabHoverKey
+}
+
+type tabHoverKey struct {
+	Group            *ui.EditorGroupWidget
+	Index            int
+	Name             string
+	AnchorX, AnchorY int
 }
 
 func (a *App) hoverDiagnostic(line, col int) string {
@@ -52,21 +67,13 @@ func (a *App) scheduleHover(path, lang string, line, col, anchorX, anchorY int, 
 		a.DismissHover()
 		return
 	}
-	delay := a.Settings.LSP.HoverDelay
-	if delay <= 0 {
-		delay = 400
+	if a.hover.tab.Group != nil {
+		a.DismissHover()
 	}
-	wait := time.Duration(delay) * time.Millisecond
-	if a.hover.task == nil || a.hover.delay != wait {
-		if a.hover.task != nil {
-			a.hover.task.Close()
-		}
-		a.hover.task = NewTask[string](a, asynctask.TaskOptions{Delay: wait})
-		a.hover.delay = wait
-	}
+	a.ensureHoverTask()
 	server, _, _ := a.lspResolve(path, lang)
-	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDir(path),
-		Line: line, Col: col, AnchorX: anchorX, AnchorY: anchorY, Diagnostic: diagText,
+	key := hoverKey{Path: path, Language: lang, Server: server, WorkDir: a.lspWorkDirFor(path, lang),
+		Line: line, Col: a.lspColumn(path, line, col), AnchorX: anchorX, AnchorY: anchorY, Diagnostic: diagText,
 		Version: a.EditorGroup.ActiveBuffer().Version(), Manager: a.LspManager}
 	a.hover.task.ScheduleKey(key, func(ctx context.Context) (string, error) {
 		return readHover(ctx, key)
@@ -84,6 +91,140 @@ func (a *App) scheduleHover(path, lang string, line, col, anchorX, anchorY int, 
 	if a.hover.task.Pending() {
 		a.EditorGroup.Hover = nil
 	}
+}
+
+func (a *App) ensureHoverTask() {
+	delay := a.Settings.LSP.HoverDelay
+	if delay <= 0 {
+		delay = 400
+	}
+	wait := time.Duration(delay) * time.Millisecond
+	if a.hover.task == nil || a.hover.delay != wait {
+		if a.hover.task != nil {
+			a.hover.task.Close()
+		}
+		a.hover.task = NewTask[string](a, asynctask.TaskOptions{Delay: wait})
+		a.hover.delay = wait
+	}
+}
+
+// TrackMouseHover shows, keeps or dismisses hover popups for a mouse event
+// before it is routed to the widget tree.
+func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
+	mx, my := ev.Position()
+	btn := ev.Buttons()
+	// Dismiss before routing: an existing hover can consume the Ctrl mouse event.
+	if term.ControlModifierHeld(ev.Modifiers(), &a.Root.ControlModifiers) {
+		for _, group := range a.editorGroups() {
+			if group.GetRect().Contains(mx, my) {
+				a.DismissHover()
+				return
+			}
+		}
+	}
+	if btn == 0 && a.checkTabHover(mx, my) {
+		return
+	} else if btn != 0 && a.hover.tab.Group != nil && !a.isMouseInsideHover(mx, my) {
+		a.DismissHover()
+	} else if hover := a.hoverEditorGroup().Hover; hover == nil {
+		if btn == 0 {
+			a.checkMouseHover(mx, my)
+		}
+	} else if !a.isMouseOverHover(mx, my) && !hover.IsDragging() {
+		a.DismissHover()
+	}
+}
+
+func (a *App) checkMouseHover(mx, my int) {
+	if a.EditorGroup.Editor == nil || !a.Settings.LSP.IsHoverEnabled() {
+		a.DismissHover()
+		return
+	}
+	line, col, ok := a.EditorGroup.Editor.TextPosAt(mx, my)
+	if !ok {
+		a.DismissHover()
+		return
+	}
+	path, lang := a.editorPathLang()
+	a.scheduleHover(path, lang, line, col, mx, my, a.hoverDiagnostic(line, col))
+}
+
+func (a *App) ShowHover(text string, anchorX, anchorY int) {
+	if text != "" {
+		a.EditorGroup.Hover = ui.NewHoverWidget(text, anchorX, anchorY, &a.Root.ControlModifiers)
+	}
+}
+
+func (a *App) hoverEditorGroup() *ui.EditorGroupWidget {
+	if a.hover.tab.Group != nil {
+		return a.hover.tab.Group
+	}
+	return a.EditorGroup
+}
+
+func (a *App) isMouseOverHover(mx, my int) bool {
+	h := a.hoverEditorGroup().Hover
+	if h == nil {
+		return false
+	}
+	r := h.GetRect()
+	m := hoverGraceMargin
+	return mx >= r.X-m && mx < r.X+r.W+m && my >= r.Y-m && my < r.Y+r.H+m
+}
+
+// checkTabHover handles pointer motion for cut tab names and reports whether
+// the pointer is on the tab bar. A tab popup has no grace margin: moving to
+// another tab or off the tab bar (other than onto the popup) dismisses it.
+func (a *App) checkTabHover(mx, my int) bool {
+	if a.isMouseInsideHover(mx, my) {
+		return false
+	}
+	group := a.editorTabGroupAt(mx, my)
+	if group == nil {
+		if a.hover.tab.Group != nil {
+			a.DismissHover()
+		}
+		return false
+	}
+	index, name, ax, ay, ok := group.TabBar.CutTabAt(mx, my)
+	key := tabHoverKey{Group: group, Index: index, Name: name, AnchorX: ax, AnchorY: ay}
+	if ok && a.hover.tab == key &&
+		(group.Hover != nil || (a.hover.task != nil && a.hover.task.Pending())) {
+		return true
+	}
+	a.DismissHover()
+	if ok {
+		a.scheduleTabHover(key)
+	}
+	return true
+}
+
+func (a *App) isMouseInsideHover(mx, my int) bool {
+	h := a.hoverEditorGroup().Hover
+	return h != nil && h.GetRect().Contains(mx, my)
+}
+
+func (a *App) scheduleTabHover(key tabHoverKey) {
+	a.ensureHoverTask()
+	a.hover.tab = key
+	a.hover.task.ScheduleKey(key, func(context.Context) (string, error) {
+		return escapeMarkdown(key.Name), nil
+	}, func(text string, err error) {
+		if err == nil && a.hover.tab == key {
+			key.Group.Hover = ui.NewHoverWidget(text, key.AnchorX, key.AnchorY, &a.Root.ControlModifiers)
+		}
+	})
+}
+
+func escapeMarkdown(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		if r < 0x80 && (unicode.IsPunct(r) || unicode.IsSymbol(r)) {
+			b.WriteByte('\\')
+		}
+		b.WriteRune(r)
+	}
+	return b.String()
 }
 
 func joinHoverText(diagnostic, text string) string {
@@ -129,6 +270,7 @@ func (a *App) stopHoverTask() {
 }
 
 func (a *App) DismissHover() {
-	a.EditorGroup.Hover = nil
+	a.hoverEditorGroup().Hover = nil
+	a.hover.tab = tabHoverKey{}
 	a.stopHoverTask()
 }

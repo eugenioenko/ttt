@@ -89,7 +89,7 @@ func (d *CommitDetailWidget) reconcileDisclosure(controls []detailDisclosureRow)
 }
 
 func (d *CommitDetailWidget) handleDisclosureKey(event *tcell.EventKey) bool {
-	if event.Modifiers()&(tcell.ModCtrl|tcell.ModAlt) != 0 {
+	if event.Modifiers()&(tcell.ModCtrl|tcell.ModAlt|tcell.ModMeta) != 0 {
 		return false
 	}
 	switch event.Key() {

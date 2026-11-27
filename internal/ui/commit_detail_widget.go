@@ -2,7 +2,10 @@ package ui
 
 import (
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
+	"maps"
+	"path/filepath"
 	"strconv"
 	"time"
 	"unicode"
@@ -11,6 +14,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -18,12 +22,14 @@ import (
 // the order Git reports them; a failed or hunk-less diff still gets a heading
 // and an explanatory row so a touched path never silently disappears.
 type CommitDetailFile struct {
-	Status      string
-	Path        string
-	OldPath     string
-	Stage       CommitDetailStage
-	Boundary    CommitDetailBoundary
-	IndexStages []byte
+	Status          string
+	Path            string
+	OldPath         string
+	Stage           CommitDetailStage
+	Boundary        CommitDetailBoundary
+	Group           string
+	ConflictSources []string
+	ConflictID      string
 	// ConflictCode marks a two-way resolution view between the preferred
 	// available conflict stage and the worktree, not a full three-way merge view.
 	ConflictCode string
@@ -58,6 +64,7 @@ const (
 	CommitDetailStageUnstaged
 	CommitDetailStageMixed
 	CommitDetailStageConflict
+	CommitDetailStageWorkingCopy
 )
 
 type CommitDetailContentKind uint8
@@ -83,6 +90,7 @@ const (
 	commitDetailMessageHeaderRow commitDetailRowKind = iota
 	commitDetailHeaderDividerRow
 	commitDetailMetadataRow
+	commitDetailSummaryRow
 	commitDetailMessageRow
 	commitDetailSpacerRow
 	commitDetailHeadingRow
@@ -168,6 +176,8 @@ type CommitDetailWidget struct {
 	signsColor         bool
 	gutterHighlight    bool
 	colorNumbers       bool
+	indentGuides       bool
+	fullLineSelection  bool
 	chevronCollapsed   rune
 	chevronExpanded    rune
 	gutterStyle        string
@@ -219,8 +229,9 @@ type CommitDetailWidget struct {
 	navRow   int
 	navValid bool
 
-	OnFetchContext func(fileIndex int, file CommitDetailFile)
-	OnClose        func()
+	OnFetchContext     func(fileIndex int, file CommitDetailFile)
+	OnClose            func()
+	configurePaneLinks func(*EditorPaneWidget, string)
 }
 
 func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *CommitDetailWidget {
@@ -229,8 +240,8 @@ func NewCommitDetailWidget(dir, ref, short string, syntaxHighlight bool) *Commit
 		Ref:              ref,
 		Short:            short,
 		Loading:          true,
-		Header:           "Commit message",
-		LoadingText:      fmt.Sprintf("Loading commit %s…", short),
+		Header:           i18n.Text("changes.commitMessage"),
+		LoadingText:      i18n.Format("changes.loadingCommit", i18n.Args{"short": short}),
 		SyntaxHighlight:  syntaxHighlight,
 		signs:            false,
 		signsColor:       true,
@@ -247,8 +258,8 @@ func NewCurrentChangesWidget(dir string, syntaxHighlight bool) *CommitDetailWidg
 		Ref:              "working-tree",
 		markdownMaxWidth: 80,
 		Loading:          true,
-		Header:           "Current changes",
-		LoadingText:      "Loading current changes…",
+		Header:           i18n.Text("changes.currentChangesHeading"),
+		LoadingText:      i18n.Text("changes.loadingCurrentChanges"),
 		CurrentChanges:   true,
 		SyntaxHighlight:  syntaxHighlight,
 		signs:            false,
@@ -335,6 +346,24 @@ func (d *CommitDetailWidget) SetDiffGutterHighlight(enabled bool) {
 	d.applyViewOptions()
 }
 
+func (d *CommitDetailWidget) SetIndentGuides(enabled bool) {
+	d.indentGuides = enabled
+	for i := range d.Files {
+		if d.Files[i].view != nil {
+			d.Files[i].view.SetIndentGuides(enabled)
+		}
+	}
+}
+
+func (d *CommitDetailWidget) SetFullLineSelection(enabled bool) {
+	d.fullLineSelection = enabled
+	for i := range d.Files {
+		if d.Files[i].view != nil {
+			d.Files[i].view.SetFullLineSelection(enabled)
+		}
+	}
+}
+
 func (d *CommitDetailWidget) SetDiffColorGutterNumbers(enabled bool) {
 	d.colorNumbers = enabled
 	d.applyViewOptions()
@@ -367,6 +396,8 @@ func (d *CommitDetailWidget) applyViewOptions() {
 		v.colorNumbers = d.colorNumbers
 		v.gapChevron = d.chevronCollapsed
 		v.minGutter = d.gutterW
+		v.SetIndentGuides(d.indentGuides)
+		v.SetFullLineSelection(d.fullLineSelection)
 		v.applyOverlayOptions()
 	}
 }
@@ -446,7 +477,7 @@ func (d *CommitDetailWidget) ApplyFileContext(fileIndex int, key string, oldLine
 	if len(contextErr) > 0 {
 		errText = contextErr[0]
 	} else if oldLines == nil && newLines == nil {
-		errText = "Could not load full file"
+		errText = i18n.Text("changes.couldNotLoadFullFile")
 	}
 	return d.ApplyFileContextContent(fileIndex, key, oldLines, newLines, CommitDetailContentText, errText)
 }
@@ -478,7 +509,7 @@ func (d *CommitDetailWidget) ApplyFileContextContent(fileIndex int, key string, 
 func CommitDetailContextKey(file CommitDetailFile) string { return commitDetailFileKey(file) }
 
 func commitDetailFileKey(file CommitDetailFile) string {
-	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + string(file.IndexStages)
+	return file.OldPath + "\x00" + file.Path + "\x00" + string([]byte{byte(file.Boundary)}) + "\x00" + file.ConflictCode + "\x00" + strconv.Quote(file.Group) + "\x00" + fmt.Sprintf("%q", file.ConflictSources) + "\x00" + strconv.Quote(file.ConflictID)
 }
 
 func (d *CommitDetailWidget) IsWrapped() bool { return d.wrapMode == DiffWrapOn }
@@ -597,9 +628,7 @@ func (d *CommitDetailWidget) SetCurrentChanges(message string, files []CommitDet
 		if i < len(d.collapsedFiles) {
 			state.collapsed = d.collapsedFiles[i]
 		}
-		for gap, expanded := range file.expandedGaps {
-			state.expandedGaps[gap] = expanded
-		}
+		maps.Copy(state.expandedGaps, file.expandedGaps)
 		preserved[commitDetailFileKey(file)] = state
 	}
 	topLine := d.TopLine
@@ -728,12 +757,17 @@ func (d *CommitDetailWidget) buildRows() {
 
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.rows = append(d.rows, commitDetailRow{kind: commitDetailMessageHeaderRow, text: header, bold: true})
 	if d.Metadata != "" {
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailMetadataRow, text: d.Metadata})
 		d.recordWidth(d.Metadata)
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
+	}
+	if summary := d.summaryText(); summary != "" {
+		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSummaryRow, text: summary})
+		d.recordWidth(summary)
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailSpacerRow})
 	}
 	d.rows = append(d.rows, d.buildMessageRows()...)
@@ -762,13 +796,13 @@ func (d *CommitDetailWidget) buildRows() {
 			var danger bool
 			switch file.FullFileState {
 			case CommitDetailFullFileIdle:
-				notice = "Full file not loaded"
+				notice = i18n.Text("changes.fullFileNotLoaded")
 			case CommitDetailFullFileLoading:
-				notice = "Loading full file…"
+				notice = i18n.Text("changes.loadingFullFile")
 			case CommitDetailFullFileFailed:
 				notice = file.FullFileErr
 				if notice == "" {
-					notice = "Could not load full file"
+					notice = i18n.Text("changes.couldNotLoadFullFile")
 				}
 				danger = true
 			}
@@ -783,23 +817,23 @@ func (d *CommitDetailWidget) buildRows() {
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: file.Error, fileIndex: fileIndex})
 			d.recordWidth(file.Error)
 		case file.ContentKind == CommitDetailContentBinary:
-			const binary = "Binary file changed"
+			binary := i18n.Text("changes.binaryFileChanged")
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: binary, fileIndex: fileIndex})
 			d.recordWidth(binary)
 		case file.ContentKind == CommitDetailContentEmpty:
-			empty := "Empty file changed"
+			empty := i18n.Text("changes.emptyFileChanged")
 			switch file.Status {
 			case "A", "?":
-				empty = "Empty file added"
+				empty = i18n.Text("changes.emptyFileAdded")
 			case "D":
-				empty = "Empty file deleted"
+				empty = i18n.Text("changes.emptyFileDeleted")
 			}
 			d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: empty, fileIndex: fileIndex})
 			d.recordWidth(empty)
 		default:
 			v := d.fileView(file)
 			if len(v.Lines) == 0 {
-				const noChanges = "No line changes"
+				noChanges := i18n.Text("changes.noLineChanges")
 				d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noChanges, fileIndex: fileIndex})
 				d.recordWidth(noChanges)
 				continue
@@ -810,7 +844,7 @@ func (d *CommitDetailWidget) buildRows() {
 		}
 	}
 	if len(d.Files) == 0 && !d.CurrentChanges {
-		const noFiles = "No files"
+		noFiles := i18n.Text("general.noFiles")
 		d.rows = append(d.rows, commitDetailRow{kind: commitDetailNoticeRow, text: noFiles})
 		d.recordWidth(noFiles)
 	}
@@ -831,6 +865,8 @@ func (d *CommitDetailWidget) fileView(file *CommitDetailFile) *DiffEditorWidget 
 		file.view = v
 	}
 	v.SetSyntaxHighlight(d.SyntaxHighlight && file.Path != "")
+	v.SetIndentGuides(d.indentGuides)
+	v.SetFullLineSelection(d.fullLineSelection)
 	v.mode = d.mode
 	v.wrapMode = d.wrapMode
 	v.focusLeft = false
@@ -857,14 +893,16 @@ func commitDetailFileHeading(file CommitDetailFile) string {
 		return path
 	}
 	if file.Stage == CommitDetailStageConflict {
-		return fmt.Sprintf("%s  %s - conflict (%s)", StatusBadge(file.Status), path, file.ConflictCode)
+		return i18n.Format("changes.conflict", i18n.Args{"status": StatusBadge(file.Status), "path": path, "conflictCode": file.ConflictCode})
 	}
-	stage := "unstaged"
+	stage := i18n.Text("changes.unstagedState")
 	switch file.Stage {
 	case CommitDetailStageStaged:
-		stage = "staged"
+		stage = i18n.Text("changes.stagedState")
 	case CommitDetailStageMixed:
-		stage = "mixed"
+		stage = i18n.Text("changes.mixed")
+	case CommitDetailStageWorkingCopy:
+		stage = i18n.Text("changes.workingCopyState")
 	}
 	return fmt.Sprintf("%s  %s · %s", StatusBadge(file.Status), path, stage)
 }
@@ -889,7 +927,7 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 	if d.Loading {
 		loadingText := d.LoadingText
 		if loadingText == "" {
-			loadingText = fmt.Sprintf("Loading commit %s…", d.Short)
+			loadingText = i18n.Format("changes.loadingCommit", i18n.Args{"short": d.Short})
 		}
 		surface.DrawText(0, 0, loadingText, w, term.StyleMuted)
 		return
@@ -937,6 +975,15 @@ func (d *CommitDetailWidget) Render(surface Surface) {
 			n++
 		}
 		if v := d.rowView(visual.row); v != nil {
+			if d.configurePaneLinks != nil {
+				path := d.Files[row.fileIndex].Path
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(d.Dir, path)
+				}
+				for _, pane := range v.viewPanes() {
+					d.configurePaneLinks(pane, path)
+				}
+			}
 			rect := Rect{X: r.X, Y: r.Y + screenY, W: viewW, H: n}
 			v.focusedGap = nil
 			if d.selectedDisclosure.gap >= 0 && d.disclosureFocused(row.fileIndex, d.selectedDisclosure.gap) {
@@ -1077,6 +1124,8 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 		d.renderHeaderDivider(surface, y, viewW)
 	case commitDetailMetadataRow:
 		d.drawTextRow(surface, 1, y, viewW-2, row.text, term.StyleMuted, term.StyleCommitHeader, false, visual.leftStart, rowIndex)
+	case commitDetailSummaryRow:
+		d.renderSummary(surface, y, viewW)
 	case commitDetailSpacerRow:
 		return
 	case commitDetailMessageRow:
@@ -1093,20 +1142,20 @@ func (d *CommitDetailWidget) renderRow(surface Surface, rowIndex int, row commit
 }
 
 func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) {
-	for column := 0; column < viewW; column++ {
+	for column := range viewW {
 		surface.SetCell(column, y, term.Cell{Ch: ' ', Style: term.StyleCommitHeader})
 	}
 	header := d.Header
 	if header == "" {
-		header = "Commit message"
+		header = i18n.Text("changes.commitMessage")
 	}
 	d.drawStaticText(surface, 1, y, viewW-2, header, term.StyleCommitHeader, term.StyleCommitHeader, true)
 	if len(d.Files) == 0 {
 		return
 	}
-	label := "Collapse all"
+	label := i18n.Text("changes.collapseAll")
 	if d.allFilesCollapsed() {
-		label = "Expand all"
+		label = i18n.Text("changes.expandAll")
 	}
 	controlW := textwidth.String(label)
 	controlX := viewW - controlW - 1
@@ -1123,7 +1172,7 @@ func (d *CommitDetailWidget) renderMessageHeader(surface Surface, y, viewW int) 
 }
 
 func (d *CommitDetailWidget) renderHeaderDivider(surface Surface, y, viewW int) {
-	for column := 0; column < viewW; column++ {
+	for column := range viewW {
 		surface.SetCell(column, y, term.Cell{Ch: '─', Style: term.StyleBorder})
 	}
 }
@@ -1162,6 +1211,9 @@ func (d *CommitDetailWidget) renderHeading(surface Surface, rowIndex int, row co
 		}
 	}
 	d.drawTextRow(surface, textX, y, viewW-textX, row.text, headingStyle, bg, row.bold, visual.leftStart, rowIndex)
+	if !visual.continuation && row.fileIndex >= 0 && row.fileIndex < len(d.Files) {
+		d.renderFileStats(surface, &d.Files[row.fileIndex], textX, y, viewW, row.text, bg)
+	}
 }
 
 func (d *CommitDetailWidget) drawStaticText(surface Surface, x, y, width int, text string, style, bg term.Style, bold bool) {
@@ -1280,6 +1332,19 @@ func (d *CommitDetailWidget) selectionText() string {
 		return ""
 	}
 	return d.selection.Text(len(d.rows), d.rowText)
+}
+
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *CommitDetailWidget) SelectedText() string {
+	if text := d.selectionText(); text != "" {
+		return text
+	}
+	for i := range d.Files {
+		if v := d.Files[i].view; v != nil && v.hasSelection() {
+			return v.SelectedText()
+		}
+	}
+	return ""
 }
 
 func (d *CommitDetailWidget) CopySelection() string {
@@ -1420,10 +1485,7 @@ func (d *CommitDetailWidget) renderHorizontalScrollbars(surface Surface, r Rect,
 }
 
 func (d *CommitDetailWidget) clampScroll() {
-	maxTop := d.totalVisualRows - d.viewH
-	if maxTop < 0 {
-		maxTop = 0
-	}
+	maxTop := max(d.totalVisualRows-d.viewH, 0)
 	if d.TopLine < 0 {
 		d.TopLine = 0
 	}
@@ -1499,11 +1561,11 @@ func (d *CommitDetailWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventConsumed
 	case *tcell.EventMouse:
 		buttons := event.Buttons()
-		modifiers := event.Modifiers()
+		sideways := widgets.HorizontalWheelMod(event.Modifiers())
 		switch {
-		case buttons&tcell.WheelUp != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelUp != 0 && sideways:
 			d.LeftCol -= 4
-		case buttons&tcell.WheelDown != 0 && modifiers&tcell.ModShift != 0:
+		case buttons&tcell.WheelDown != 0 && sideways:
 			d.LeftCol += 4
 		case buttons&tcell.WheelUp != 0:
 			d.TopLine -= 3
@@ -1590,6 +1652,7 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 			d.hasSelection = false
 			d.clearFileSelections(fileIndex)
 			result := d.Files[fileIndex].view.HandleEvent(event)
+			d.primaryPressed = d.Files[fileIndex].view.pressed
 			if result == EventCaptured {
 				d.capturedFile = fileIndex
 				return EventCaptured
@@ -1628,6 +1691,9 @@ func (d *CommitDetailWidget) handlePointer(event *tcell.EventMouse) EventResult 
 			d.hasSelection = false
 		}
 		return EventConsumed
+	}
+	if buttons == tcell.ButtonNone && overFile {
+		hoverChanged = d.Files[fileIndex].view.HandleEvent(event) != EventIgnored || hoverChanged
 	}
 	if hoverChanged {
 		return EventConsumed
@@ -1778,7 +1844,7 @@ func (d *CommitDetailWidget) GoToHunk(index int) error {
 func indexInFile(hunks []DiffHunk, flat int) int {
 	fileIndex := hunks[flat].FileIndex
 	n := 0
-	for i := 0; i < flat; i++ {
+	for i := range flat {
 		if hunks[i].FileIndex == fileIndex {
 			n++
 		}

@@ -2,13 +2,12 @@ package app
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
-	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
 
 const gitGutterDelay = 500 * time.Millisecond
@@ -23,8 +22,7 @@ type gitGutterResult struct {
 	// computed from, so edits made while it ran can be replayed onto it.
 	Version uint64
 	Lines   []string
-	// Conflict reports that the file has no single staged version to diff
-	// against, because it has unresolved merge conflicts.
+	// Conflicted fallback content is safe for markers, not editable diffs.
 	Conflict bool
 	RelPath  string
 }
@@ -37,7 +35,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask.Stop()
 	}
 	gutterOn := a.Settings.Editor.IsGitGutterEnabled()
-	diffOn := a.EditorGroup.IsInlineDiffPath(filePath)
+	diffOn := a.isInlineDiffPath(filePath)
 	if !gutterOn && !diffOn {
 		return
 	}
@@ -46,9 +44,11 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 	}
 
 	repoDir, relPath, ok := a.repoPathForFile(filePath)
+	source := a.Repository.repositorySource(repoDir)
 	if !ok && diffOn {
 		repo := a.inlineDiffRepos[filePath]
-		repoDir, relPath, ok = repo.dir, repo.rel, repo.dir != ""
+		relPath, ok = repo.rel, repo.dir != ""
+		source = repo.source
 	}
 	if !ok {
 		return
@@ -59,7 +59,7 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 	copy(linesCopy, bufferLines)
 	showTrailing := false
 	var version uint64
-	if buf := a.EditorGroup.BufferForPath(filePath); buf != nil {
+	if buf := a.editorBufferForPath(filePath); buf != nil {
 		showTrailing = buf.ShowTrailingNewline
 		version = buf.Version()
 	}
@@ -68,77 +68,67 @@ func (a *App) RequestGitGutter(filePath string, bufferLines []string) {
 		a.gitGutterTask = NewTask[*gitGutterResult](a, asynctask.TaskOptions{})
 	}
 	a.gitGutterTask.Schedule(func(ctx context.Context) (*gitGutterResult, error) {
-		// The index is the base for both the gutter and the inline diff, as in
-		// VS Code: staged work drops out of the gutter, which then agrees with
-		// the "Changes" diff.
-		indexContent, indexErr := git.ShowIndexFileContext(ctx, repoDir, relPath)
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+		base, err := source.readBaseline(ctx, relPath)
+		result := &gitGutterResult{Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy, Conflict: base.Conflicted, RelPath: relPath}
+		if err != nil {
+			return result, err
 		}
-		unmerged := indexErr != nil && git.IsUnmergedContext(ctx, repoDir, relPath)
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
-		}
-		result := &gitGutterResult{Path: filePath, DiffOn: diffOn, Version: version, Lines: linesCopy}
-		if gutterOn {
-			baseContent, baseErr := indexContent, indexErr
-			if unmerged {
-				// A conflicted file has no single staged version, so the
-				// gutter falls back to HEAD.
-				baseContent, baseErr = git.ShowFileContext(ctx, repoDir, relPath, "HEAD")
-				if ctx.Err() != nil {
-					return nil, ctx.Err()
-				}
-			}
-			if baseErr != nil {
-				if !git.IgnoredFilesContext(ctx, repoDir, []string{relPath})[relPath] {
-					// File is not in the index (untracked) — mark all lines as added
-					result.Changes = make([]diff.LineChangeKind, len(linesCopy))
-					for i := range result.Changes {
-						result.Changes[i] = diff.LineAdded
-					}
+		if gutterOn && !base.Ignored {
+			if !base.Exists {
+				result.Changes = make([]diff.LineChangeKind, len(linesCopy))
+				for i := range result.Changes {
+					result.Changes[i] = diff.LineAdded
 				}
 			} else {
-				oldLines := blobLines(baseContent, showTrailing)
-				var err error
-				result.Changes, err = diff.ComputeGutterChangesContext(ctx, oldLines, linesCopy)
+				result.Changes, err = diff.ComputeGutterChangesContext(ctx, blobLines(base.Content, showTrailing), linesCopy)
 				if err != nil {
 					return nil, err
 				}
 			}
 		}
-		if diffOn {
-			if indexErr == nil {
-				result.Base = blobLines(indexContent, showTrailing)
-			} else if unmerged {
-				result.Conflict, result.RelPath = true, relPath
+		if diffOn && !base.Conflicted {
+			if base.Exists {
+				result.Base = blobLines(base.Content, showTrailing)
 			}
-			if !result.Conflict {
-				lines, err := diff.FullDiffLinesContext(ctx, result.Base, linesCopy)
-				if err != nil {
-					return nil, err
-				}
-				result.Diff = lines
+			result.Diff, err = diff.FullDiffLinesContext(ctx, result.Base, linesCopy)
+			if err != nil {
+				return nil, err
 			}
 		}
 		return result, ctx.Err()
 	}, func(result *gitGutterResult, err error) {
 		if err == nil {
 			a.applyGitGutterResult(result)
+		} else if result != nil && result.DiffOn && result.Conflict {
+			a.closeConflictedInlineDiff(result)
 		}
 	})
 }
 
 func (a *App) applyGitGutterResult(v *gitGutterResult) {
-	a.EditorGroup.SetLineChanges(v.Path, v.Changes)
+	for _, group := range a.editorGroups() {
+		group.SetLineChanges(v.Path, v.Changes)
+	}
 	switch {
 	case v.DiffOn && v.Conflict:
-		if a.EditorGroup.IsInlineDiffPath(v.Path) {
-			a.EditorGroup.DisableInlineDiff(v.Path)
-			a.StatusNotify(fmt.Sprintf("%s has merge conflicts; diff closed", v.RelPath))
-		}
+		a.closeConflictedInlineDiff(v)
 	case v.DiffOn:
-		a.EditorGroup.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		for _, group := range a.editorGroups() {
+			group.SetInlineDiff(v.Path, v.Base, v.Diff, v.Version, v.Lines)
+		}
+	}
+}
+
+func (a *App) closeConflictedInlineDiff(v *gitGutterResult) {
+	closed := false
+	for _, group := range a.editorGroups() {
+		if group.IsInlineDiffPath(v.Path) {
+			group.DisableInlineDiff(v.Path)
+			closed = true
+		}
+	}
+	if closed {
+		a.StatusNotify(i18n.Format("status.mergeConflictDiffClosed", i18n.Args{"path": v.RelPath}))
 	}
 }
 
@@ -157,7 +147,7 @@ func (a *App) ScheduleGitGutter() {
 		a.gitGutterTask.Stop()
 	}
 	path := a.EditorGroup.ActiveFilePath()
-	diffOn := a.EditorGroup.IsInlineDiffPath(path)
+	diffOn := a.isInlineDiffPath(path)
 	if a.EditorGroup.ActiveBuffer() == nil || path == "" || a.EditorGroup.IsActiveVirtual() || (!a.Settings.Editor.IsGitGutterEnabled() && !diffOn) {
 		return
 	}
@@ -182,12 +172,7 @@ func (a *App) ScheduleGitGutter() {
 // blobLines splits a blob the way buffer.LoadFile splits a file, so an
 // unchanged file diffs as identical rather than off by a trailing line.
 func blobLines(content string, showTrailingNewline bool) []string {
-	lines := buffer.SplitLines(content)
-	if len(lines) == 0 {
-		lines = []string{""}
-	}
-	if showTrailingNewline && lines[len(lines)-1] != "" {
-		lines = append(lines, "")
-	}
-	return lines
+	b := buffer.Buffer{ShowTrailingNewline: showTrailingNewline}
+	b.SetText(content)
+	return b.Lines
 }

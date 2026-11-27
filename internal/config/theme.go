@@ -26,6 +26,7 @@ type BorderChars struct {
 	BottomTee   string `json:"bottomTee"`
 	LeftTee     string `json:"leftTee"`
 	RightTee    string `json:"rightTee"`
+	Cross       string `json:"cross,omitempty"`
 }
 
 type TabStyles struct {
@@ -74,6 +75,7 @@ type DiagnosticStyles struct {
 
 type EditorStyles struct {
 	LineNumber    StyleDef         `json:"lineNumber"`
+	IndentGuide   StyleDef         `json:"indentGuide,omitempty"`
 	ActiveLine    StyleDef         `json:"activeLine"`
 	Selection     StyleDef         `json:"selection"`
 	SearchMatch   StyleDef         `json:"searchMatch"`
@@ -360,7 +362,7 @@ func DefaultTheme() ThemeConfig {
 
 		Editor: EditorStyles{
 			ActiveLine:    StyleDef{Bg: "#282828"},
-			Selection:     StyleDef{Bg: "#282828"},
+			Selection:     StyleDef{Bg: "#434343"},
 			LineNumber:    StyleDef{Fg: "#999999"},
 			SearchMatch:   StyleDef{Bg: "#623800"},
 			SearchActive:  StyleDef{Bg: "#9e6a03"},

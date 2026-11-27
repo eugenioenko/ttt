@@ -86,13 +86,14 @@ type AdditionalEdit struct {
 }
 
 type CompletionItem struct {
-	Label           string
-	Detail          string
-	InsertText      string
-	FilterText      string
-	SortText        string
-	Kind            CompletionKind
-	AdditionalEdits []AdditionalEdit
+	Label            string
+	Detail           string
+	InsertText       string
+	InsertTextFormat int
+	FilterText       string
+	SortText         string
+	Kind             CompletionKind
+	AdditionalEdits  []AdditionalEdit
 }
 
 func FilterCompletions(items []CompletionItem, prefix string) []CompletionItem {

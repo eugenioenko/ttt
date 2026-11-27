@@ -48,6 +48,51 @@ func TestCommitMessageContextCancellationKillsAndReapsProcessGroup(t *testing.T)
 	waitFakeGitExit(t, child)
 }
 
+func TestMutationCancellationAllowsLockCleanupAndBoundsUnresponsiveGit(t *testing.T) {
+	for _, ignoreTerm := range []bool{false, true} {
+		name := "cleanup"
+		if ignoreTerm {
+			name = "escalation"
+		}
+		t.Run(name, func(t *testing.T) {
+			binDir := t.TempDir()
+			lock := filepath.Join(binDir, "index.lock")
+			pidPath := filepath.Join(binDir, "parent.pid")
+			script := "#!/bin/sh\ntrap 'rm -f \"$FAKE_GIT_LOCK\"; exit 0' TERM\n: > \"$FAKE_GIT_LOCK\"\nprintf '%s' \"$$\" > \"$FAKE_GIT_PARENT\"\nwhile :; do sleep 30; done\n"
+			if ignoreTerm {
+				script = "#!/bin/sh\ntrap '' TERM\nprintf '%s' \"$$\" > \"$FAKE_GIT_PARENT\"\nexec sleep 30\n"
+			}
+			if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+			t.Setenv("FAKE_GIT_LOCK", lock)
+			t.Setenv("FAKE_GIT_PARENT", pidPath)
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			errCh := make(chan error, 1)
+			go func() { errCh <- runPathsContext(ctx, binDir, []string{"add", "--"}, []string{"file.txt"}) }()
+			pid := waitFakeGitPID(t, pidPath)
+			t.Cleanup(func() { _ = syscall.Kill(-pid, syscall.SIGKILL) })
+			cancel()
+			select {
+			case err := <-errCh:
+				if !errors.Is(err, context.Canceled) {
+					t.Fatalf("cancellation: %v", err)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("mutation did not exit after cancellation")
+			}
+			if !ignoreTerm {
+				if _, err := os.Stat(lock); !errors.Is(err, os.ErrNotExist) {
+					t.Fatalf("lock not cleaned up: %v", err)
+				}
+			}
+			waitFakeGitExit(t, pid)
+		})
+	}
+}
+
 func waitFakeGitPID(t *testing.T, path string) int {
 	t.Helper()
 	deadline := time.Now().Add(time.Second)
@@ -75,6 +120,28 @@ func waitFakeGitExit(t *testing.T, pid int) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	defer syscall.Kill(pid, syscall.SIGKILL)
+	defer func() { _ = syscall.Kill(pid, syscall.SIGKILL) }()
 	t.Fatalf("fake git process %d is still alive", pid)
+}
+
+func TestStatusDoesNotTakeOptionalLocks(t *testing.T) {
+	binDir := t.TempDir()
+	argsPath := filepath.Join(binDir, "args")
+	script := "#!/bin/sh\nprintf '%s\\n' \"$@\" > \"$FAKE_GIT_ARGS\"\n"
+	if err := os.WriteFile(filepath.Join(binDir, "git"), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
+	t.Setenv("FAKE_GIT_ARGS", argsPath)
+
+	if _, err := StatusFilesContext(context.Background(), "/repo"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(argsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if args := strings.Fields(string(got)); len(args) < 2 || args[0] != "--no-optional-locks" || args[1] != "-C" {
+		t.Fatalf("git status args = %q, want --no-optional-locks first", args)
+	}
 }

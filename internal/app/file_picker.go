@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/ttt/internal/workspace"
@@ -40,28 +41,28 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 	fp := &filePicker{}
 
 	submit := func(text string) {
-		path := strings.TrimSpace(text)
+		path := text
 		if path == "" {
 			return
 		}
 		path = workspace.ExpandPath(path)
 		abs, err := filepath.Abs(path)
 		if err != nil {
-			a.StatusError("Error: " + err.Error())
+			a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 			return
 		}
 		// OpenFile treats a missing path as a new file, so validate before handing it off.
 		info, err := os.Stat(abs)
 		if err != nil {
-			a.StatusError("Cannot open file " + abs + ": " + err.Error())
+			a.StatusError(i18n.Format("status.cannotOpenFile", i18n.Args{"abs": abs, "error": err.Error()}))
 			return
 		}
 		if info.IsDir() {
-			a.StatusError("Cannot open file: path is a directory: " + abs)
+			a.StatusError(i18n.Format("status.cannotOpenFilePathIsADirectory", i18n.Args{"abs": abs}))
 			return
 		}
 		if !info.Mode().IsRegular() {
-			a.StatusError("Cannot open file: not a regular file: " + abs)
+			a.StatusError(i18n.Format("status.cannotOpenFileNotARegularFile", i18n.Args{"abs": abs}))
 			return
 		}
 		a.DismissDialog()
@@ -69,21 +70,21 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 	}
 
 	fp.input = widgets.NewInputWidget(widgets.InputConfig{
-		Placeholder: "File path",
+		Placeholder: i18n.Text("files.filePath"),
 		OnSubmit:    submit,
 		OnChange:    func(text string) { fp.syncFromInput(text) },
 	})
 	fp.places = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No places",
+		EmptyText: i18n.Text("general.noPlaces"),
 		OnCommand: func(command string, node *widgets.TreeNode) {
 			if command == "activate" {
 				fp.enter(node.ID)
 			}
 		},
 	})
-	fp.places.SetItems(placeNodes(workspace.Places()))
+	fp.places.SetItems(placeNodes(a.favoriteDirs(), workspace.Places()))
 	fp.list = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No files or folders",
+		EmptyText: i18n.Text("files.noFilesOrFolders"),
 		OnCommand: func(command string, node *widgets.TreeNode) {
 			if command != "activate" {
 				return
@@ -121,7 +122,7 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 	columns.Gap = 1
 	dialog.SetContent(widgets.NewVStackWidget(fp.input, columns))
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Cancel", Handler: func() { a.DismissDialog() }},
+		{Label: i18n.Text("general.cancelButton"), Handler: func() { a.DismissDialog() }},
 		{Label: "&" + confirmLabel, Handler: func() { submit(fp.input.Text()) }},
 	}
 	dialog.OnDismiss = func() { a.DismissDialog() }
@@ -144,7 +145,7 @@ func (fp *filePicker) enter(dir string) {
 // it. Typing "~/repos/br" lists ~/repos showing only the matches, which keeps
 // the path box fast without forcing a separate search mode.
 func (fp *filePicker) syncFromInput(text string) {
-	path := workspace.ExpandPath(strings.TrimSpace(text))
+	path := workspace.ExpandPath(text)
 	if path == "" {
 		return
 	}
@@ -193,13 +194,24 @@ func filePickerEntries(dir string) []filePickerEntry {
 	}
 	for _, item := range items {
 		path := filepath.Join(dir, item.Name())
-		info, err := os.Stat(path)
-		if err != nil {
-			continue
+		isDir := item.IsDir()
+		isRegular := item.Type().IsRegular()
+		// DirEntry reports a symlink's own type, never its target's, so the target
+		// needs one explicit stat. Windows junctions are ModeIrregular, not
+		// ModeSymlink, so both need resolving. Ordinary entries use the type bits
+		// ReadDir already has, avoiding a metadata call per entry.
+		if item.Type()&(os.ModeSymlink|os.ModeIrregular) != 0 {
+			info, err := os.Stat(path)
+			if err != nil {
+				continue
+			}
+			isDir = info.IsDir()
+			isRegular = info.Mode().IsRegular()
 		}
-		if info.IsDir() {
+		switch {
+		case isDir:
 			out = append(out, filePickerEntry{label: item.Name(), path: path, dir: true})
-		} else if info.Mode().IsRegular() {
+		case isRegular:
 			out = append(out, filePickerEntry{label: item.Name(), path: path})
 		}
 	}

@@ -19,7 +19,7 @@ func openTabWithFile(t *testing.T, content string) (*EditorGroupWidget, string) 
 		t.Fatalf("write temp: %v", err)
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if g.tabs[g.active].FilePath != path {
 		t.Fatalf("expected active tab %s, got %s", path, g.tabs[g.active].FilePath)
 	}
@@ -79,6 +79,21 @@ func TestSetDiagnosticsWrapsLspSource(t *testing.T) {
 	}
 }
 
+func TestDiagnosticsForSourceReturnsOnlyRequestedSource(t *testing.T) {
+	g, path := openTabWithFile(t, "hello world")
+	g.SetDiagnosticsSource("lsp:go", path, []Diagnostic{{Message: "go diagnostic"}})
+	g.SetDiagnosticsSource("plugin:test", path, []Diagnostic{{Message: "plugin diagnostic"}})
+
+	got := g.DiagnosticsForSource("lsp:go", path)
+	if len(got) != 1 || got[0].Message != "go diagnostic" {
+		t.Fatalf("diagnostics = %+v, want only gopls diagnostic", got)
+	}
+	got[0].Message = "modified"
+	if original := g.DiagnosticsForSource("lsp:go", path)[0].Message; original != "go diagnostic" {
+		t.Fatalf("source diagnostics were aliased: %q", original)
+	}
+}
+
 func TestCustomStyleFlowsToDiagStyleAt(t *testing.T) {
 	g, path := openTabWithFile(t, "hello world")
 
@@ -130,7 +145,7 @@ func TestInlineDiffDropsDeferredHighlightingWhenItEnds(t *testing.T) {
 		}
 		g := NewEditorGroupWidget(nil, 4, true, "compact")
 		g.SyntaxHighlight = true
-		g.OpenFile(path)
+		requireNoError(t, g.OpenFile(path))
 		if !g.EnableInlineDiff(path, base) {
 			t.Fatalf("%s: diff mode did not turn on", end)
 		}
@@ -172,7 +187,7 @@ func TestEditableSplitSharesSingleLineHighlighting(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "extended")
 	g.SyntaxHighlight = true
 	g.DiffMode = DiffModeSplit
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if !g.EnableInlineDiff(path, []string{"package main", "", "func b() {}"}) {
 		t.Fatal("diff mode did not turn on")
 	}

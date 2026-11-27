@@ -13,6 +13,7 @@ import (
 	"github.com/yuin/goldmark/extension"
 	east "github.com/yuin/goldmark/extension/ast"
 	gmtext "github.com/yuin/goldmark/text"
+	"github.com/yuin/goldmark/util"
 )
 
 type LineKind int
@@ -263,12 +264,7 @@ func (r *renderer) renderBlock(n ast.Node) {
 		r.emitBlank()
 
 	case *ast.HTMLBlock:
-		for i := 0; i < n.Lines().Len(); i++ {
-			seg := n.Lines().At(i)
-			line := strings.TrimRight(string(seg.Value(r.src)), "\n")
-			r.emit(Line{Kind: KindCode, Spans: []Span{{Text: line, Style: term.StylePaletteItem}}})
-		}
-		r.emitBlank()
+		r.renderHTMLBlock(n)
 
 	default:
 		for child := n.FirstChild(); child != nil; child = child.NextSibling() {
@@ -459,7 +455,11 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, segs *inlineLines) {
 	for child := n.FirstChild(); child != nil; child = child.NextSibling() {
 		switch c := child.(type) {
 		case *ast.Text:
-			txt := string(c.Value(r.src))
+			value := c.Value(r.src)
+			if !c.IsRaw() {
+				value = util.UnescapePunctuations(value)
+			}
+			txt := string(value)
 			if txt != "" {
 				segs.add(Span{Text: txt, Style: style})
 			}
@@ -488,10 +488,7 @@ func (r *renderer) walkInline(n ast.Node, style term.Style, segs *inlineLines) {
 			txt := string(c.URL(r.src))
 			segs.add(Span{Text: txt, Style: style})
 		case *ast.RawHTML:
-			for i := 0; i < c.Segments.Len(); i++ {
-				seg := c.Segments.At(i)
-				segs.add(Span{Text: string(seg.Value(r.src)), Style: style})
-			}
+			r.renderRawHTML(c, style, segs)
 		default:
 			r.walkInline(child, style, segs)
 		}

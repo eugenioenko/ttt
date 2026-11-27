@@ -210,9 +210,11 @@ func TestAutoClosingMovementAndMultiline(t *testing.T) {
 	assertAutoClosing(t, e, "", 0, 0)
 }
 
-func TestAutoClosingSelectionsAreReplaced(t *testing.T) {
+func TestAutoClosingSelectionsAreReplacedWithSurroundDisabled(t *testing.T) {
 	for _, text := range []string{"hello", "one\ntwo"} {
 		e := autoClosingEditor(t, text, "a.go", 0)
+		enabled := false
+		e.AutoSurround.Enabled = &enabled
 		e.Selection.Start(0, 0)
 		e.Cursor.Line = len(e.Buf.Lines) - 1
 		e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
@@ -374,10 +376,10 @@ func TestAutoClosingTabSwitchAndSyntaxDisabled(t *testing.T) {
 	}
 	g := NewEditorGroupWidget(nil, 4, true, "compact")
 	g.Editor.AutoClosing.Brackets = true
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
 	g.CommitActiveTab()
 	typeAutoClosing(g.Editor, "(")
-	g.OpenFile(b)
+	requireNoError(t, g.OpenFile(b))
 	g.CommitActiveTab()
 	typeAutoClosing(g.Editor, "[")
 	g.SwitchToTabByPath(a)

@@ -864,6 +864,14 @@ func TestTableHorizontalWheel(t *testing.T) {
 	if tbl.scrollLeft != 8 {
 		t.Fatalf("wheel left: scrollLeft=%d, want 8", tbl.scrollLeft)
 	}
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelUp, tcell.ModAlt))
+	if tbl.scrollLeft != 5 || tbl.scrollTop != 0 {
+		t.Fatalf("Alt+wheel up: scrollLeft=%d scrollTop=%d, want 5 and 0", tbl.scrollLeft, tbl.scrollTop)
+	}
+	tbl.HandleEvent(tcell.NewEventMouse(1, 2, tcell.WheelDown, tcell.ModAlt))
+	if tbl.scrollLeft != 8 || tbl.scrollTop != 0 {
+		t.Fatalf("Alt+wheel down: scrollLeft=%d scrollTop=%d, want 8 and 0", tbl.scrollLeft, tbl.scrollTop)
+	}
 }
 
 func TestTableHorizontalScrollbarClickScrollsWithoutSelecting(t *testing.T) {

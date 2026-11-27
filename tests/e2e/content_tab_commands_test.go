@@ -38,6 +38,7 @@ func TestEditorCommandsOnSettingsTabAreSafeNoOps(t *testing.T) {
 		"editor.upperCase", "editor.lowerCase", "editor.titleCase",
 		"editor.goToMatchingBracket",
 		"multicursor.selectNext", "multicursor.selectAll", "multicursor.undoCursor",
+		"multicursor.addCursorAbove", "multicursor.addCursorBelow",
 		"editor.splitSelectionToLines",
 		"editor.moveWordLeft", "editor.moveWordRight",
 		"editor.deleteWordLeft", "editor.deleteWordRight",

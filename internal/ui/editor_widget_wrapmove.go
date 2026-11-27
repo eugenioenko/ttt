@@ -1,23 +1,61 @@
 package ui
 
-import "github.com/eugenioenko/ttt/internal/textwidth"
+import (
+	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/core/cursor"
+	"github.com/eugenioenko/ttt/internal/textwidth"
+)
 
-// wrapGoal is valid only while the cursor sits where the last vertical move
-// left it, so any other cursor move or edit resets it.
-type wrapGoal struct {
-	x, line, col int
-	version      uint64
-	ok           bool
+type cursorGoalContext struct {
+	buffer          *buffer.Buffer
+	version         uint64
+	tabWidth, width int
+	wrap, words     bool
 }
 
-func (e *EditorPaneWidget) moveCursorWrapped(delta int) {
-	x := -1
-	if g := e.wrapGoal; g.ok && g.line == e.Cursor.Line && g.col == e.Cursor.Col && g.version == e.Buf.Version() {
-		x = g.x
+func (e *EditorPaneWidget) ResetCursorGoal() {
+	e.Cursor.Goal.Reset()
+	if e.Multi != nil {
+		for i := range e.Multi.Cursors {
+			e.Multi.Cursors[i].Goal.Reset()
+		}
 	}
+}
+
+func (e *EditorPaneWidget) goalColumn(line, col int, goal *cursor.Goal) int {
+	l := e.layout()
+	context := cursorGoalContext{
+		buffer: e.Buf, version: e.Buf.Version(),
+		tabWidth: l.tabW, width: l.key.width, wrap: l.wrap, words: l.words,
+	}
+	if e.goalContext != context {
+		e.ResetCursorGoal()
+		e.goalContext = context
+	}
+	x := -1
+	if !e.WordWrap {
+		x = bufColToVisualCol(e.Buf.Lines[line], col, l.tabW)
+	}
+	return goal.Column(line, col, x)
+}
+
+func (e *EditorPaneWidget) moveCursorRows(delta int) {
+	x := e.goalColumn(e.Cursor.Line, e.Cursor.Col, &e.Cursor.Goal)
 	line, col, x := e.wrappedRowMove(e.Cursor.Line, e.Cursor.Col, delta, x)
 	e.Cursor.Line, e.Cursor.Col = line, col
-	e.wrapGoal = wrapGoal{x: x, line: line, col: col, version: e.Buf.Version(), ok: true}
+	e.Cursor.Goal.Remember(line, col, x)
+}
+
+func (e *EditorPaneWidget) moveCursorUnwrapped(delta int) {
+	x := e.goalColumn(e.Cursor.Line, e.Cursor.Col, &e.Cursor.Goal)
+	e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + delta)
+	if delta < 0 {
+		e.skipHiddenLineUp()
+	} else {
+		e.skipHiddenLineDown()
+	}
+	e.Cursor.Col = visualColToBufCol(e.Buf.Lines[e.Cursor.Line], x, e.resolveTabSize())
+	e.Cursor.Goal.Remember(e.Cursor.Line, e.Cursor.Col, x)
 }
 
 // A negative x aims for the screen column (line, col) is drawn at.

@@ -36,6 +36,25 @@ func BenchmarkLayoutScroll50k(b *testing.B)      { benchmarkLayoutScroll(b, 5000
 func BenchmarkLayoutScrollWrap50k(b *testing.B)  { benchmarkLayoutScroll(b, 50000, true) }
 func BenchmarkLayoutScrollWrap500k(b *testing.B) { benchmarkLayoutScroll(b, 500000, true) }
 
+func BenchmarkRenderIndentGuidesBlankRun1M(b *testing.B) {
+	lines := make([]string, 1_000_000)
+	lines[0] = "    head"
+	lines[len(lines)-1] = "    tail"
+	e := newRowsEditor(lines, 120, 50)
+	e.IndentGuides = true
+	e.Cursor.Line = len(lines) / 2
+	e.scrollViewport()
+	grid := makeGrid(120, 50)
+	surface := NewRenderSurface(grid, Rect{W: 120, H: 50})
+	e.Render(surface)
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		e.Cursor.Line = len(lines)/2 + i%40
+		e.scrollViewport()
+		e.Render(surface)
+	}
+}
+
 func benchmarkScrollGitMarks(b *testing.B, n int, wrap bool) {
 	e := newLayoutBenchEditor(n, wrap)
 	changes := make([]diff.LineChangeKind, n)

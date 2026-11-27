@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -99,7 +99,7 @@ func TestLoadOlderHistoryDoesNotReplaceActiveRefreshCancellation(t *testing.T) {
 	cp.Screen = term.NewTcellScreenFrom(term.NewSimScreen())
 	cp.logDir = "/repo"
 	cp.lastLogDir = "/repo"
-	cp.logAnchor = git.ObjectID(strings.Repeat("a", 40))
+	cp.logAnchor = strings.Repeat("a", 40)
 	cp.logOffset = 10
 	cp.logHasMore = true
 	cp.logGen = 1
@@ -170,7 +170,7 @@ func TestStaleCommitFilesCompletionDoesNotCancelNewerRead(t *testing.T) {
 func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 	cp := NewChangesPanel()
 	ref := strings.Repeat("c", 40)
-	status := git.FileStatus{Status: "M", Path: "file.go"}
+	status := scm.Change{Kind: scm.Modified, Path: "file.go"}
 	commit := commitFileRef{Dir: "/repo", Ref: ref, Short: "ccccccc", Status: status}
 	commitNode := &widgets.TreeNode{ID: "commit:" + ref}
 	fileNode := &widgets.TreeNode{ID: "cfile:commit:" + ref + ":file.go"}
@@ -182,7 +182,7 @@ func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 		calls = append(calls, commitFileRef{Dir: dir, Ref: gotRef, Short: short})
 	}
 	var diffCalls []bool
-	cp.OnOpenCommitDiff = func(dir, gotRef, short string, gotStatus git.FileStatus, extended bool) {
+	cp.OnOpenCommitDiff = func(dir, gotRef, short string, gotStatus scm.Change, extended bool) {
 		if dir != commit.Dir || gotRef != commit.Ref || short != commit.Short || gotStatus != status {
 			t.Fatalf("diff call = %q %q %q %#v", dir, gotRef, short, gotStatus)
 		}
@@ -200,7 +200,7 @@ func TestCommitHistoryFileKeysActivateCommitAndFileRows(t *testing.T) {
 		t.Fatalf("commit open calls = %d, want 4", len(calls))
 	}
 	commitOnly := commit
-	commitOnly.Status = git.FileStatus{}
+	commitOnly.Status = scm.Change{}
 	for i, call := range calls {
 		if call != commitOnly {
 			t.Fatalf("open call %d = %#v, want %#v", i, call, commitOnly)

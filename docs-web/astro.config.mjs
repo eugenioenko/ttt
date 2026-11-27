@@ -6,6 +6,7 @@ export default defineConfig({
   image: { service: passthroughImageService() },
   integrations: [
     starlight({
+      components: { Footer: './src/components/Footer.astro' },
       customCss: ['./src/styles/custom.css'],
       title: 'TTT Editor',
       favicon: '/favicon.svg',
@@ -32,7 +33,9 @@ export default defineConfig({
             { label: 'LSP', link: '/guides/lsp/' },
             { label: 'Themes', link: '/guides/themes/' },
             { label: 'Extra Themes', link: '/guides/extra-themes/' },
+            { label: 'Languages', link: '/guides/languages/' },
             { label: 'Keybindings', link: '/guides/keybindings/' },
+            { label: 'Command Key on macOS', link: '/guides/macos-command-key/' },
             { label: 'Plugins', link: '/guides/plugins/' },
             { label: 'Plugin Authoring', link: '/guides/plugin-authoring/' },
             { label: 'Testing Plugins', link: '/guides/plugin-testing/' },

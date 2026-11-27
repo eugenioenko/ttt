@@ -1,10 +1,15 @@
 package e2e
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestSidebarTabClick(t *testing.T) {
@@ -132,6 +137,64 @@ func TestSidebarTabOverflow(t *testing.T) {
 	if len(h.app.Sidebar.Tabs.HiddenTabs()) != 0 {
 		t.Errorf("expected 0 hidden tabs with wide sidebar, got %d", len(h.app.Sidebar.Tabs.HiddenTabs()))
 	}
+}
+
+func TestSidebarOverflowLabelsFollowLiveIconSettings(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.app.PluginManager = plugin.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "plugins.ttt.json"))
+	h.app.PluginManager.SidebarPanels = []plugin.SidebarRegistration{
+		{ID: "plugin.todo", Title: "Todo", Icon: plugin.PanelIcon{Plain: "T", Nerd: "N"}},
+		{ID: "plugin.fallback", Title: "Fallback", Icon: plugin.PanelIcon{Nerd: "F"}},
+	}
+	h.app.Sidebar.AddPanel("plugin.todo", "Todo", h.app.Changes.Adapter)
+	h.app.Sidebar.AddPanel("plugin.fallback", "Fallback", h.app.Changes.Adapter)
+	h.app.SplitPanel.DividerPos = 18
+	settings := *h.app.Settings
+	settings.Sidebar.TabStyle = config.SidebarTabStyleLabelIcon
+	settings.Appearance.Icons = config.IconsNone
+	h.app.ApplySettings(settings)
+	defer icons.Configure(config.IconsNone, nil)
+
+	checkMenu := func(wantChanges, wantTodo, wantFallback string) {
+		t.Helper()
+		h.redraw()
+		r := h.app.Sidebar.GetRect()
+		x := displayColumnOf(h.screenRow(r.Y), "»")
+		if x < 0 {
+			t.Fatal("sidebar has no overflow button")
+		}
+		h.click(x, r.Y)
+		menu, ok := h.app.Root.TopOverlayWidget().(*ui.ContextMenuWidget)
+		if !ok {
+			t.Fatalf("overflow opened %T, want context menu", h.app.Root.TopOverlayWidget())
+		}
+		labels := map[string]string{}
+		for _, item := range menu.Items {
+			labels[item.Command] = item.Label
+		}
+		for id, want := range map[string]string{"changes": wantChanges, "plugin.todo": wantTodo, "plugin.fallback": wantFallback} {
+			if got := labels["sidebar.overflow."+id]; got != want {
+				t.Errorf("overflow label for %s = %q, want %q", id, got, want)
+			}
+		}
+		h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	}
+	checkMenu(icons.Get(config.IconsNone, icons.PanelChanges)+" Changes", "T Todo", "Fallback")
+
+	settings.Appearance.Icons = config.IconsNerdFont
+	settings.Appearance.Overrides = map[string]string{string(icons.PanelChanges): "C"}
+	h.app.ApplySettings(settings)
+	checkMenu("C Changes", "N Todo", "F Fallback")
+
+	settings.Sidebar.TabStyle = config.SidebarTabStyleLabel
+	h.app.ApplySettings(settings)
+	checkMenu("Changes", "Todo", "Fallback")
+
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	h.app.SplitPanel.DividerPos = 12
+	h.app.ApplySettings(settings)
+	checkMenu("Changes", "Todo", "Fallback")
 }
 
 func TestSidebarCollapseWidthReset(t *testing.T) {

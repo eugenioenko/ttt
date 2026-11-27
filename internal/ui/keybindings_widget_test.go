@@ -4,8 +4,24 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
+
+func TestKeybindingsFooterClipsToDialog(t *testing.T) {
+	w := NewKeybindingsWidget(nil)
+	w.boxX, w.boxW = 4, 10
+	cells := makeGrid(30, 1)
+	for x := range cells[0] {
+		cells[0][x] = term.Cell{Ch: '·'}
+	}
+	w.renderFooterActions(NewRenderSurface(cells, Rect{W: 30, H: 1}), 0, 0, 0)
+	for x, cell := range cells[0] {
+		if (x < w.boxX+2 || x >= w.boxX+w.boxW-2) && cell.Ch != '·' {
+			t.Errorf("footer wrote %q outside its content at column %d", cell.Ch, x)
+		}
+	}
+}
 
 func kbTestCommands() []command.Command {
 	return []command.Command{

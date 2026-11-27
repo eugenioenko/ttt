@@ -1,6 +1,8 @@
 package buffer
 
 import (
+	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,7 +14,7 @@ import (
 
 func TestLoadAndSaveFile(t *testing.T) {
 	fname := "testfile.txt"
-	defer os.Remove(fname)
+	defer func() { _ = os.Remove(fname) }()
 	orig := &Buffer{Lines: []string{"hello", "world"}}
 	if err := orig.SaveFile(fname); err != nil {
 		t.Fatalf("SaveFile failed: %v", err)
@@ -23,6 +25,98 @@ func TestLoadAndSaveFile(t *testing.T) {
 	}
 	if len(b.Lines) != 2 || b.Lines[0] != "hello" || b.Lines[1] != "world" {
 		t.Errorf("expected [hello world], got %v", b.Lines)
+	}
+}
+
+func TestUTF8BOMLoadSave(t *testing.T) {
+	for _, tc := range []struct {
+		name, content string
+		lines         []string
+	}{
+		{"plain", "one\ntwo\n", []string{"one", "two", ""}},
+		{"bom lf", "\ufeffone\ntwo\n", []string{"one", "two", ""}},
+		{"bom crlf", "\ufeffone\r\ntwo\r\n", []string{"one", "two", ""}},
+		{"bom no final newline", "\ufeffone", []string{"one", ""}},
+		{"bom crlf no final newline", "\ufeffone\r\ntwo", []string{"one", "two", ""}},
+		{"bom only", "\ufeff", []string{""}},
+		{"interior feff", "one\ufefftwo\n\ufeffthree", []string{"one\ufefftwo", "\ufeffthree", ""}},
+		{"strip one bom", "\ufeff\ufeffone", []string{"\ufeffone", ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "bom.txt")
+			if err := os.WriteFile(path, []byte(tc.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			b := &Buffer{ShowTrailingNewline: true, InsertFinalNewline: strings.HasSuffix(tc.content, "\n")}
+			for range 2 {
+				if err := b.LoadFile(path); err != nil {
+					t.Fatal(err)
+				}
+				if !slices.Equal(b.Lines, tc.lines) {
+					t.Fatalf("loaded lines = %q, want %q", b.Lines, tc.lines)
+				}
+				if b.Dirty {
+					t.Fatal("loading marked the buffer dirty")
+				}
+				if err := b.SaveFile(path); err != nil {
+					t.Fatal(err)
+				}
+				data, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(data) != tc.content {
+					t.Fatalf("saved bytes = %x, want %x", data, tc.content)
+				}
+			}
+		})
+	}
+}
+
+func TestSetTextResetsUTF8BOM(t *testing.T) {
+	b := &Buffer{}
+	path := filepath.Join(t.TempDir(), "bom.txt")
+	for _, text := range []string{"\ufeffone", "two", "\ufeff", "", "\ufeffthree"} {
+		b.SetText(text)
+		if got, want := b.Lines[0], strings.TrimPrefix(text, "\ufeff"); got != want {
+			t.Fatalf("SetText(%q): first line = %q, want %q", text, got, want)
+		}
+		if err := b.SaveFile(path); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != text {
+			t.Fatalf("SetText(%q): saved bytes = %x", text, data)
+		}
+	}
+}
+
+func TestReloadFileResetsUTF8BOM(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "bom.txt")
+	b := &Buffer{}
+	for _, text := range []string{"\ufeffone", "two"} {
+		if err := os.WriteFile(path, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.LoadFile(path); err != nil {
+			t.Fatal(err)
+		}
+		if b.UTF8BOM != strings.HasPrefix(text, "\ufeff") {
+			t.Fatalf("LoadFile(%q): UTF8BOM = %v", text, b.UTF8BOM)
+		}
+		if err := b.SaveFile(path); err != nil {
+			t.Fatal(err)
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != text {
+			t.Fatalf("reloaded file saved as %x, want %x", data, text)
+		}
 	}
 }
 
@@ -56,7 +150,7 @@ func TestLineEndingChangedSinceLoadAndSave(t *testing.T) {
 func TestLoadShowTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "trailing.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: true}
 	if err := b.LoadFile(fname); err != nil {
@@ -70,7 +164,7 @@ func TestLoadShowTrailingNewline(t *testing.T) {
 func TestLoadNoShowTrailingNewline(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "notrailing.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\nccc\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: false}
 	if err := b.LoadFile(fname); err != nil {
@@ -84,10 +178,53 @@ func TestLoadNoShowTrailingNewline(t *testing.T) {
 	}
 }
 
+func TestLoadSavePreservesTrailingNewlines(t *testing.T) {
+	for _, ending := range []struct{ name, value string }{{"LF", "\n"}, {"CRLF", "\r\n"}} {
+		for _, tc := range []struct {
+			name string
+			text string
+		}{
+			{"empty", ""},
+			{"final newline", "a\n"},
+			{"one trailing blank", "a\n\n"},
+			{"two trailing blanks", "a\n\n\n"},
+			{"newline only", "\n"},
+			{"blank lines only", "\n\n\n"},
+		} {
+			t.Run(ending.name+"/"+tc.name, func(t *testing.T) {
+				content := strings.ReplaceAll(tc.text, "\n", ending.value)
+				path := filepath.Join(t.TempDir(), "trailing.txt")
+				if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				for cycle := range 3 {
+					b := &Buffer{ShowTrailingNewline: true, InsertFinalNewline: true}
+					if err := b.LoadFile(path); err != nil {
+						t.Fatal(err)
+					}
+					if want := strings.Split(tc.text, "\n"); !slices.Equal(b.Lines, want) {
+						t.Fatalf("cycle %d: loaded %q, want %q", cycle, b.Lines, want)
+					}
+					if err := b.SaveFile(path); err != nil {
+						t.Fatal(err)
+					}
+					data, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if string(data) != content {
+						t.Fatalf("cycle %d: saved %q, want %q", cycle, data, content)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestShowTrailingNewlineDoesNotAffectSave(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "save.txt")
-	os.WriteFile(fname, []byte("aaa\nbbb\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("aaa\nbbb\n"), 0644))
 
 	b := &Buffer{ShowTrailingNewline: false, InsertFinalNewline: true}
 	if err := b.LoadFile(fname); err != nil {
@@ -238,7 +375,7 @@ func TestDiskChangedNewBuffer(t *testing.T) {
 func TestLoadDetectsLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "lf.txt")
-	os.WriteFile(fname, []byte("line1\nline2\nline3\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("line1\nline2\nline3\n"), 0644))
 	b := &Buffer{}
 	if err := b.LoadFile(fname); err != nil {
 		t.Fatal(err)
@@ -251,7 +388,7 @@ func TestLoadDetectsLF(t *testing.T) {
 func TestLoadDetectsCRLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "crlf.txt")
-	os.WriteFile(fname, []byte("line1\r\nline2\r\nline3\r\n"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("line1\r\nline2\r\nline3\r\n"), 0644))
 	b := &Buffer{}
 	if err := b.LoadFile(fname); err != nil {
 		t.Fatal(err)
@@ -264,11 +401,11 @@ func TestLoadDetectsCRLF(t *testing.T) {
 func TestSavePreservesLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "lf.txt")
-	os.WriteFile(fname, []byte("a\nb"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("a\nb"), 0644))
 	b := &Buffer{}
-	b.LoadFile(fname)
+	requireNoError(t, b.LoadFile(fname))
 	b.Lines[0] = "edited"
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "edited\nb" {
 		t.Errorf("expected LF preserved, got %q", string(data))
@@ -278,11 +415,11 @@ func TestSavePreservesLF(t *testing.T) {
 func TestSavePreservesCRLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "crlf.txt")
-	os.WriteFile(fname, []byte("a\r\nb"), 0644)
+	requireNoError(t, os.WriteFile(fname, []byte("a\r\nb"), 0644))
 	b := &Buffer{}
-	b.LoadFile(fname)
+	requireNoError(t, b.LoadFile(fname))
 	b.Lines[0] = "edited"
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "edited\r\nb" {
 		t.Errorf("expected CRLF preserved, got %q", string(data))
@@ -293,7 +430,7 @@ func TestNewBufferDefaultsToLF(t *testing.T) {
 	dir := t.TempDir()
 	fname := filepath.Join(dir, "new.txt")
 	b := &Buffer{Lines: []string{"hello", "world"}}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello\nworld" {
 		t.Errorf("expected LF default, got %q", string(data))
@@ -307,7 +444,7 @@ func TestSaveTrimsTrailingWhitespace(t *testing.T) {
 		Lines:                  []string{"hello   ", "world\t\t", "clean"},
 		TrimTrailingWhitespace: true,
 	}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello\nworld\nclean" {
 		t.Errorf("expected trimmed output, got %q", string(data))
@@ -320,7 +457,7 @@ func TestSaveWithoutTrimPreservesWhitespace(t *testing.T) {
 	b := &Buffer{
 		Lines: []string{"hello   ", "world\t\t"},
 	}
-	b.SaveFile(fname)
+	requireNoError(t, b.SaveFile(fname))
 	data, _ := os.ReadFile(fname)
 	if string(data) != "hello   \nworld\t\t" {
 		t.Errorf("expected whitespace preserved, got %q", string(data))
@@ -449,5 +586,28 @@ func TestBufferDiskSize(t *testing.T) {
 	}
 	if got := b.DiskSize(); got != info.Size() {
 		t.Errorf("saved DiskSize() = %d, want %d", got, info.Size())
+	}
+}
+
+func TestSaveErrorsKeepTheirDetails(t *testing.T) {
+	cause := os.ErrPermission
+	var err error = &RecoveryError{Path: "/tmp/.f.ttt-recovery-1", Err: cause}
+	if !errors.Is(err, os.ErrPermission) {
+		t.Errorf("RecoveryError does not unwrap to its cause: %v", err)
+	}
+	var recovery *RecoveryError
+	if !errors.As(fmt.Errorf("save: %w", err), &recovery) || recovery.Path != "/tmp/.f.ttt-recovery-1" {
+		t.Errorf("RecoveryError path lost when wrapped: %+v", recovery)
+	}
+	if got := err.Error(); got != "permission denied (the previous contents are saved in /tmp/.f.ttt-recovery-1)" {
+		t.Errorf("RecoveryError text = %q", got)
+	}
+
+	var replaced *ReplacedError
+	if !errors.As(fmt.Errorf("save: %w", &ReplacedError{Path: "f.txt"}), &replaced) || replaced.Path != "f.txt" {
+		t.Errorf("ReplacedError path lost when wrapped: %+v", replaced)
+	}
+	if got := replaced.Error(); got != "f.txt was replaced while saving" {
+		t.Errorf("ReplacedError text = %q", got)
 	}
 }

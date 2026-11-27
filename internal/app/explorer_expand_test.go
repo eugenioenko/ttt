@@ -6,10 +6,13 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
-	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 func TestExplorerExpandAllReachesEveryVisibleDescendantAndCollapseAllClosesTree(t *testing.T) {
+	forEachCompactMode(t, testExpandAllAndCollapseAll)
+}
+
+func testExpandAllAndCollapseAll(t *testing.T, compact bool) {
 	rootPath := t.TempDir()
 	for _, dir := range []string{
 		"deep/one/two",
@@ -35,15 +38,19 @@ func TestExplorerExpandAllReachesEveryVisibleDescendantAndCollapseAllClosesTree(
 			t.Fatal(err)
 		}
 	}
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
+	explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
 	root := explorer.Tree.Config.Items[0]
+	deepRows := []string{"deep", "one", "two"}
+	if compact {
+		deepRows = []string{"deep/one/two"}
+	}
 
 	explorer.ExpandAll()
 	gitMetadata := nodeWithLabel(root.Children, ".git")
 	if gitMetadata == nil || gitMetadata.Expanded || len(gitMetadata.Children) != 0 {
 		t.Fatalf("bulk expansion traversed .git metadata: %+v", gitMetadata)
 	}
-	for _, label := range []string{"deep", "one", "two", "deep.txt", "visible", "inner", "inner.txt", ".hidden", "hidden.txt", ".ignored", "ignored.txt"} {
+	for _, label := range append(deepRows, "deep.txt", "visible", "inner", "inner.txt", ".hidden", "hidden.txt", ".ignored", "ignored.txt") {
 		node := nodeWithLabel(root.Children, label)
 		if node == nil {
 			t.Errorf("one expand did not materialize %q", label)
@@ -52,10 +59,15 @@ func TestExplorerExpandAllReachesEveryVisibleDescendantAndCollapseAllClosesTree(
 		}
 	}
 	explorer.CollapseAll()
-	for _, node := range []*widgets.TreeNode{root, nodeWithLabel(root.Children, "deep"), nodeWithLabel(root.Children, "visible")} {
-		if node != nil && node.Expanded {
-			t.Errorf("collapse left %q open", node.Label)
+	for _, label := range []string{deepRows[0], "visible"} {
+		if node := nodeWithLabel(root.Children, label); node == nil {
+			t.Errorf("collapse removed %q", label)
+		} else if node.Expanded {
+			t.Errorf("collapse left %q open", label)
 		}
+	}
+	if root.Expanded {
+		t.Error("collapse left the root open")
 	}
 }
 

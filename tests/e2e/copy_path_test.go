@@ -13,7 +13,7 @@ func TestCopyAbsolutePathFromEditor(t *testing.T) {
 
 	clipboard.DisableSystem()
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 
 	h.exec("file.copyAbsolutePath")
@@ -31,7 +31,7 @@ func TestCopyRelativePathFromEditor(t *testing.T) {
 
 	clipboard.DisableSystem()
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "subdir", "nested.txt"))
+	h.openFile(filepath.Join(h.dir, "subdir", "nested.txt"))
 	h.redraw()
 
 	h.exec("file.copyRelativePath")

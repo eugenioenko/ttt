@@ -19,10 +19,10 @@ func openBookmarkFiles(t *testing.T) (g *EditorGroupWidget, a, b string) {
 		}
 	}
 	g = NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(a)
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
+	requireNoError(t, g.OpenFile(a))
 	g.Editor.SetBookmark(1, '*', term.StyleDefault)
-	g.OpenFile(b)
+	requireNoError(t, g.OpenFile(b))
 	return g, a, b
 }
 
@@ -31,7 +31,7 @@ func TestBookmarksFollowInactiveTabRename(t *testing.T) {
 	renamed := filepath.Join(filepath.Dir(a), "renamed.txt")
 
 	g.RenamePath(a, renamed)
-	g.OpenFile(renamed)
+	requireNoError(t, g.OpenFile(renamed))
 
 	if _, ok := g.Editor.GetBookmark(1); !ok || g.ActiveFilePath() != renamed {
 		t.Fatalf("bookmark lost after renaming an inactive tab (active %q)", g.ActiveFilePath())
@@ -40,12 +40,12 @@ func TestBookmarksFollowInactiveTabRename(t *testing.T) {
 
 func TestBookmarksFollowActiveTabRename(t *testing.T) {
 	g, a, b := openBookmarkFiles(t)
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
 	renamed := filepath.Join(filepath.Dir(a), "renamed.txt")
 
 	g.RenamePath(a, renamed)
-	g.OpenFile(b)
-	g.OpenFile(renamed)
+	requireNoError(t, g.OpenFile(b))
+	requireNoError(t, g.OpenFile(renamed))
 
 	if _, ok := g.Editor.GetBookmark(1); !ok {
 		t.Fatal("bookmark lost after renaming the active tab and switching away")
@@ -54,14 +54,14 @@ func TestBookmarksFollowActiveTabRename(t *testing.T) {
 
 func TestBookmarksFollowSaveAs(t *testing.T) {
 	g, a, b := openBookmarkFiles(t)
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
 	saved := filepath.Join(filepath.Dir(a), "saved.txt")
 
 	if !g.SaveAs(saved) {
 		t.Fatal("SaveAs failed")
 	}
-	g.OpenFile(b)
-	g.OpenFile(saved)
+	requireNoError(t, g.OpenFile(b))
+	requireNoError(t, g.OpenFile(saved))
 
 	if _, ok := g.Editor.GetBookmark(1); !ok {
 		t.Fatal("bookmark lost after Save As and switching away")
@@ -78,13 +78,13 @@ func TestBookmarksFollowRenameOfReplacedPreviewTab(t *testing.T) {
 		}
 	}
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(a)
+	requireNoError(t, g.OpenFile(a))
 	g.Editor.SetBookmark(1, '*', term.StyleDefault)
-	g.OpenFile(b)
+	requireNoError(t, g.OpenFile(b))
 	renamed := filepath.Join(tmp, "renamed.txt")
 
 	g.RenamePath(a, renamed)
-	g.OpenFile(renamed)
+	requireNoError(t, g.OpenFile(renamed))
 
 	if _, ok := g.Editor.GetBookmark(1); !ok {
 		t.Fatal("bookmark lost after renaming a file whose preview tab was replaced")
@@ -97,8 +97,8 @@ func TestBookmarksFollowFolderRename(t *testing.T) {
 	moved := dir + "-moved"
 
 	g.RenamePath(dir, moved)
-	g.OpenFile(filepath.Join(moved, filepath.Base(b)))
-	g.OpenFile(filepath.Join(moved, filepath.Base(a)))
+	requireNoError(t, g.OpenFile(filepath.Join(moved, filepath.Base(b))))
+	requireNoError(t, g.OpenFile(filepath.Join(moved, filepath.Base(a))))
 
 	if _, ok := g.Editor.GetBookmark(1); !ok {
 		t.Fatal("bookmark lost after renaming the parent folder")

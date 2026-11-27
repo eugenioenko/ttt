@@ -98,7 +98,7 @@ describe("BUG-011: Replace All ignores case-sensitive toggle", () => {
 });
 
 describe("BUG-012: Replace All is not a single undo step", () => {
-  it.fails("one undo fully reverts a replace-all", () => {
+  it("one undo fully reverts a replace-all", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "undoall.txt", "cat cat cat\ndog\ncat\n");
 
@@ -116,9 +116,6 @@ describe("BUG-012: Replace All is not a single undo step", () => {
     tui.press("ctrl+s");
     tui.run();
 
-    // Buggy behavior: each of the 4 replacements pushes 2 ungrouped undo
-    // commands (8 undos to revert); one undo leaves " dog dog" — a state
-    // the user never saw.
     expect(readFile(file)).toBe("cat cat cat\ndog\ncat\n");
   });
 });
@@ -315,7 +312,7 @@ describe("BUG-048: find-next uses active tab matches", () => {
 });
 
 describe("BUG-014: replace bar swallows global keybindings", () => {
-  it.fails("tab-switch works while the replace bar is open", () => {
+  it("tab-switch works while the replace bar is open", () => {
     dir = createTempDir();
     const fileE = createTempFile(dir, "tabE.txt", "a\n");
     const fileF = createTempFile(dir, "tabF.txt", "b\n");
@@ -336,11 +333,12 @@ describe("BUG-014: replace bar swallows global keybindings", () => {
     // Buggy behavior: ReplaceBarWidget.handleKey unconditionally returns
     // EventConsumed, so alt+. is eaten and the marker lands in tabE.
     expect(readFile(fileF)).toBe("Zb\n");
+    expect(readFile(fileE)).toBe("a\n");
   });
 });
 
 describe("BUG-015: find does not seed query from selection", () => {
-  it.fails("ctrl+f pre-fills the search box with the selected word", () => {
+  it("ctrl+f pre-fills the search box with the selected word", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "seed.txt", "hello world\n");
 

@@ -3,6 +3,7 @@ package ui
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -170,13 +171,13 @@ func TestPaletteBackspace(t *testing.T) {
 	// Initial text is ">", type "sp" → ">sp"
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "s", 0))
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "p", 0))
-	if p.Input.Text != ">sp" {
-		t.Fatalf("expected text '>sp', got '%s'", p.Input.Text)
+	if p.Input.Text() != ">sp" {
+		t.Fatalf("expected text '>sp', got '%s'", p.Input.Text())
 	}
 
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyBackspace2, "", 0))
-	if p.Input.Text != ">s" {
-		t.Fatalf("expected text '>s' after backspace, got '%s'", p.Input.Text)
+	if p.Input.Text() != ">s" {
+		t.Fatalf("expected text '>s' after backspace, got '%s'", p.Input.Text())
 	}
 }
 
@@ -537,8 +538,8 @@ func TestPaletteSharedWidthAcrossModeTransitionsAndReopen(t *testing.T) {
 
 	reopened := NewSelectDialogWidget(helpTestCommands())
 	renderPaletteAt(reopened, 200, 50)
-	if reopened.Input.Text != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
-		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text, reopened.boxX, reopened.boxW)
+	if reopened.Input.Text() != ">" || reopened.boxX != 70 || reopened.boxW != 60 {
+		t.Fatalf("reopened command palette = input:%q x:%d width:%d", reopened.Input.Text(), reopened.boxX, reopened.boxW)
 	}
 }
 
@@ -546,8 +547,8 @@ func TestPaletteHelpStartsWithOrientationTopics(t *testing.T) {
 	p := NewSelectDialogWidget(helpTestCommands())
 	p.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "?", tcell.ModNone))
 
-	if p.mode != paletteHelpMode || p.Input.Text != "?" {
-		t.Fatalf("expected question-mark help mode, got mode=%d input=%q", p.mode, p.Input.Text)
+	if p.mode != paletteHelpMode || p.Input.Text() != "?" {
+		t.Fatalf("expected question-mark help mode, got mode=%d input=%q", p.mode, p.Input.Text())
 	}
 	if len(p.Items) == 0 {
 		t.Fatal("expected orientation topics")
@@ -678,5 +679,93 @@ func TestPaletteHelpNoMatchesRendersGuidance(t *testing.T) {
 func TestTruncatePaletteDetailUsesDisplayWidth(t *testing.T) {
 	if got := TruncateLeft("prefix界界", 4); got != "…界" {
 		t.Fatalf("expected width-safe tail, got %q", got)
+	}
+}
+
+func TestSelectDialogWidgetFocusedInput(t *testing.T) {
+	p := NewSelectDialogWidget(nil)
+	var holder InputHolder = p
+	if holder.FocusedInput() != p.Input {
+		t.Fatalf("FocusedInput() = %v, want %v", holder.FocusedInput(), p.Input)
+	}
+}
+
+func TestPalettePluginDisplayTitle(t *testing.T) {
+	commands := []command.Command{
+		{ID: "demo.open", Title: "Open Dashboard", DisplayTitle: "My Plugin: Open Dashboard", Shortcut: "Alt+J"},
+		{ID: "core.refresh", Title: "Refresh"},
+	}
+	p := NewSelectDialogWidget(commands)
+	for _, query := range []string{"", "My Plugin", "Open Dashboard", "My Plugin: Open Dashboard"} {
+		p.filterCommands(query)
+		if len(p.Items) == 0 || p.Items[0].Label != "My Plugin: Open Dashboard" || p.Items[0].ID != "demo.open" || p.Items[0].Detail != "Alt+J" {
+			t.Fatalf("query %q: %+v", query, p.Items)
+		}
+		if p.Selected != 0 {
+			t.Fatal("selection not reset")
+		}
+	}
+	p.filterCommands("Refresh")
+	if len(p.Items) != 1 || p.Items[0].Label != "Refresh" {
+		t.Fatalf("core: %+v", p.Items)
+	}
+	_, help := buildPaletteHelpItems(commands)
+	for _, item := range help {
+		if item.ID == "demo.open" && (item.Label != "My Plugin: Open Dashboard" || !strings.Contains(strings.Join(item.searchText, " "), "My Plugin")) {
+			t.Fatalf("help: %+v", item)
+		}
+	}
+}
+
+func paletteItemIDs(p *SelectDialogWidget) []string {
+	ids := make([]string, len(p.Items))
+	for i, item := range p.Items {
+		ids[i] = item.ID
+	}
+	return ids
+}
+
+func TestPaletteRecentCommandsLeadUnfilteredList(t *testing.T) {
+	p := NewSelectDialogWidget(testCommands())
+	p.Selected = 2
+	p.SetRecentCommands([]string{"sidebar.toggle", "plugin.unloaded", "file.open", "sidebar.toggle"})
+
+	want := []string{"sidebar.toggle", "file.open", "file.save", "editor.split"}
+	if got := paletteItemIDs(p); !slices.Equal(got, want) {
+		t.Fatalf("unfiltered order = %v, want %v", got, want)
+	}
+	if p.Selected != 0 {
+		t.Fatalf("selected = %d, want the most recent command at 0", p.Selected)
+	}
+
+	p.SetRecentCommands(nil)
+	want = []string{"file.save", "file.open", "editor.split", "sidebar.toggle"}
+	if got := paletteItemIDs(p); !slices.Equal(got, want) {
+		t.Fatalf("order without recent commands = %v, want %v", got, want)
+	}
+}
+
+func TestPaletteRecentCommandsDoNotReorderQueryResults(t *testing.T) {
+	plain := NewSelectDialogWidget(testCommands())
+	recent := NewSelectDialogWidget(testCommands())
+	recent.SetRecentCommands([]string{"file.open", "sidebar.toggle"})
+
+	for _, query := range []string{"file", "e", "toggle"} {
+		plain.filterCommands(query)
+		recent.filterCommands(query)
+		if got, want := paletteItemIDs(recent), paletteItemIDs(plain); !slices.Equal(got, want) {
+			t.Fatalf("query %q order = %v, want fuzzy order %v", query, got, want)
+		}
+	}
+}
+
+func TestPaletteRecentCommandsLeaveOtherModesAlone(t *testing.T) {
+	p := NewSelectDialogWidget(testCommands())
+	p.Input.SetText("?")
+	topics := paletteItemIDs(p)
+
+	p.SetRecentCommands([]string{"sidebar.toggle"})
+	if got := paletteItemIDs(p); p.mode != paletteHelpMode || !slices.Equal(got, topics) {
+		t.Fatalf("help mode=%v items=%v, want help topics %v", p.mode, got, topics)
 	}
 }

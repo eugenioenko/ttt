@@ -3,13 +3,51 @@ title: Editor Basics
 description: Core editing features in TTT.
 ---
 
+## Workspace tabs
+
+To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
+
+On exit, the current text-file tab list replaces the remembered list for that workspace, including when you started with explicit file arguments. Closing all text-file tabs clears that workspace's saved list, so closed tabs do not return on the next launch.
+
+Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Turning off **Restore workspace tabs** pauses saving and restoration. Turning it back on can restore the last session saved while the setting was enabled. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
+
+## Split Editors
+
+Use the editor tab bar's **More** menu to choose **Split Right** (side by side) or **Split Down** (stacked). Repeat on a group to create up to 16 editor groups, including a grid. Each new group starts with an independent untitled document, numbered across the workspace. Opening a file replaces that untouched placeholder; once edited, the untitled document stays in its own tab.
+
+Views of the same document share text, undo history, and save state, with independent cursors, selections, and scrolling. Opening a file normally uses the active group, including when the same document is already open elsewhere. Split commands use the **Split:** prefix in the command palette; the More menu keeps only **Split Right**, **Split Down**, and **Close Split** for managing splits.
+
+Drag a tab into another group to move it, dropping between tab titles to choose its position or over the editor to append it. Pins, unsaved edits, undo history, and the view position move with the tab. Moving a document already open in the destination keeps one view; moving the last tab removes the empty group. Press **Escape** to cancel a drag. **Split: Move to Other Group** is also available in the command palette.
+
+Use **Open to the Side** in a text-tab or Explorer context menu to open another view, creating a right split when only one group exists. Text views share the document and undo history while keeping independent cursors and scrolling. The command palette also provides **Split: Open to the Side** and **Split: Open Explorer File to the Side**. **Split Right** and **Split Down** continue to create independent untitled documents.
+
+Click a group or press **Ctrl+K Left/Right/Up/Down** to focus it. The active group’s border is highlighted by default; turn off **Highlight active split** in **Settings > Appearance > Window** to disable it. **F6** and **Shift+F6** cycle through editor groups, the sidebar, and the panel.
+
+Drag dividers alongside editor content to resize groups; side-by-side dividers leave the tab rows clear. **Split: Equalize Sizes** in the command palette balances their sizes again. Closing a group's last tab removes that group; **Close Split** merges its tabs into a neighboring group, keeping one view when both contain the same document.
+
+## Tab bar styles
+
+Choose **Tab Bar Style** under **Settings > Appearance > Window** or **Options > Appearance**. The setting applies immediately to every editor group, with or without splits:
+
+- **Extended** (default): the three-row tab strip.
+- **Hidden**: a one-row divider that gives the editor two extra rows. Tabs still exist, and keyboard and command-palette tab actions keep working.
+- **Auto-hide**: the divider expands to Extended when the pointer stays on its top edge for 50 ms. It hides 100 ms after the pointer leaves the strip and its one-cell grace area. Menus and drags keep the header open.
+
+The setting is stored as `editor.tabBarStyle`. Hidden headers have no tab or More-button mouse targets.
+
 ## Syntax Highlighting
 
 TTT highlights code with [textmate-go](https://github.com/eugenioenko/textmate-go), a pure Go port of VS Code's TextMate engine built for ttt. It embeds TextMate grammars for 124 languages, detected from the file name, and colors constructs that span lines (block comments, template literals, docstrings, tags with attributes on several lines) correctly.
 
+Click the language name in the status bar, or run **Change Language Mode** from the command palette, to search built-in and external grammars. This works for files without a recognized extension, such as `~/.bash_aliases`. Choose **Auto Detect** to restore automatic detection, or **Plain Text** to disable syntax highlighting for the tab.
+
+The selection belongs to the current tab and stays after Save As, rename, and grammar reloads. It does not change the language server or word-wrap language overrides, and it is not saved after the tab closes. Selecting a language does not enable syntax highlighting when it is disabled in settings. The adjacent language-server indicator still opens the Output panel.
+
 ## Soft Wrapping
 
-Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
+When no Markdown language override exists, Markdown source files wrap by default, inheriting the global wrap width and break mode. Existing Markdown override entries are preserved, including empty entries and width-only overrides. Enable `editor.wordWrap` to display long lines on multiple rows without inserting newlines or marking the file modified. `editor.wordWrapColumn` defaults to `0`, which uses the pane's available text width after gutters, scrollbars, and existing margins. A positive value caps that width: a 65-column limit uses 65 columns in a wide pane and 50 in a pane with only 50 text columns. Columns measure terminal display width, including wide characters and tabs.
+
+`editor.wordWrapBreak` chooses where a row ends. The default, `"word"`, ends a row after a space or after `.`, `,`, `;`, `/`, `|`, `&`, `?` and closing brackets, before an opening bracket, or next to a wide character, so words and identifiers stay whole. A space at the edge stays on its row instead of starting the next one, and a token wider than the row breaks at the character that overflows. `"character"` fills every row and breaks wherever the width runs out.
 
 Use language IDs to set different limits for code and prose:
 
@@ -20,17 +58,26 @@ Use language IDs to set different limits for code and prose:
     "wordWrapColumn": 0,
     "languageOverrides": {
       "typescript": { "wordWrapColumn": 80 },
-      "markdown": { "wordWrapColumn": 65 }
+      "markdown": { "wordWrapColumn": 65 },
+      "log": { "wordWrapBreak": "character" }
     }
   }
 }
 ```
 
-Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping and `0` for the column). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
+Each field resolves independently: language override, then global setting, then built-in default (`false` for wrapping, `0` for the column, and `"word"` for the break). An omitted field inherits; explicit `wordWrapColumn: 0` removes a global column cap, and `wordWrap: false` disables wrapping for that language. With effective wrapping off, the column has no effect. Unknown or unmatched file languages inherit the global settings. Detection uses the editor's grammars and does not require an installed or enabled language server, or syntax coloring.
 
-The Options **Word Wrap** toggle changes the global default; explicit language overrides retain precedence. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
+The **Options > Editor > Word Wrap** toggle changes the global default; explicit language overrides retain precedence. **Options > Markdown** opens picker dialogs for **Word Wrap** (Use Editor Default, On, Off) and **Wrap Width** (Use Editor Default, Pane Width, Custom). Custom prompts for a positive column limit. The same controls are in **Settings > Markdown**, where Custom reveals a column input; changes take effect on Apply. These controls edit `editor.languageOverrides.markdown` and leave other language overrides intact. Choose Use Editor Default to remove that field’s override. When all Markdown fields inherit, an empty `"markdown": {}` entry preserves that choice across restarts. Switching tabs, changing the detected file language, or running **Reload Settings** applies the effective settings. Language overrides apply to all files of that language; filename and glob rules are not supported.
 
 The `editor.largeFiles.wordWrapMaxMB` safeguard still applies, including when a language enables wrapping. Diff views retain their separate wrap policy. `markdown.wrapWidth` controls rendered Markdown, such as hover popups and plugin widgets; raw Markdown editing uses these editor settings.
+
+## Opening Links
+
+By default, ttt underlines HTTP/HTTPS links on Ctrl-hover and opens them on Ctrl+click, using the browser on the machine running ttt. Set `"links": { "native": true }` to pass web links to your outer terminal as OSC 8 hyperlinks instead. Your terminal then controls their hover appearance and opening gesture, and opens them locally even when ttt runs over SSH. For example, Ghostty uses Ctrl+Shift+click while ttt captures the mouse, and foot uses its keyboard-driven URL mode. The shared setting also applies to integrated terminals and is available under **General → Links**.
+
+In either mode, hold **Ctrl** over existing file references such as `src/main.go:12:3` to underline them, then **Ctrl+click** to open them. File references open in ttt at the specified line and column; relative paths use the current file's directory, or the workspace folder for untitled buffers and remote PR diffs.
+
+Move outside the pane or move the mouse without Ctrl to clear the underlines. Link navigation also works when pointer shapes are disabled, and is available in diff tabs, Commit Details, and Current Changes.
 
 ## Bracket Matching
 
@@ -40,24 +87,42 @@ Bracket pair colorization is also available, rendering each nesting level in a d
 
 ## Auto Indent
 
-New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from the Options menu (**Auto Indent**) or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
+New lines inherit the indentation of the previous line and gain an extra level after an open `{`, `(`, `[`, or trailing `:`. This is on by default; toggle it from **Options > Editor > Auto Indent** or with the `editor.autoIndent` setting. Turn it off for plain `noautoindent` behavior, where Enter opens a column-1 line.
 
-Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from the Options menu (**Auto Dedent**) or with the `editor.autoDedent` setting.
+Typing a closing `}`, `)`, or `]` on an otherwise-blank line dedents it one level so it lines up with its opening line. This dedent is on by default; toggle it from **Options > Editor > Auto Dedent** or with the `editor.autoDedent` setting.
 
 ## Find and Replace
 
 - **Ctrl+F** opens the find bar with match navigation
 - **Ctrl+R** opens find and replace with replace-one and replace-all
+- Click the chevron beside the search input to toggle the replacement row. Search text, options, and replacement text are preserved when switching modes.
 - **F3 / Shift+F3** to jump between matches
 
 ## Go to Line
 
 Press **Ctrl+G** to open the Go to Line dialog.
 
+## Scrolling
+
+**Scroll Line Up** and **Scroll Line Down** (**Ctrl+Up** / **Ctrl+Down**) move only the viewport by one visual row. The cursor and selection stay in place, so you can look at nearby text without losing your editing position.
+
+**Scroll Up** and **Scroll Down** move the viewport and cursor together. The cursor keeps its screen row, so the text follows the caret the way Vim's `Ctrl+D` does. The step is `editor.scrollLines` screen rows; `0` (the default) scrolls half the editor height.
+
+They have no default shortcut. Bind them in `keybindings.json`, for example:
+
+```json
+[
+  { "key": "ctrl+k pgup", "command": "view.scrollUp" },
+  { "key": "ctrl+k pgdn", "command": "view.scrollDown" }
+]
+```
+
 ## Selection and Clipboard
 
 - **Ctrl+A** to select all
 - **Ctrl+C / Ctrl+X / Ctrl+V** for copy, cut, paste with system clipboard support
+
+The selection highlight covers the selected text plus one cell for each selected line break, so empty lines in a selection stay visible. Set `editor.fullLineSelection` to `true` (or turn on **Settings > Appearance > Code > Full line selection**) to extend the highlight to the editor's right edge on every selected line break instead.
 
 ## Undo and Redo
 
@@ -140,6 +205,8 @@ TTT supports `.editorconfig` files and picks up indent size automatically per fi
 - Drag sidebar and panel dividers to resize
 - Right-click for context menus
 
+In terminals that support OSC 22, the mouse pointer shows what is under it: a text pointer over editor text and plugin inputs, a hand over tabs, menu items, tree rows, and buttons, a grabbing hand while dragging a tab, and a resize pointer over dividers. Other terminals keep their usual pointer. You can opt out of pointer shape changes with `appearance.pointerShapes: false` (or via **Settings > Appearance > Window > Pointer shapes**). Mouse clicks, selection, scrolling, drag gestures, and mouse reporting continue to work normally when pointer shapes are disabled.
+
 The sidebar resize handle and resize pointer cover only the divider column. Clicks and drags in the first content column beside it go directly to the content, including plugin tabs without a gutter.
 
 Other resize allowances are intentionally retained until a separate change is requested:
@@ -159,4 +226,4 @@ Inline blame info for the current line is shown in the status bar, including the
 
 When enabled, diff indicators appear in the line number gutter showing added, modified, and removed lines compared to the last committed version. Toggle with the "Toggle Git Gutter" command in the command palette.
 
-When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.
+When a file is taller than the editor, the same changes are marked on the vertical scrollbar in the gutter colors. Marks are placed to an eighth of a cell, and even a single changed line stays visible in a long file. Set `appearance.scrollbarGlyphs` to `"legacy"` for thin line marks if your terminal or font has the Symbols for Legacy Computing glyphs. Click a mark to scroll to that change. Turn the marks off with `editor.scrollbarGitMarks` or **Options > Editor > Scrollbar Git Marks**. Diff views can mark their changed rows too: turn on `editor.diffScrollbarGitMarks` or **Options > Diff Views > Scrollbar Git Marks**.

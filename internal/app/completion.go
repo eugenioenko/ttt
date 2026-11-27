@@ -12,6 +12,10 @@ import (
 )
 
 type completionState struct {
+	pathRead  *asynctask.Task[[]ui.CompletionItem]
+	pathPopup *pathCompletionTarget
+	lines     []string
+	col       int
 	debounce  *asynctask.Task[struct{}]
 	delay     time.Duration
 	read      *asynctask.Task[completionReply]
@@ -21,6 +25,8 @@ type completionState struct {
 type completionReply struct {
 	items    []ui.CompletionItem
 	lspItems []lsp.CompletionItem
+	lines    []string
+	col      int
 }
 
 // completionTarget is the word a completion request was made for. A reply is
@@ -51,10 +57,12 @@ func (a *App) ScheduleAutocomplete() {
 		a.completion.delay = delay
 	}
 	target := a.currentCompletionTarget()
+	pathTarget := a.currentPathCompletionTarget()
 	a.completion.debounce.Schedule(func(context.Context) (struct{}, error) {
 		return struct{}{}, nil
 	}, func(_ struct{}, err error) {
-		if err == nil && a.currentCompletionTarget() == target {
+		if err == nil && a.currentCompletionTarget() == target &&
+			(pathTarget.buf == nil || a.currentPathCompletionTarget() == pathTarget) {
 			a.HandleAutocompleteTrigger()
 		}
 	})
@@ -70,7 +78,7 @@ func (a *App) HandleAutocompleteTrigger() {
 	if a.IsAutocompleteActive() {
 		return
 	}
-	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger {
+	if prefix := a.currentPrefix(); len(prefix) >= 1 || isTrigger || a.currentPathCompletionTarget().buf != nil {
 		path, lang := a.editorPathLang()
 		line, col := a.EditorGroup.ActiveCursor()
 		a.RequestCompletions(path, lang, line, col, triggerChar)
@@ -80,12 +88,16 @@ func (a *App) HandleAutocompleteTrigger() {
 // RequestCompletions asks the server for completions at line and col,
 // cancelling any request still in flight.
 func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar string) {
+	pathTarget := a.currentPathCompletionTarget()
 	serverKey, _, ok := a.lspResolve(path, lang)
 	if !ok || a.EditorGroup.ActiveBuffer() == nil {
+		a.requestPathCompletions(pathTarget)
 		return
 	}
 	target := a.currentCompletionTarget()
-	workDir := a.lspWorkDir(path)
+	lines := a.lspLines(path)
+	wireCol := lsp.PositionToUTF16(lines, lsp.Position{Line: line, Character: col}).Character
+	workDir := a.lspWorkDirFor(path, lang)
 	manager := a.LspManager
 	if a.completion.read == nil {
 		a.completion.read = NewTask[completionReply](a, asynctask.TaskOptions{})
@@ -112,7 +124,7 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 			trigger = &lsp.CompletionContext{TriggerKind: lsp.CompletionTriggerInvoked}
 		}
 		slog.Debug("lsp completion request", "path", path, "line", line, "col", col, "triggerChar", triggerChar)
-		items, err := client.Completion(ctx, FileURI(path), line, col, trigger)
+		items, err := client.Completion(ctx, FileURI(path), line, wireCol, trigger)
 		if err != nil {
 			if ctx.Err() == nil {
 				slog.Error("lsp completion", "err", err)
@@ -120,10 +132,13 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 			return completionReply{}, err
 		}
 		slog.Debug("lsp completion response", "count", len(items))
-		return completionReply{items: LspToUICompletions(items), lspItems: items}, nil
+		return completionReply{items: LspToUICompletions(items, lines), lspItems: items, lines: lines, col: col}, nil
 	}, func(reply completionReply, err error) {
 		if err == nil {
 			a.applyCompletionReply(target, reply)
+		}
+		if !a.IsAutocompleteActive() {
+			a.requestPathCompletions(pathTarget)
 		}
 	})
 }
@@ -134,6 +149,8 @@ func (a *App) applyCompletionReply(target completionTarget, reply completionRepl
 	if len(reply.items) == 0 || a.currentCompletionTarget() != target {
 		return
 	}
+	a.completion.lines = reply.lines
+	a.completion.col = reply.col
 	a.ShowAutocomplete(reply.items, reply.lspItems)
 }
 
@@ -143,6 +160,9 @@ func (a *App) applyCompletionReply(target completionTarget, reply completionRepl
 // again instead of breaking the line, and Escape did not stick.
 func (a *App) CloseAutocomplete() {
 	a.DismissAutocomplete()
+	if a.completion.pathRead != nil {
+		a.completion.pathRead.Stop()
+	}
 	if a.completion.debounce != nil {
 		a.completion.debounce.Stop()
 	}
@@ -161,7 +181,8 @@ func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone 
 	if !ok || buf == nil {
 		return
 	}
-	workDir := a.lspWorkDir(path)
+	wireCol := a.lspColumn(path, line, col)
+	workDir := a.lspWorkDirFor(path, lang)
 	manager := a.LspManager
 	if a.completion.signature == nil {
 		a.completion.signature = NewTask[*SignatureHelpResult](a, asynctask.TaskOptions{})
@@ -179,7 +200,7 @@ func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone 
 			slog.Error("lsp client", "err", err)
 			return nil, err
 		}
-		sig, err := client.SignatureHelp(ctx, FileURI(path), line, col)
+		sig, err := client.SignatureHelp(ctx, FileURI(path), line, wireCol)
 		if err != nil {
 			if ctx.Err() == nil {
 				slog.Error("lsp signatureHelp", "err", err)

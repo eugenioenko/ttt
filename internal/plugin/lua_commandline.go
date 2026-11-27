@@ -68,7 +68,7 @@ func newCommandLineModule(L *lua.LState, p *Plugin) *lua.LTable {
 					Fn:      fn,
 					NRet:    1,
 					Protect: true,
-				}, keyEventToLua(p.State, ev))
+				}, keyEventToLua(p.State, ev, p.ControlModifiers))
 				if err != nil {
 					p.logError("command_line.on_key", err)
 					return false

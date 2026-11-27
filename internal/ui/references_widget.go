@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
@@ -39,7 +40,7 @@ func (r *ReferencesWidget) Render(surface Surface) {
 	w, h := surface.Size()
 
 	if len(r.Items) == 0 {
-		msg := "No references"
+		msg := i18n.Text("references.noReferences")
 		x := 1
 		for _, ch := range msg {
 			if x >= w {

@@ -25,11 +25,31 @@ func NewBottomPanelWidget(borders *term.BorderSet) *BottomPanelWidget {
 
 func (bp *BottomPanelWidget) Focusable() bool { return true }
 
+func (bp *BottomPanelWidget) OwnsPointerCapture() bool {
+	if !bp.Visible || bp.GetRect().H < 3 {
+		return false
+	}
+	return bp.Tabs.OwnsPointerCapture()
+}
+
+func (bp *BottomPanelWidget) CancelPointerCapture() bool {
+	return bp.Tabs.CancelPointerCapture()
+}
+
+func (bp *BottomPanelWidget) InvalidatePointerInteraction() bool {
+	return bp.Tabs.InvalidatePointerInteraction()
+}
+
+func (bp *BottomPanelWidget) SetPointerCaptureInvalidated(invalidated func()) {
+	bp.Tabs.SetPointerCaptureInvalidated(invalidated)
+}
+
 func (bp *BottomPanelWidget) Render(surface Surface) {
 	w, h := surface.Size()
 	r := bp.GetRect()
 
 	if h < 3 {
+		bp.Tabs.InvalidatePointerInteraction()
 		return
 	}
 
@@ -75,13 +95,13 @@ func (bp *BottomPanelWidget) DividerScreenY() int {
 
 func (bp *BottomPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
+		if bp.Tabs.PointerGestureActive() {
+			return bp.Tabs.HandleEvent(ev)
+		}
 		_, my := mev.Position()
 		r := bp.GetRect()
 		if my == r.Y {
-			if bp.Tabs.HandleEvent(ev) == EventConsumed {
-				return EventConsumed
-			}
-			return EventIgnored
+			return bp.Tabs.HandleEvent(ev)
 		}
 	}
 	active := bp.ActiveWidget()

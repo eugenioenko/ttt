@@ -19,17 +19,17 @@ func runPiped(cmd *exec.Cmd, stdout, stderr io.Writer) error {
 	}
 	errR, errW, err := os.Pipe()
 	if err != nil {
-		outR.Close()
-		outW.Close()
+		_ = outR.Close()
+		_ = outW.Close()
 		return err
 	}
 	cmd.Stdout, cmd.Stderr = outW, errW
 	startErr := cmd.Start()
-	outW.Close()
-	errW.Close()
+	_ = outW.Close()
+	_ = errW.Close()
 	if startErr != nil {
-		outR.Close()
-		errR.Close()
+		_ = outR.Close()
+		_ = errR.Close()
 		return startErr
 	}
 
@@ -39,7 +39,7 @@ func runPiped(cmd *exec.Cmd, stdout, stderr io.Writer) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			defer d.r.Close()
+			defer func() { _ = d.r.Close() }()
 			d.run()
 		}()
 	}
@@ -71,7 +71,7 @@ func (d *pipeDrain) childExited() {
 	d.deadline = d.exitedAt.Add(pluginExecWaitDelay)
 	if d.r.SetReadDeadline(d.deadline) != nil {
 		r := d.r
-		time.AfterFunc(pluginExecWaitDelay, func() { r.Close() })
+		time.AfterFunc(pluginExecWaitDelay, func() { _ = r.Close() })
 	}
 }
 

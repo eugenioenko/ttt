@@ -75,7 +75,7 @@ func TestDebugPluginManifestUnreadableManifestIsAnError(t *testing.T) {
 	if err := os.Chmod(dir, 0); err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { os.Chmod(dir, 0755) })
+	t.Cleanup(func() { requireNoError(t, os.Chmod(dir, 0755)) })
 	if _, _, err := debugPluginManifest(filepath.Join(dir, "init.lua")); err == nil {
 		t.Fatal("an unreadable manifest fell back to the default permissions")
 	}

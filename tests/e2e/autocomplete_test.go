@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -14,8 +15,8 @@ func setupAutocompleteTest(t *testing.T, content string) *testHarness {
 	t.Helper()
 	h := newTestHarness(t, 80, 24)
 	f := filepath.Join(h.dir, "ac.txt")
-	os.WriteFile(f, []byte(content), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(content), 0644))
+	h.openFile(f)
 	h.redraw()
 	return h
 }
@@ -561,4 +562,28 @@ func TestAutocomplete_DismissRemovesFromScreen(t *testing.T) {
 	// The autocomplete menu label should no longer be on screen.
 	// (The text was not inserted, so it should not appear.)
 	h.assertNotContains("uniqueCompletion")
+}
+
+func TestAutocomplete_SnippetPlaceholder(t *testing.T) {
+	h := setupAutocompleteTest(t, "<div class\n")
+	defer h.stop()
+
+	editor := h.app.EditorGroup.Editor
+	editor.Cursor.Line = 0
+	editor.Cursor.Col = 10
+
+	h.app.ShowAutocomplete([]ui.CompletionItem{{
+		Label:            "class",
+		InsertText:       `class="$1"`,
+		InsertTextFormat: lsp.InsertTextFormatSnippet,
+	}}, nil)
+	h.redraw()
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+
+	if got := editor.Buf.Lines[0]; got != `<div class=""` {
+		t.Fatalf("buffer = %q, want %q", got, `<div class=""`)
+	}
+	if editor.Cursor.Line != 0 || editor.Cursor.Col != 12 {
+		t.Fatalf("cursor = %d:%d, want 0:12", editor.Cursor.Line, editor.Cursor.Col)
+	}
 }

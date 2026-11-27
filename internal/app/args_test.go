@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
 
@@ -139,6 +140,7 @@ func TestResolveArgsSkipsHomeAsWorkspace(t *testing.T) {
 
 func TestForwardableTargets(t *testing.T) {
 	dir := t.TempDir()
+	t.Chdir(dir)
 	file := filepath.Join(dir, "file.txt")
 	if err := os.WriteFile(file, []byte("one\ntwo\n"), 0600); err != nil {
 		t.Fatal(err)
@@ -146,24 +148,28 @@ func TestForwardableTargets(t *testing.T) {
 	saved := os.Args
 	defer func() { os.Args = saved }()
 	for _, tc := range []struct {
-		name string
-		args []string
-		want bool
+		name    string
+		args    []string
+		files   []FileTarget
+		folders []string
 	}{
-		{"file", []string{file}, true},
-		{"new file", []string{filepath.Join(dir, "new.txt")}, true},
-		{"no arguments", nil, false},
-		{"folder", []string{file, dir}, false},
-		{"pull request", []string{file, "https://github.com/eugenioenko/ttt/pull/1"}, false},
-		{"config value", []string{"--config", "--listen", file}, true},
-		{"split value", []string{"--exec-split-on", "--workspace", file}, true},
-		{"size value", []string{"--size", "-", file}, true},
+		{"file", []string{file}, []FileTarget{{Path: file}}, nil},
+		{"new file", []string{"new.txt"}, []FileTarget{{Path: filepath.Join(dir, "new.txt")}}, nil},
+		{"no arguments", nil, nil, nil},
+		{"folder", []string{dir}, nil, []string{dir}},
+		{"dot", []string{"."}, nil, []string{dir}},
+		{"mixed", []string{".", "file.txt:2:1"}, []FileTarget{{Path: file, Line: 2, Col: 1}}, []string{dir}},
+		{"workspace", []string{"--workspace", "missing.ttt", dir, file}, nil, nil},
+		{"pull request", []string{file, "https://github.com/eugenioenko/ttt/pull/1"}, nil, nil},
+		{"config value", []string{"--config", "--listen", file}, []FileTarget{{Path: file}}, nil},
+		{"split value", []string{"--exec-split-on", "--workspace", file}, []FileTarget{{Path: file}}, nil},
+		{"size value", []string{"--size", "-", file}, []FileTarget{{Path: file}}, nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			os.Args = append([]string{"ttt"}, tc.args...)
-			targets := ForwardableTargets()
-			if (len(targets) > 0) != tc.want {
-				t.Fatalf("targets = %v, want forwardable %v", targets, tc.want)
+			files, folders := ForwardableTargets()
+			if !slices.Equal(files, tc.files) || !slices.Equal(folders, tc.folders) {
+				t.Fatalf("targets = (%v, %v), want (%v, %v)", files, folders, tc.files, tc.folders)
 			}
 		})
 	}

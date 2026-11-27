@@ -3,6 +3,7 @@ package ui
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -15,6 +16,19 @@ func newMultiCursorEditor(lines []string, positions [][2]int) *EditorPaneWidget 
 	}
 	e.syncFromMulti()
 	return e
+}
+
+// Secondary cursors must not borrow StyleSelection: in the default "background"
+// selection style it carries no reverse attribute, so cursors render as a soft tint.
+func TestMultiCursorSecondaryCursorsRenderAsBlock(t *testing.T) {
+	e := newRowsEditor([]string{"foo", "bar"}, 20, 4)
+	e.ensureMulti()
+	e.Multi.Add(1, 1)
+	e.syncFromMulti()
+	grid := renderGrid(e)
+	if c := grid[1][e.GutterWidth()+1]; c.Style != term.StyleReverse || c.BgStyle != 0 {
+		t.Fatalf("secondary cursor cell style=%v bg=%v, want StyleReverse with no bg", c.Style, c.BgStyle)
+	}
 }
 
 // Tab in multi-cursor mode inserts one indent unit at every cursor, not just the

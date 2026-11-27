@@ -9,6 +9,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/ui"
+
+	"github.com/gdamore/tcell/v3"
 )
 
 func findMenuCommand(items []ui.ContextMenuItem, command string) (ui.ContextMenuItem, bool) {
@@ -243,32 +245,24 @@ func TestOptionsMenuDynamicChecked(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	// Build the options menu and verify line numbers is checked
-	items := h.app.BuildOptionsMenu()
-	found := false
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			found = true
-			if item.Checked != 2 { // MenuChecked
-				t.Errorf("expected line numbers checked (2), got %d", item.Checked)
-			}
-		}
-	}
-	if !found {
-		t.Error("expected to find options.toggleLineNumbers in menu items")
+	item, found := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLineNumbers")
+	if !found || item.Checked != ui.MenuChecked {
+		t.Fatalf("expected checked Line Numbers, got %+v (found=%v)", item, found)
 	}
 
-	// Toggle line numbers off
-	h.exec("options.toggleLineNumbers")
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Line Numbers")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 
-	// Rebuild and verify unchecked
-	items = h.app.BuildOptionsMenu()
-	for _, item := range items {
-		if item.Command == "options.toggleLineNumbers" {
-			if item.Checked != 1 { // MenuUnchecked
-				t.Errorf("expected line numbers unchecked (1), got %d", item.Checked)
-			}
-		}
+	if h.app.Root.HasOverlay() || h.app.Settings.Editor.LineNumbers {
+		t.Fatal("choosing Line Numbers in Editor should close the menu and disable line numbers")
+	}
+	item, found = findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLineNumbers")
+	if !found || item.Checked != ui.MenuUnchecked {
+		t.Fatalf("expected unchecked Line Numbers after toggle, got %+v (found=%v)", item, found)
 	}
 }
 
@@ -276,25 +270,20 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
-	items := h.app.BuildOptionsMenu()
-	lspIdx, hoverIdx := -1, -1
-	for i, item := range items {
-		switch item.Command {
-		case "options.toggleLSP":
-			lspIdx = i
-		case "options.toggleLSPHover":
-			hoverIdx = i
-		}
-	}
-	if lspIdx < 0 || hoverIdx != lspIdx+1 {
-		t.Fatalf("LSP Hover should follow LSP Code Assist: lsp=%d hover=%d", lspIdx, hoverIdx)
-	}
-	if items[hoverIdx].Label != "LSP Hover" || items[hoverIdx].Checked != ui.MenuChecked {
-		t.Fatalf("hover item = %+v, want checked LSP Hover", items[hoverIdx])
+	item, found := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleLSPHover")
+	if !found || item.Label != "Hover Information" || item.Checked != ui.MenuChecked {
+		t.Fatalf("expected checked Hover Information, got %+v (found=%v)", item, found)
 	}
 
 	h.app.ShowHover("info", 5, 5)
-	h.exec("options.toggleLSPHover")
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Enable Code Assist")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
 
 	if h.app.Settings.LSP.IsHoverEnabled() {
 		t.Fatal("hover should be disabled after toggle")
@@ -322,4 +311,113 @@ func TestOptionsMenuToggleLSPHover(t *testing.T) {
 	if !h.app.Settings.LSP.IsHoverEnabled() {
 		t.Error("hover should be re-enabled after second toggle")
 	}
+}
+
+func TestOptionsMenuForwardShortcutsFollowsSessionToggle(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	h.exec("terminal.toggleShortcutForwarding")
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleTerminalForwardShortcuts"); item.Checked != ui.MenuChecked {
+		t.Fatalf("menu should show the session override as checked, got %+v", item)
+	}
+
+	h.exec("options.toggleTerminalForwardShortcuts")
+	if h.app.Root.ForwardShortcuts || h.app.Settings.Terminal.ForwardShortcuts {
+		t.Fatal("toggling a forwarded session should turn forwarding off and save false")
+	}
+
+	h.exec("options.toggleTerminalForwardShortcuts")
+	if !h.app.Root.ForwardShortcuts {
+		t.Fatal("toggling again should turn forwarding on")
+	}
+	data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved config.Settings
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatal(err)
+	}
+	if !saved.Terminal.ForwardShortcuts {
+		t.Fatal("forward shortcuts should be saved as true")
+	}
+	if item, _ := findMenuCommand(h.app.BuildOptionsMenu(), "options.toggleTerminalForwardShortcuts"); item.Checked != ui.MenuChecked {
+		t.Fatalf("menu should be checked after enabling, got %+v", item)
+	}
+}
+
+func TestOptionsExplorerTogglesApplyAndPersist(t *testing.T) {
+	h := newTestHarness(t, 100, 26)
+	defer h.stop()
+
+	cases := []struct {
+		command string
+		get     func(config.ExplorerSettings) bool
+	}{
+		{"options.toggleExplorerShowHiddenFiles", func(s config.ExplorerSettings) bool { return s.ShowHidden }},
+		{"options.toggleExplorerShowGitIgnoredFiles", func(s config.ExplorerSettings) bool { return s.ShowGitIgnored }},
+		{"options.toggleExplorerCompactFolders", func(s config.ExplorerSettings) bool { return s.CompactFolders }},
+		{"options.toggleExplorerAutoReveal", func(s config.ExplorerSettings) bool { return s.AutoReveal }},
+		{"options.toggleExplorerGitStatusColors", func(s config.ExplorerSettings) bool { return s.GitStatusColors }},
+		{"options.toggleExplorerDimStagedGitColors", func(s config.ExplorerSettings) bool { return s.DimStagedGitColors }},
+	}
+	if h.app.Settings.Explorer.AutoReveal {
+		t.Fatal("auto-reveal must remain off by default")
+	}
+	for _, tc := range cases {
+		t.Run(tc.command, func(t *testing.T) {
+			initial := tc.get(h.app.Settings.Explorer)
+			for _, want := range []bool{!initial, initial} {
+				h.exec(tc.command)
+				if got := tc.get(h.app.Settings.Explorer); got != want {
+					t.Fatalf("setting = %v, want %v", got, want)
+				}
+				if got := tc.get(h.app.Explorer.Settings); got != want {
+					t.Fatalf("live explorer setting = %v, want %v", got, want)
+				}
+				item, ok := findMenuCommand(h.app.BuildOptionsMenu(), tc.command)
+				checked := ui.MenuUnchecked
+				if want {
+					checked = ui.MenuChecked
+				}
+				if !ok || item.Checked != checked {
+					t.Fatalf("menu item = %+v, found = %v, want checked = %d", item, ok, checked)
+				}
+				data, err := os.ReadFile(filepath.Join(h.dir, "config", "settings.json"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				var saved config.Settings
+				if err := json.Unmarshal(data, &saved); err != nil {
+					t.Fatal(err)
+				}
+				if got := tc.get(saved.Explorer); got != want {
+					t.Fatalf("saved setting = %v, want %v", got, want)
+				}
+			}
+		})
+	}
+}
+
+func TestOptionsExplorerHiddenFilesMenuAction(t *testing.T) {
+	h := newTestHarness(t, 100, 26)
+	defer h.stop()
+	if err := os.WriteFile(filepath.Join(h.dir, ".hidden.txt"), []byte("hidden"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	h.exec("explorer.refresh")
+	h.assertContains(".hidden.txt")
+
+	h.exec("menu.options")
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyDown, tcell.ModNone)
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.assertContains("Show Hidden Files")
+	h.assertContains("Auto-Reveal Active File")
+	h.pressKey(tcell.KeyEnter, tcell.ModNone)
+	h.assertNotContains(".hidden.txt")
+
+	h.exec("options.toggleExplorerShowHiddenFiles")
+	h.assertContains(".hidden.txt")
 }

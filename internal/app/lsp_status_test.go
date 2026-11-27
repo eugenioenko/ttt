@@ -1,12 +1,49 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 )
+
+func TestLanguageSelectionPreservesLSPResolution(t *testing.T) {
+	s := config.DefaultSettings()
+	s.LSP.Servers = map[string]config.LSPServerConfig{
+		"python": {Command: []string{"missing-python-language-server"}},
+		"shell":  {Command: []string{"missing-shell-language-server"}},
+	}
+	a := buildTestApp(t, s)
+	a.LspManager = lsp.NewManager(&s.LSP)
+	t.Cleanup(func() { a.CloseTasks(); a.EditorGroup.CloseAllTabs() })
+	path := filepath.Join(t.TempDir(), "deploy")
+	if err := os.WriteFile(path, []byte("#!/usr/bin/env python3\nprint('hi')\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	for _, selection := range []string{"source.shell", highlight.PlainText, ""} {
+		a.EditorGroup.SetActiveLanguage(selection)
+		file, language := a.editorPathLang()
+		server, _, ok := a.lspResolve(file, language)
+		if !ok || server != "python" || language != "Python" {
+			t.Fatalf("selection %q retargeted LSP: %q, %q", selection, server, language)
+		}
+	}
+	var closedLanguage string
+	a.EditorGroup.OnFileClose = func(_ string, language string) { closedLanguage = language }
+	a.EditorGroup.SetActiveLanguage(highlight.PlainText)
+	a.EditorGroup.CloseTab()
+	if closedLanguage != "Python" {
+		t.Fatalf("closing Plain Text tab lost its document lifecycle: %q", closedLanguage)
+	}
+}
 
 func TestLspIcon(t *testing.T) {
 	tests := []struct {

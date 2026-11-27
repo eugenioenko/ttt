@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import * as tui from "./tui.js";
-import { cleanupDir, createGitRepo, createTempDir, createTempFile, git } from "./helpers.js";
+import { cleanupDir, createGitRepo, createTempDir, createTempFile, git, gitStatus } from "./helpers.js";
 
 let dir;
 let configDir;
@@ -48,10 +48,9 @@ describe("git file tree", () => {
     tui.exec("Git: Expand All File Trees");
     const expanded = tui.snapshot();
 
+    // A folder row owns its own context menu now; the panel menu stays in the
+    // same list and on the panel's ⋮ button.
     tui.rclick(5, 5);
-    tui.press("down");
-    tui.press("down");
-    tui.press("right");
     const context = tui.snapshot();
     tui.press("escape");
     tui.click(29, 2);
@@ -69,13 +68,33 @@ describe("git file tree", () => {
     expect(snapshots[tree]).not.toContain("src/work/changed.go");
     expect(snapshots[collapsed]).not.toContain("changed.go");
     expect(snapshots[expanded]).toContain("changed.go");
-    for (const menu of [snapshots[context], snapshots[threeDot]]) {
-      expect(menu).toContain("Open Current Changes");
-      expect(menu).toContain("Git Files");
-      expect(menu).toContain("Tree");
-      expect(menu).toContain("List");
-      expect(menu).toContain("Expand All");
-      expect(menu).toContain("Collapse All");
-    }
+    expect(snapshots[context]).toContain("Stage Folder");
+    expect(snapshots[context]).toContain("Discard Folder Changes");
+    expect(snapshots[context]).toContain("Open Current Changes");
+    expect(snapshots[context]).toContain("Git Files");
+    expect(snapshots[threeDot]).toContain("Tree");
+    expect(snapshots[threeDot]).toContain("List");
+    expect(snapshots[threeDot]).toContain("Expand All");
+    expect(snapshots[threeDot]).toContain("Collapse All");
+  });
+
+  it("stages every file under a folder row from the tree", () => {
+    dir = nestedRepo();
+    configDir = createTempDir();
+    writeFileSync(join(configDir, "settings.json"), JSON.stringify({ git: { fileView: "tree", icons: "none" } }));
+    tui.start(dir);
+    tui.setEnv({ TTT_CONFIG_DIR: configDir });
+    tui.pressChord("ctrl+k", "c");
+    tui.waitFor("Changes (1)");
+
+    tui.rclick(5, 5);
+    tui.waitFor("Stage Folder");
+    tui.press("enter");
+    tui.waitFor("Staged (1)");
+    const staged = tui.snapshot();
+
+    const { snapshots } = tui.run();
+    expect(snapshots[staged]).toContain("Staged (1)");
+    expect(gitStatus(dir)).toEqual(["A  src/work/changed.go"]);
   });
 });

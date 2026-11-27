@@ -22,12 +22,12 @@ func main() {
 	y := []int{1, 2, 3}
 }
 `
-	os.WriteFile(fp, []byte(content), 0644)
+	requireNoError(t, os.WriteFile(fp, []byte(content), 0644))
 	h.app.Settings.Editor.BracketPairColorization = true
 	h.app.EditorGroup.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketColorStyles = app.ResolveBracketColorStyles(nil)
-	h.app.EditorGroup.OpenFile(fp)
+	h.openFile(fp)
 	h.redraw()
 
 	h.assertContains("func main()")
@@ -111,12 +111,12 @@ func main() {
 	x := foo(1)
 }
 `
-	os.WriteFile(fp, []byte(content), 0644)
+	requireNoError(t, os.WriteFile(fp, []byte(content), 0644))
 	h.app.Settings.Editor.BracketPairColorization = true
 	h.app.EditorGroup.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketColorStyles = app.ResolveBracketColorStyles(nil)
-	h.app.EditorGroup.OpenFile(fp)
+	h.openFile(fp)
 	h.redraw()
 
 	cells, w, _ := h.screen.GetContents()
@@ -174,12 +174,12 @@ func TestBracketColorizationSkipsStrings(t *testing.T) {
 var s = "hello(world)"
 var x = (1 + 2)
 `
-	os.WriteFile(fp, []byte(content), 0644)
+	requireNoError(t, os.WriteFile(fp, []byte(content), 0644))
 	h.app.Settings.Editor.BracketPairColorization = true
 	h.app.EditorGroup.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketPairColorization = true
 	h.app.EditorGroup.Editor.BracketColorStyles = app.ResolveBracketColorStyles(nil)
-	h.app.EditorGroup.OpenFile(fp)
+	h.openFile(fp)
 	h.redraw()
 
 	cells, w, _ := h.screen.GetContents()

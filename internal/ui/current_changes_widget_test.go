@@ -127,17 +127,17 @@ func TestCurrentChangesSamePathBoundariesPreserveIndependentCollapseAndSelection
 	}
 }
 
-func currentChangesConflictTestFile(path, code string, stages []byte, oldLines, newLines []string) CommitDetailFile {
+func currentChangesConflictTestFile(path, code string, stages []string, oldLines, newLines []string) CommitDetailFile {
 	file := CommitDetailFile{
 		Status: "U", Path: path, Stage: CommitDetailStageConflict, Boundary: CommitDetailBoundaryConflictToWorktree,
-		ConflictCode: code, IndexStages: append([]byte(nil), stages...), Diff: diff.Parse(diff.Generate(oldLines, newLines, path)),
+		ConflictCode: code, ConflictSources: append([]string(nil), stages...), Diff: diff.Parse(diff.Generate(oldLines, newLines, path)),
 	}
 	return CommitDetailFileWithContent(file, oldLines, newLines)
 }
 
 func TestCurrentChangesConflictHeadingContentAndIdentity(t *testing.T) {
 	detail := NewCurrentChangesWidget("/repo", false)
-	file := currentChangesConflictTestFile("conflict.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"ours"})
+	file := currentChangesConflictTestFile("conflict.txt", "UD", []string{"1", "2"}, []string{"ours"}, []string{"ours"})
 	detail.SetCurrentChanges("1 conflict", []CommitDetailFile{file}, "")
 	detail.SetRect(Rect{W: 80, H: 8})
 	cells := makeGrid(80, 8)
@@ -154,7 +154,7 @@ func TestCurrentChangesConflictHeadingContentAndIdentity(t *testing.T) {
 
 	theirs := file
 	theirs.ConflictCode = "DU"
-	theirs.IndexStages = []byte{1, 3}
+	theirs.ConflictSources = []string{"1", "3"}
 	if CommitDetailContextKey(file) == CommitDetailContextKey(theirs) {
 		t.Fatal("conflict XY and index-stage identity collapsed to one context key")
 	}
@@ -162,8 +162,8 @@ func TestCurrentChangesConflictHeadingContentAndIdentity(t *testing.T) {
 
 func TestCurrentChangesConflictRefreshPreservesCollapseAndSelection(t *testing.T) {
 	detail := NewCurrentChangesWidget("/repo", false)
-	collapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"resolved"})
-	selected := currentChangesConflictTestFile("selected.txt", "DU", []byte{1, 3}, []string{"theirs"}, []string{"working"})
+	collapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []string{"1", "2"}, []string{"ours"}, []string{"resolved"})
+	selected := currentChangesConflictTestFile("selected.txt", "DU", []string{"1", "3"}, []string{"theirs"}, []string{"working"})
 	detail.SetCurrentChanges("2 conflicts", []CommitDetailFile{collapsed, selected}, "")
 	detail.collapsedFiles[0] = true
 	detail.rebuildRows()
@@ -173,8 +173,8 @@ func TestCurrentChangesConflictRefreshPreservesCollapseAndSelection(t *testing.T
 	}
 	selectDetailFileText(selectedView)
 
-	refreshedCollapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []byte{1, 2}, []string{"ours"}, []string{"resolved latest"})
-	refreshedSelected := currentChangesConflictTestFile("selected.txt", "DU", []byte{1, 3}, []string{"theirs"}, []string{"working latest"})
+	refreshedCollapsed := currentChangesConflictTestFile("collapsed.txt", "UD", []string{"1", "2"}, []string{"ours"}, []string{"resolved latest"})
+	refreshedSelected := currentChangesConflictTestFile("selected.txt", "DU", []string{"1", "3"}, []string{"theirs"}, []string{"working latest"})
 	detail.SetCurrentChanges("2 conflicts", []CommitDetailFile{refreshedCollapsed, refreshedSelected}, "")
 	if !detail.collapsedFiles[0] || detail.collapsedFiles[1] {
 		t.Fatalf("conflict collapse state = %v", detail.collapsedFiles)

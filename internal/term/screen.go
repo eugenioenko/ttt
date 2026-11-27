@@ -114,6 +114,7 @@ const (
 	StyleHide
 	StyleNote
 	StylePluginSelection
+	StyleIndentGuide
 	// styleTokenBase starts a block of MaxTokenStyles slots that a theme's
 	// tokenColors fill; see TokenStyle.
 	styleTokenBase
@@ -149,7 +150,9 @@ const (
 
 // Cell represents a single character cell on the screen.
 type Cell struct {
+	Link      Hyperlink
 	Ch        rune
+	Text      string // when non-empty, the complete grapheme starting with Ch
 	Style     Style
 	BgStyle   Style // when non-zero, background comes from this style instead of Style
 	UlStyle   Style // when non-zero, underline style+color comes from this style

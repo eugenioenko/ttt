@@ -1,7 +1,8 @@
 package clipboard
 
 import (
-	"bytes"
+	"cmp"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -10,7 +11,10 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 )
+
+const clipboardTimeout = time.Second
 
 var (
 	content   string
@@ -45,17 +49,21 @@ func Get() string {
 	return content
 }
 
+// Set has already retained a process-local copy; external backends are best-effort.
 func writeSystemClipboard(s string) {
 	// Only emit OSC 52 when a writer is configured — avoids leaking escape sequences
 	if oscWriter != nil {
 		encoded := base64.StdEncoding.EncodeToString([]byte(s))
-		fmt.Fprintf(oscWriter, "\033]52;c;%s\a", encoded)
+		_, _ = fmt.Fprintf(oscWriter, "\033]52;c;%s\a", encoded)
 	}
 
 	if name, args := findCopyCmd(); name != "" {
-		c := exec.Command(name, args...)
+		ctx, cancel := context.WithTimeout(context.Background(), clipboardTimeout)
+		defer cancel()
+		c := exec.CommandContext(ctx, name, args...)
+		c.WaitDelay = 100 * time.Millisecond
 		c.Stdin = strings.NewReader(s)
-		c.Run()
+		_ = c.Run()
 	}
 }
 
@@ -64,24 +72,51 @@ func readSystemClipboard() (string, bool) {
 	if name == "" {
 		return "", false
 	}
-	out, err := exec.Command(name, args...).Output()
-	if err != nil {
-		// A clipboard holding only an image has no text, but it was read:
-		// falling back to the process-local copy would paste stale text.
-		return "", holdsNonText(name)
+	ctx, cancel := context.WithTimeout(context.Background(), clipboardTimeout)
+	defer cancel()
+
+	if filepath.Base(name) == "wl-paste" {
+		types, err := pasteOutput(ctx, name, "--list-types")
+		if err != nil {
+			return "", false
+		}
+		offered := strings.TrimSpace(string(types))
+		// wl-paste --type text can select image/svg+xml.
+		mimeType := waylandTextType(offered)
+		if mimeType == "" {
+			return "", offered != ""
+		}
+		args = append(args, "--type", mimeType)
 	}
-	if len(out) == 0 {
+
+	out, err := pasteOutput(ctx, name, args...)
+	if err != nil || len(out) == 0 {
 		return "", false
 	}
 	return string(out), true
 }
 
-func holdsNonText(pasteCmd string) bool {
-	if filepath.Base(pasteCmd) != "wl-paste" {
-		return false
+func pasteOutput(ctx context.Context, name string, args ...string) ([]byte, error) {
+	c := exec.CommandContext(ctx, name, args...)
+	c.WaitDelay = 100 * time.Millisecond
+	return c.Output()
+}
+
+func waylandTextType(offered string) string {
+	var plain, other string
+	for line := range strings.SplitSeq(offered, "\n") {
+		mimeType := strings.TrimSpace(line)
+		mediaType, _, _ := strings.Cut(strings.ToLower(mimeType), ";")
+		switch {
+		case strings.EqualFold(mimeType, "text/plain;charset=utf-8"):
+			return mimeType
+		case mediaType == "text/plain":
+			plain = cmp.Or(plain, mimeType)
+		case strings.HasPrefix(mediaType, "text/"), mimeType == "UTF8_STRING", mimeType == "TEXT", mimeType == "STRING":
+			other = cmp.Or(other, mimeType)
+		}
 	}
-	types, err := exec.Command(pasteCmd, "--list-types").Output()
-	return err == nil && len(bytes.TrimSpace(types)) > 0
+	return cmp.Or(plain, other)
 }
 
 func findCopyCmd() (string, []string) {
@@ -110,7 +145,7 @@ func findPasteCmd() (string, []string) {
 	}
 	if os.Getenv("WAYLAND_DISPLAY") != "" {
 		if p, err := exec.LookPath("wl-paste"); err == nil {
-			return p, []string{"--no-newline", "--type", "text"}
+			return p, []string{"--no-newline"}
 		}
 	}
 	if os.Getenv("DISPLAY") != "" {

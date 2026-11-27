@@ -419,6 +419,94 @@ func (s *SelectWidget) notifyPointerCaptureInvalidated(invalidated bool) {
 	}
 }
 
+func (s *SelectWidget) PointerShapeAt(mx, my int) string {
+	if s.scrollbar.isDragging() {
+		return term.PointerDefault
+	}
+
+	if s.HasPopup() {
+		pr := s.PopupRect()
+		if pr.Contains(mx, my) {
+			w, h := pr.W, pr.H
+			listH := h - 2
+			if w <= 2 || listH <= 0 {
+				return term.PointerDefault
+			}
+			if mx == pr.X || mx == pr.X+w-1 || my == pr.Y || my == pr.Y+h-1 {
+				return term.PointerDefault
+			}
+			if s.scrollbar.interaction.geometry.hitTrack.Contains(mx, my) {
+				return term.PointerDefault
+			}
+			idx := s.scrollTop + (my - pr.Y - 1)
+			if idx >= 0 && idx < len(s.filtered) {
+				return term.PointerHand
+			}
+			return term.PointerDefault
+		}
+	}
+
+	if !s.rect.Contains(mx, my) {
+		return ""
+	}
+
+	if s.Config.Collapsible {
+		if !s.open {
+			return term.PointerHand
+		}
+		inputRect := s.input.GetRect()
+		if inputRect.W <= 0 && s.rect.W > 2 {
+			inputRect = Rect{X: s.rect.X, Y: s.rect.Y, W: s.rect.W - 2, H: 1}
+		}
+		if inputRect.Contains(mx, my) {
+			return term.PointerText
+		}
+		return term.PointerHand
+	}
+
+	// Non-collapsible inline list.
+	if s.scrollbar.interaction.geometry.hitTrack.Contains(mx, my) {
+		return term.PointerDefault
+	}
+
+	if s.Config.ShowDivider {
+		if my == s.rect.Y || my == s.rect.Y+2 {
+			return term.PointerDefault
+		}
+	}
+
+	inputRect := s.input.GetRect()
+	if inputRect.W <= 0 && s.rect.W > 2 {
+		inputY := s.rect.Y
+		if s.Config.ShowDivider {
+			inputY++
+		}
+		inputRect = Rect{X: s.rect.X, Y: inputY, W: s.rect.W - 2, H: 1}
+	}
+
+	if inputRect.Contains(mx, my) {
+		return term.PointerText
+	}
+	if my == inputRect.Y {
+		return term.PointerDefault
+	}
+
+	listStart := s.rect.Y + 1
+	if s.Config.ShowDivider {
+		listStart = s.rect.Y + 3
+	}
+
+	if my >= listStart && my < s.rect.Y+s.rect.H {
+		idx := s.scrollTop + (my - listStart)
+		if idx >= 0 && idx < len(s.filtered) {
+			return term.PointerHand
+		}
+		return term.PointerDefault
+	}
+
+	return term.PointerDefault
+}
+
 func (s *SelectWidget) handleKey(ev *tcell.EventKey) EventResult {
 	// A collapsed select opens on Up/Down/Enter before it starts navigating.
 	if s.Config.Collapsible && !s.open {

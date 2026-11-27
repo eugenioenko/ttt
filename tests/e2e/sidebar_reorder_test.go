@@ -33,7 +33,7 @@ func TestSidebarHeaderDragReordersAndPersists(t *testing.T) {
 	h.app.Root.HandleEvent(tcell.NewEventMouse(dropX, tabsY, tcell.ButtonNone, 0))
 	h.redraw()
 
-	want := []string{"changes", "explorer", "search", "outline"}
+	want := []string{"changes", "explorer", "search", "outline", "apps"}
 	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, want) {
 		t.Fatalf("panel order = %v, want %v", got, want)
 	}
@@ -45,7 +45,7 @@ func TestSidebarHeaderDragReordersAndPersists(t *testing.T) {
 	}
 
 	h.exec("sidebar.movePanelRight")
-	want = []string{"explorer", "changes", "search", "outline"}
+	want = []string{"explorer", "changes", "search", "outline", "apps"}
 	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, want) {
 		t.Fatalf("command panel order = %v, want %v", got, want)
 	}
@@ -149,7 +149,7 @@ func TestSidebarDuplicatePluginAddDuringDragCannotRetargetRelease(t *testing.T) 
 	defer h.stop()
 	original := newEmptyWidget()
 	replacement := newEmptyWidget()
-	h.app.Sidebar.SetPanelOrder([]string{"changes", "plugin.late", "explorer", "search", "outline"})
+	h.app.Sidebar.SetPanelOrder([]string{"changes", "plugin.late", "explorer", "search", "outline", "apps"})
 	h.app.Sidebar.AddPanel("plugin.late", "Late", original)
 	h.app.Sidebar.SetActivePanel("plugin.late")
 	h.redraw()
@@ -166,7 +166,7 @@ func TestSidebarDuplicatePluginAddDuringDragCannotRetargetRelease(t *testing.T) 
 	}
 	h.app.Sidebar.AddPanel("plugin.late", "Replacement", replacement)
 
-	wantWithPlugin := []string{"changes", "plugin.late", "explorer", "search", "outline"}
+	wantWithPlugin := []string{"changes", "plugin.late", "explorer", "search", "outline", "apps"}
 	if got := h.app.Sidebar.PanelIDs(); !slices.Equal(got, wantWithPlugin) {
 		t.Fatalf("duplicate add panel order = %v, want %v", got, wantWithPlugin)
 	}

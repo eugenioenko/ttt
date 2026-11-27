@@ -113,7 +113,7 @@ func TestAnnotationNotesKeepGitGutterMarkers(t *testing.T) {
 func TestDecorationNotesMergeAndIndentLikeTheirLine(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "\tfunc a() {\n}\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.Editor.SetRect(Rect{W: 40, H: 6})
 	g.Editor.Viewport.Width, g.Editor.Viewport.Height = 40, 6
 	g.SetDecorations("b", a, []Decoration{{StartLine: 0, EndLine: 0, Note: "from b", Style: term.StyleMuted}})
@@ -128,7 +128,7 @@ func TestDecorationNotesMergeAndIndentLikeTheirLine(t *testing.T) {
 func TestDecorationNotesFollowTheirLineIndent(t *testing.T) {
 	g, dir := newDecoratedGroup(t, map[string]string{"a.txt": "\tfunc a() {\n}\n"})
 	a := filepath.Join(dir, "a.txt")
-	openCommitted(g, a)
+	openCommitted(t, g, a)
 	g.Editor.SetRect(Rect{W: 40, H: 6})
 	g.Editor.Viewport.Width, g.Editor.Viewport.Height = 40, 6
 	g.SetDecorations("a", a, []Decoration{{StartLine: 0, EndLine: 0, Note: "from a", Style: term.StyleMuted}})

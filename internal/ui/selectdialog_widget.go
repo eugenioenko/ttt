@@ -7,8 +7,10 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -54,21 +56,25 @@ type SelectDialogWidget struct {
 	BaseWidget
 	Commands          []command.Command
 	Items             []PaletteItem
-	Input             *InputWidget
+	Input             *widgets.InputWidget
 	Selected          int
 	scrollOffset      int
 	inputX            int
 	inputY            int
 	mode              paletteMode
 	files             []PaletteFile
+	filesRequested    bool
+	filesLoading      bool
 	helpTopics        []PaletteItem
 	helpCommands      []PaletteItem
+	recentCommands    []string
 	activeHelpTopic   string
 	helpQuery         string
 	OnExecute         func(id string)
 	OnOpenFile        func(path string)
 	OnGoToLine        func(line int)
 	OnDismiss         func()
+	OnRequestFiles    func()
 	OnSelectionChange func(id string)
 	Borders           *term.BorderSet
 	Icons             string
@@ -87,24 +93,39 @@ func NewSelectDialogWidget(commands []command.Command) *SelectDialogWidget {
 		Commands: commands,
 	}
 	p.helpTopics, p.helpCommands = buildPaletteHelpItems(commands)
-	p.Input = NewInputWidget()
-	p.Input.Prefix = " "
+	p.Input = newPanelInput()
+	p.Input.Config.Prefix = " "
 	p.Input.SetText(">")
-	p.Input.OnChange = func(text string) {
+	p.Input.Config.OnChange = func(text string) {
 		p.filter()
 	}
 	p.filter()
 	return p
 }
 
+func (p *SelectDialogWidget) SetRecentCommands(ids []string) {
+	p.recentCommands = ids
+	if p.mode == paletteCommandMode {
+		p.filter()
+	}
+}
+
 func (p *SelectDialogWidget) SetFiles(files []PaletteFile) {
 	p.files = files
+	p.filesLoading = false
+	if p.mode == paletteFileMode {
+		p.filter()
+	}
 }
 
 func (p *SelectDialogWidget) Focusable() bool { return true }
 
+func (p *SelectDialogWidget) FocusedInput() *widgets.InputWidget {
+	return p.Input
+}
+
 func (p *SelectDialogWidget) CursorPosition() (int, int, bool) {
-	return p.Input.CursorX(p.inputX), p.inputY, true
+	return p.Input.CursorPosition()
 }
 
 func calculatePaletteWidth(screenWidth int) int {
@@ -127,6 +148,9 @@ func (p *SelectDialogWidget) calculateLayout(sw, sh int) selectDialogLayout {
 			chromeRows += 2
 		}
 		itemRows := len(p.Items)
+		if p.mode == paletteFileMode && p.filesLoading {
+			itemRows = 1
+		}
 		if p.mode == paletteHelpMode && p.helpQuery != "" && itemRows == 0 {
 			itemRows = 1
 		}
@@ -179,7 +203,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 
 	p.inputX = boxX + 1
 	p.inputY = boxY + 1
-	p.Input.Render(surface, p.inputX, p.inputY, boxW-2)
+	renderPanelInput(surface, p.Input, p.inputX, p.inputY, boxW-2)
 
 	if p.mode == paletteGoToLineMode {
 		p.visibleItems = layout.visibleItems
@@ -222,9 +246,12 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 		surface.ClearRect(boxX+1, y, contentRight-boxX-1, 1, style)
 		p.renderItemRow(surface, y, contentRight, item, style, idx == p.Selected)
 	}
+	if p.mode == paletteFileMode && p.filesLoading && visibleItems > 0 {
+		surface.DrawText(boxX+2, boxY+3, i18n.Text("general.loading"), contentRight-1, term.StyleMuted)
+	}
 	if p.mode == paletteHelpMode && p.helpQuery != "" && len(p.Items) == 0 && visibleItems > 0 {
 		y := boxY + 3
-		message := fmt.Sprintf("No help entries match %q", p.helpQuery)
+		message := i18n.Format("selectdialog.noHelpEntriesMatch", i18n.Args{"query": fmt.Sprintf("%q", p.helpQuery)})
 		surface.DrawText(boxX+2, y, message, contentRight-1, term.StyleMuted)
 	}
 
@@ -243,7 +270,7 @@ func (p *SelectDialogWidget) Render(surface Surface) {
 			description := p.Items[p.Selected].Description
 			surface.DrawText(boxX+2, detailY, description, boxX+boxW-2, term.StyleMuted)
 		} else if p.helpQuery != "" {
-			surface.DrawText(boxX+2, detailY, "Try > for all commands", boxX+boxW-2, term.StyleMuted)
+			surface.DrawText(boxX+2, detailY, i18n.Text("selectdialog.tryForAllCommands"), boxX+boxW-2, term.StyleMuted)
 		}
 	}
 }
@@ -308,6 +335,9 @@ func TruncateLeft(detail string, availW int) string {
 }
 
 func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
+	if result := handleInputDrag(ev, p.Input); result != EventIgnored {
+		return result
+	}
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		btn := mev.Buttons()
 		mx, my := mev.Position()
@@ -360,8 +390,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 			}
 
 			if my == p.inputY {
-				p.Input.HandleClick(mx, my)
-				return EventConsumed
+				return p.Input.HandleEvent(mev)
 			}
 
 			itemsStartY := p.boxY + 3
@@ -395,7 +424,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 	case tcell.KeyEnter:
 		if p.mode == paletteGoToLineMode {
 			if p.OnGoToLine != nil {
-				text := strings.TrimPrefix(p.Input.Text, ":")
+				text := strings.TrimPrefix(p.Input.Text(), ":")
 				if n, err := strconv.Atoi(text); err == nil {
 					if n < 1 {
 						n = 1
@@ -421,7 +450,7 @@ func (p *SelectDialogWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		p.notifySelectionChange()
 	default:
-		if kev.Key() == tcell.KeyRune && kev.Str() == "?" && p.mode == paletteCommandMode && p.Input.Text == ">" {
+		if kev.Key() == tcell.KeyRune && kev.Str() == "?" && p.mode == paletteCommandMode && p.Input.Text() == ">" {
 			p.Input.SetText("?")
 			return EventConsumed
 		}
@@ -473,7 +502,7 @@ func (p *SelectDialogWidget) notifySelectionChange() {
 }
 
 func (p *SelectDialogWidget) filter() {
-	text := p.Input.Text
+	text := p.Input.Text()
 	if strings.HasPrefix(text, ">") {
 		p.mode = paletteCommandMode
 		p.activeHelpTopic = ""
@@ -492,6 +521,11 @@ func (p *SelectDialogWidget) filter() {
 	} else {
 		p.mode = paletteFileMode
 		p.activeHelpTopic = ""
+		if !p.filesRequested && p.OnRequestFiles != nil {
+			p.filesRequested = true
+			p.filesLoading = true
+			p.OnRequestFiles()
+		}
 		p.filterFiles(text)
 	}
 	p.notifySelectionChange()
@@ -566,9 +600,9 @@ func filterPaletteHelpCandidates(query string, candidates []PaletteItem) []Palet
 func (p *SelectDialogWidget) filterCommands(query string) {
 	p.Items = nil
 	if query == "" {
-		for _, cmd := range p.Commands {
+		for _, cmd := range p.commandsRecentFirst() {
 			p.Items = append(p.Items, PaletteItem{
-				Label:  cmd.Title,
+				Label:  cmd.PaletteTitle(),
 				Detail: cmd.Shortcut,
 				ID:     cmd.ID,
 			})
@@ -581,6 +615,9 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 		var matches []scored
 		for _, cmd := range p.Commands {
 			bestOk, bestScore := fuzzyMatch(query, cmd.Title)
+			if ok, score := fuzzyMatch(query, cmd.PaletteTitle()); ok && (!bestOk || score > bestScore) {
+				bestOk, bestScore = true, score
+			}
 			for _, kw := range cmd.Keywords {
 				if ok, score := fuzzyMatch(query, kw); ok {
 					penalized := score / 2
@@ -593,7 +630,7 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 			if bestOk {
 				matches = append(matches, scored{
 					item: PaletteItem{
-						Label:  cmd.Title,
+						Label:  cmd.PaletteTitle(),
 						Detail: cmd.Shortcut,
 						ID:     cmd.ID,
 					},
@@ -612,8 +649,40 @@ func (p *SelectDialogWidget) filterCommands(query string) {
 	p.scrollOffset = 0
 }
 
+func (p *SelectDialogWidget) commandsRecentFirst() []command.Command {
+	if len(p.recentCommands) == 0 {
+		return p.Commands
+	}
+	ordered := make([]command.Command, 0, len(p.Commands))
+	recent := make(map[string]bool, len(p.recentCommands))
+	for _, id := range p.recentCommands {
+		if recent[id] {
+			continue
+		}
+		for _, cmd := range p.Commands {
+			if cmd.ID == id {
+				ordered = append(ordered, cmd)
+				recent[id] = true
+				break
+			}
+		}
+	}
+	for _, cmd := range p.Commands {
+		if !recent[cmd.ID] {
+			ordered = append(ordered, cmd)
+		}
+	}
+	return ordered
+}
+
 func (p *SelectDialogWidget) filterFiles(query string) {
 	p.Items = fuzzyFilterFiles(p.files, query, 100)
 	p.Selected = 0
 	p.scrollOffset = 0
+}
+
+func (p *SelectDialogWidget) CancelPointerCapture() bool { return cancelInputDrags(p.Input) }
+
+func (p *SelectDialogWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(p.Input) || p.scrollbar.IsDragging()
 }

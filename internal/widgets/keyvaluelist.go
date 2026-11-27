@@ -39,6 +39,10 @@ func (w *WrappingKeyValueListWidget) HeightForWidth(width int) int {
 	return w.rowCount(width-w.BoxOverheadW()) + w.BoxOverheadH()
 }
 
+func (w *WrappingKeyValueListWidget) HeightAtWidth(width int) int {
+	return w.HeightForWidth(width)
+}
+
 func (kv *KeyValueListWidget) Height() int {
 	if kv.wrap && kv.lastW > 0 {
 		return kv.rowCount(kv.lastW) + kv.BoxOverheadH()

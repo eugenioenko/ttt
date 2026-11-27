@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,7 +21,9 @@ import (
 
 var (
 	jobPidRe = regexp.MustCompile(`JOBPID=(\d+)`)
-	promptRe = regexp.MustCompile(`[$#] $`)
+	// The prompt is back after the job started: closing now lands where bash
+	// alone can lose the hangup (#1114).
+	jobPromptRe = regexp.MustCompile(`JOBPID=(\d+)\r?\n[^\n]*[$#] $`)
 )
 
 type delayedReadPty struct {
@@ -94,9 +97,9 @@ func TestExitKeepsDrainingWhileReaderMakesProgress(t *testing.T) {
 	}
 }
 
-// startShellJob runs cmdline in an interactive shell; cmdline must print
-// JOBPID=<pid> once the job is ready to be hung up.
-func startShellJob(t *testing.T, shell, cmdline string) (*Terminal, int) {
+// startShellJob runs cmdline in an interactive shell and returns once the
+// output matches ready, whose first group is the job's pid.
+func startShellJob(t *testing.T, shell, cmdline string, ready *regexp.Regexp) (*Terminal, int) {
 	t.Helper()
 	path, err := exec.LookPath(shell)
 	if err != nil {
@@ -106,21 +109,30 @@ func startShellJob(t *testing.T, shell, cmdline string) (*Terminal, int) {
 	if err != nil {
 		t.Fatalf("New() error: %v", err)
 	}
+	updated := make(chan struct{}, 1)
+	term.OnUpdate = func() {
+		term.AckUpdate()
+		select {
+		case updated <- struct{}{}:
+		default:
+		}
+	}
 	term.Run()
 	term.WriteString(cmdline + "\n")
 
-	deadline := time.Now().Add(5 * time.Second)
+	timeout := time.After(5 * time.Second)
 	for {
-		if m := jobPidRe.FindSubmatch(term.RawTail()); m != nil {
+		if m := ready.FindSubmatch(term.RawTail()); m != nil {
 			pid, _ := strconv.Atoi(string(m[1]))
 			t.Cleanup(func() { _ = syscall.Kill(pid, syscall.SIGKILL) })
 			return term, pid
 		}
-		if time.Now().After(deadline) {
+		select {
+		case <-updated:
+		case <-timeout:
 			term.Close()
 			t.Fatalf("background job never started; output: %q", term.RawTail())
 		}
-		time.Sleep(10 * time.Millisecond)
 	}
 }
 
@@ -157,7 +169,9 @@ func closeWithin(t *testing.T, term *Terminal, limit time.Duration) time.Duratio
 }
 
 func TestCloseHangsUpBackgroundJobs(t *testing.T) {
-	assertCloseHangsUpJob(t)
+	for range 20 {
+		assertCloseHangsUpJob(t)
+	}
 }
 
 func TestCloseLetsProgramHandlePtyHangup(t *testing.T) {
@@ -270,42 +284,13 @@ func signalStatus(pid int) string {
 	return strings.Join(fields, ", ")
 }
 
-// Close loses the hangup if it lands before bash is reading at its prompt
-// again, or before the job has exec'd and dropped bash's signal handlers
-// (#1114). Wait for both.
-func waitForHangupReady(t *testing.T, term *Terminal, pid int, comm string) {
-	t.Helper()
-	marker := "JOBPID=" + strconv.Itoa(pid)
-	deadline := time.Now().Add(5 * time.Second)
-	for {
-		tail := string(term.RawTail())
-		atPrompt := false
-		if i := strings.LastIndex(tail, marker); i >= 0 {
-			atPrompt = promptRe.MatchString(tail[i:])
-		}
-		if atPrompt && procComm(pid, comm) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("shell never settled with job %d running %s; output: %q", pid, comm, tail)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-}
-
-func procComm(pid int, comm string) bool {
-	got, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/comm")
-	return err == nil && strings.TrimSpace(string(got)) == comm
-}
-
 func assertCloseHangsUpJob(t *testing.T) {
 	t.Helper()
 	if _, err := os.Stat("/proc/self"); err != nil {
-		t.Skipf("no procfs; cannot observe the job exec: %v", err)
+		t.Skipf("no procfs: %v", err)
 	}
-	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!")
+	term, pid := startShellJob(t, "bash", "sleep 300 & echo JOBPID=$!", jobPromptRe)
 	t.Cleanup(term.Close)
-	waitForHangupReady(t, term, pid, "sleep")
 	before := "self: " + signalStatus(os.Getpid()) + "\nshell: " + signalStatus(term.cmd.Process.Pid) + "\njob: " + signalStatus(pid)
 	elapsed := closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
@@ -324,7 +309,7 @@ func assertCloseHangsUpJob(t *testing.T) {
 }
 
 func TestCloseIsBoundedWhenJobIgnoresHangup(t *testing.T) {
-	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
+	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`, jobPidRe)
 
 	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
 
@@ -340,7 +325,7 @@ func TestCloseIsBoundedWhenJobIgnoresHangup(t *testing.T) {
 }
 
 func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
-	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`)
+	term, pid := startShellJob(t, "sh", `sh -c 'trap "" HUP; echo JOBPID=$$; exec sleep 300' &`, jobPidRe)
 	defer term.Close()
 	exited := make(chan struct{})
 	term.cbMu.Lock()
@@ -361,5 +346,77 @@ func TestOnExitIsBoundedWhenJobKeepsSlaveOpen(t *testing.T) {
 	case <-term.done:
 	case <-time.After(5 * time.Second):
 		t.Fatal("readLoop did not finish after the last slave holder exited")
+	}
+}
+
+func TestBashIntegrationMarksUserPrompt(t *testing.T) {
+	bash, err := exec.LookPath("bash")
+	if err != nil {
+		t.Skip("bash not available")
+	}
+	home := t.TempDir()
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	rc := "PS1='first> '\nPROMPT_COMMAND='PS1=\"rebuilt> \"'\n"
+	if err := os.WriteFile(home+"/.bashrc", []byte(rc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	shell, args := IntegrateShell(bash, nil)
+	term, err := New(shell, 80, 24, 0, []string{"HOME=" + home, "HISTFILE=/dev/null"}, home, args...)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	term.Run()
+	waitRaw := func(want string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for !strings.Contains(string(term.RawTail()), want) {
+			if time.Now().After(deadline) {
+				t.Fatalf("output never contained %q: %q", want, term.RawTail())
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	waitRaw("\x1b]133;A\arebuilt> ")
+	term.WriteString("echo integrated\r")
+	waitRaw("\x1b]133;C\aintegrated")
+}
+
+// dash never forwards SIGHUP to its jobs, so only Close itself can hang them up.
+func TestCloseHangsUpJobsTheShellDoesNotForwardHangupTo(t *testing.T) {
+	if runtime.GOOS != "linux" {
+		t.Skip("session jobs are found through /proc")
+	}
+	term, pid := startShellJob(t, "dash", "sleep 300 & echo JOBPID=$!", jobPidRe)
+	closeWithin(t, term, 2*hangupGrace+readLoopGrace+time.Second)
+
+	deadline := time.Now().Add(2 * time.Second)
+	for !processGone(pid) {
+		if time.Now().After(deadline) {
+			t.Fatalf("background job %d survived Close() (shell: %v)", pid, term.cmd.ProcessState)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
+func TestChildEnvironmentAndPID(t *testing.T) {
+	t.Setenv("TTT_REMOVED", "inherited")
+	t.Setenv("TTT_EMPTY", "inherited")
+	term, err := New("/bin/sh", 80, 24, 0, []string{"TTT_REMOVED=override", "TTT_REMOVED", "TTT_EMPTY="}, "", "-c", `printf '%s:%s:%s:%s' "$$" "${TTT_REMOVED-unset}" "${TTT_EMPTY-unset}" "$TERM"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	want := strconv.Itoa(term.PID()) + ":unset::xterm-256color"
+	term.Run()
+	select {
+	case got := <-exited:
+		if got != want {
+			t.Fatalf("child reported %q, want %q", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("child did not exit")
 	}
 }

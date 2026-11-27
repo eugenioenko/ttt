@@ -1,7 +1,3 @@
-// Repro tests for confirmed bugs from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Each test asserts the CORRECT behavior and is declared with `it.fails`,
-// so it passes while the bug exists and goes red the moment the bug is
-// fixed — at that point remove the `.fails` marker and the audit entry.
 import { describe, it, expect, afterEach } from "vitest";
 import * as tui from "./tui.js";
 import { createTempDir, createTempFile, cleanupDir, readFile } from "./helpers.js";
@@ -17,7 +13,7 @@ afterEach(() => {
 });
 
 describe("BUG-026: fold reattaches to an unrelated block after edits above", () => {
-  it.fails("inserting a line above never collapses a region the user did not fold", () => {
+  it("inserting a line above never collapses a region the user did not fold", () => {
     dir = createTempDir();
     const file = createTempFile(dir, "reattach.go", GO_SAMPLE);
 
@@ -28,20 +24,26 @@ describe("BUG-026: fold reattaches to an unrelated block after edits above", () 
     tui.type("4");
     tui.press("enter");
     tui.pressChord("ctrl+k", "["); // fold the if-block
+    const folded = tui.snapshot();
     tui.exec("Go to Line");
     tui.type("1");
     tui.press("enter");
     tui.press("home");
     tui.press("enter"); // insert a blank line at the top
-    const s = tui.snapshot();
+    const inserted = tui.snapshot();
+    tui.press("ctrl+z");
+    const undone = tui.snapshot();
+    tui.press("ctrl+y");
+    const redone = tui.snapshot();
     const { snapshots } = tui.run();
 
-    // Correct: the fold either follows the if-block or is cleared — but
-    // func outer()'s body must NEVER become collapsed (the user never
-    // folded it). Buggy: SetRanges matches collapsed state by raw
-    // StartLine equality, so the shifted outer function inherits the
-    // inner block's fold and silently hides different code.
-    expect(snapshots[s]).not.toContain("func outer() { ⋯");
+    for (const s of [folded, inserted, undone, redone]) {
+      expect(snapshots[s]).not.toContain("func outer() { ⋯");
+      expect(snapshots[s]).toContain("if true { ⋯");
+    }
+    expect(snapshots[inserted]).toMatch(/5›\s+if true/);
+    expect(snapshots[undone]).toMatch(/4›\s+if true/);
+    expect(snapshots[redone]).toMatch(/5›\s+if true/);
   });
 });
 

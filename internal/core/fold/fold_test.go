@@ -318,6 +318,24 @@ func TestSetRangesPreservesCollapsed(t *testing.T) {
 	}
 }
 
+func TestShiftCollapsed(t *testing.T) {
+	s := NewState()
+	s.SetRanges([]Range{{StartLine: 0, EndLine: 2}, {StartLine: 3, EndLine: 5}, {StartLine: 6, EndLine: 8}})
+	s.CollapseAll()
+
+	s.ShiftCollapsed(3, 0, 1)
+	s.SetRanges([]Range{{StartLine: 0, EndLine: 2}, {StartLine: 4, EndLine: 6}, {StartLine: 7, EndLine: 9}})
+	if !s.IsCollapsed(0) || !s.IsCollapsed(4) || !s.IsCollapsed(7) || s.IsCollapsed(3) {
+		t.Fatalf("collapsed headers after insertion = %v, want 0, 4, 7", s.collapsed)
+	}
+
+	s.ShiftCollapsed(4, 3, 1)
+	s.SetRanges([]Range{{StartLine: 0, EndLine: 2}, {StartLine: 4, EndLine: 8}, {StartLine: 5, EndLine: 7}})
+	if !s.IsCollapsed(0) || !s.IsCollapsed(5) || s.IsCollapsed(4) {
+		t.Fatalf("collapsed headers after replacing a folded block = %v, want 0, 5", s.collapsed)
+	}
+}
+
 func TestFoldAt(t *testing.T) {
 	s := NewState()
 	s.SetRanges([]Range{{StartLine: 3, EndLine: 6}})

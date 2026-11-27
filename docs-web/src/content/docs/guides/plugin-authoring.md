@@ -16,7 +16,7 @@ Plugins live in one of two locations:
 
 If a plugin with the same name exists in both locations, the global one takes precedence.
 
-Each plugin is a directory containing a manifest file and one or more Lua source files:
+Each plugin is a directory containing a manifest file and Lua source files or declarative contributions:
 
 ```
 ~/.config/ttt/plugins/my-plugin/
@@ -50,11 +50,12 @@ Every plugin requires a `plugin.ttt.json` manifest file at the root of its direc
 | `description` | string | no       | Shown in the plugin list dialog.                    |
 | `version`     | string | no       | Semver version string.                              |
 | `author`      | string | no       | Plugin author name.                                 |
-| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars` or `themes`. |
+| `entry`       | string | yes      | Path to the Lua entry point, relative to the plugin directory. Optional when the plugin declares `grammars`, `themes`, or `languages`. |
 | `api`         | number | no       | Plugin API version the plugin targets. Defaults to `1` when omitted. The editor refuses to load plugins that target a newer API than it supports. |
 | `permissions` | object | no       | Object declaring required permissions (see [Permissions Reference](#permissions-reference)). |
 | `grammars`    | array  | no       | TextMate grammars the plugin contributes (see [Grammar plugins](#grammar-plugins)). |
 | `themes`      | array  | no       | Theme JSON files the plugin contributes (see [Theme plugins](#theme-plugins)). |
+| `languages`   | array  | no       | Interface translation catalogs (see [Language packs](#language-packs)). |
 
 ### Minimal Example
 
@@ -104,6 +105,41 @@ The approval dialog lists every theme. After approval, ttt copies the files into
 
 Updating or reloading replaces the plugin's theme files, removes contributions dropped from its manifest, and refreshes an active theme immediately. Invalid source files leave the previously installed themes intact. Disabling keeps the installed themes available. Uninstalling removes them; if the active theme was removed, ttt switches to its default colors and saves that selection.
 
+### Language packs
+
+To install a pack or change the interface language, see the [Languages guide](/guides/languages/).
+
+A language pack translates the core editor interface. It needs no Lua entry point or permissions:
+
+```json
+{
+  "name": "ttt-i18n-es",
+  "displayName": "Español Language Pack",
+  "version": "0.1.0",
+  "languages": [{
+    "locale": "es",
+    "name": "Español",
+    "path": "messages.json",
+    "sourceCommit": "e2c249393ab523cea4a5229640cd0c8ba641e13c",
+    "tttVersion": "1.12.0"
+  }]
+}
+```
+
+`locale` is a BCP 47 language tag, such as `es`, `pt-BR`, or `zh-TW`; `name` is its native display name. Each locale can have one installed provider. English (`en`) is built in. `path` points to a flat JSON string map using the keys from `internal/i18n/en.json`, for example `{"general.save": "Guardar"}`. Paths are relative to the plugin directory and cannot escape it, including through symlinks. Catalog files are limited to 2 MiB each. Preserve named placeholders and their occurrence counts exactly; icons belong in the editor's icon definitions.
+
+The optional `sourceCommit` identifies the full 40-character commit ID in `eugenioenko/ttt` whose `internal/i18n/en.json` was used for translation. During managed plugin installation or update, the host downloads that English catalog into `~/.config/ttt/languages/sources/<commit>.json`, or `$TTT_CONFIG_DIR/languages/sources/<commit>.json` when `TTT_CONFIG_DIR` is set. Installed languages referencing the same commit share one cached English file, which remains available offline. Initial installation fails if a required source cannot be obtained; a failed automatic update keeps the previous language cache.
+
+Copying a plugin directory manually does not download its English source. If its manifest declares `sourceCommit`, download `https://raw.githubusercontent.com/eugenioenko/ttt/<commit>/internal/i18n/en.json` into the configured source cache described above before starting ttt, replacing `<commit>` with the manifest's `sourceCommit`. If that file is missing or invalid, ttt logs an error and does not install the language contribution. A pack without `sourceCommit` does not need this file. Installing through the Plugins panel prepares any required source automatically.
+
+When loading a translation, ttt compares the original English value with its embedded English value. Changed or missing source values fall back to English per message. Missing, empty, unknown, or invalid-placeholder translations also fall back individually. Duplicate keys or malformed JSON reject a file and leave the previous installation intact. Without `sourceCommit`, missing-message and placeholder validation still apply.
+
+After approval, ttt caches the files under `~/.config/ttt/languages/plugins/<plugin-name>/`. Installing a pack adds it to **Change Display Language** and **Settings → General → Display language** without selecting it. Selection takes effect after restarting. Disabling the plugin keeps the cached language available; uninstalling removes it and selects English if necessary. Updating or reloading replaces the bundled contributions.
+
+`tttVersion` identifies the editor release the catalog targets, separately from the plugin's `version`. **Update languages on upgrade** (`language.autoUpdate`) defaults to on. When a newer ttt version starts, it checks installed packs from public GitHub repositories for a catalog targeting that version or later. The check runs in the background, downloads the manifest and JSON files from one pinned commit, and replaces the cache only after validation. It never updates or executes Lua code. Failed or unavailable updates keep the cached language; an updated active language takes effect after restarting. Versions without release numbers, such as `dev`, skip this check. Turn the setting off to manage updates manually with **Plugins: Update**.
+
+The [ttt-plugins language packs](https://github.com/eugenioenko/ttt-plugins/tree/main/i18n) include common-language packs and a local Codex CLI script that compares one shared English snapshot and translates only added or changed messages. Use `make languages` to generate and `make languages-check` to validate. Per-language ignore lists and `--ignore-keys` preserve selected translations even when their English text changes. These ignored keys are skipped during generation, retaining their existing translations as approved against the new English source. Runtime loading does not read ignore lists; placeholder validation still applies. Third-party plugin UI copy is owned by each plugin and is not translated by these core catalogs.
+
 ### Grammar plugins
 
 A plugin can add syntax highlighting for a language by shipping a TextMate grammar in JSON format. A plugin that only contributes grammars needs no Lua code and no permissions:
@@ -142,8 +178,8 @@ A grammar whose file types match a built-in language replaces it, and other gram
 
 ### Loading
 
-1. On startup, ttt scans `~/.config/ttt/plugins/` and `<workspace-root>/plugins/` for directories containing `plugin.ttt.json`.
-2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`.
+1. On startup, ttt scans `~/.config/ttt/plugins/`, `<workspace-root>/plugins/`, and the optional `plugins.systemDir`, in that order, for directories containing `plugin.ttt.json`.
+2. For each plugin, the manifest is parsed and permissions are compared against the user's stored approvals in `~/.config/ttt/plugins.ttt.json`. System plugins can also inherit administrator approvals from `<plugins.systemDir>/plugins.ttt.json`; see [system-wide installation and approval](/guides/plugins/#system-wide-installation-and-approval). Disabling remains per user.
 3. If the plugin has been approved and its permissions haven't changed, it loads immediately: a sandboxed Lua VM is created, the entry file is executed, and `ttt.register()` wires up the panels.
 4. If the plugin is new or its permissions have changed since approval, an approval dialog appears showing the requested permissions. The user can Allow or Cancel.
 
@@ -198,10 +234,30 @@ Sidebar panels appear in the left sidebar alongside the file explorer. Requires 
 | Field       | Type     | Required | Description                                                             |
 |-------------|----------|----------|-------------------------------------------------------------------------|
 | `title`     | string   | yes      | Displayed as the panel's tab label.                                     |
+| `icon`      | string or table | no | Tab icon for when `sidebar.tabStyle` is `"label-icon"` or `"icon"`. See [Sidebar icons](#sidebar-icons). |
 | `render`    | function | yes      | Called each render frame. Receives a [panel proxy](#widget-api) object. |
 | `on_event`  | function | no       | Fallback handler for key/mouse events not consumed by widgets.          |
 | `actions`   | table    | no       | Array of menu entries for the panel's "..." header menu.                |
 | `on_action` | function | no       | Callback when a header menu action is selected. Receives the command string. |
+
+#### Sidebar icons
+
+Give both forms so the tab suits the user's `appearance.icons` setting. Each must be one character; Lua 5.1 has no `\u` escape, so paste the glyph or write its UTF-8 bytes:
+
+```lua
+sidebar = {
+  title = "Todo",
+  icon = { plain = "T", nerd = "\238\171\176" },
+  render = function(panel) end,
+}
+```
+
+| `appearance.icons` | `{ plain, nerd }` | `{ plain }` | `{ nerd }` | `"T"` (string) | no icon |
+|--------------------|-------------------|-------------|------------|----------------|---------|
+| `nerd-font`        | nerd              | plain       | nerd       | `T`            | title   |
+| `none`             | plain             | plain       | title      | `T`            | title   |
+
+The tab shows only its title when the plugin gives no icon, or none for the current mode. An invalid value is ignored with a warning in the Output panel, and the plugin still loads. A string is used in both modes, so don't pass a Nerd Font glyph as one: it appears as a box without the font.
 
 The `actions` array defines entries for the sidebar panel's header menu (the "..." button). Each entry uses the [menu entry format](#menu-entry-format):
 
@@ -237,6 +293,8 @@ Bottom panels appear in the bottom panel alongside the terminal. Requires the `p
 ### Commands
 
 Plugins can register commands that appear in the command palette. Requires the `commands` permission.
+
+The palette automatically displays commands as `Plugin Name: Command Title`, using the manifest `displayName` or the registered plugin name. Existing prefixes using a colon, dash, or pipe (ignoring case and surrounding whitespace) are preserved. Command IDs and registered titles remain unchanged; palette search matches both the display title and original title.
 
 Each command entry is a table with:
 
@@ -486,7 +544,7 @@ While the command line is open it consumes **all** keys. In particular, a plugin
 
 #### `ttt.command_line.show(config)`
 
-Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another overlay (a dialog, the command palette, a menu) is up.
+Open the command line and move focus to it. If one is already open, it is replaced rather than stacked. The call is a no-op while another modal overlay (a dialog, the command palette, a menu) is up. Non-modal Find and Replace bars remain open underneath the command line.
 
 | Field       | Type     | Description                                                        |
 |-------------|----------|--------------------------------------------------------------------|
@@ -686,6 +744,11 @@ local id, err = term.spawn{
 }
 if not id then error(err) end
 
+-- Or open it as an editor tab, here a markdown editor on the active file
+-- (ttt.editor requires editor.read). The tab is titled after label, or the program.
+local editor = require("ttt.editor")
+term.spawn{ shell = "edamame", args = {editor.file_path()}, location = "editor" }
+
 -- 2. Send input to the terminal (requires terminal.control)
 term.send(id, "Review the staged diff\n")   -- writes to PTY stdin; trailing newline acts as Enter
 
@@ -700,11 +763,11 @@ end
 
 -- 5. List all open terminal tabs (requires terminal.read)
 for _, t in ipairs(term.list()) do
-  ttt.log(string.format("Tab %s [%s] %dx%d", t.id, t.label, t.cols, t.rows))
+  ttt.log(string.format("Tab %s [%s] in %s %dx%d", t.id, t.label, t.location, t.cols, t.rows))
 end
 
 -- 6. Focus the terminal tab (requires terminal.control)
-term.focus(id)                              -- reveals the bottom panel and selects this tab
+term.focus(id)                              -- reveals the panel or editor tab and focuses it
 
 -- 7. Close the terminal tab (requires terminal.control)
 local ok, err = term.close(id)              -- terminates child process and removes tab
@@ -714,13 +777,17 @@ local ok, err = term.close(id)              -- terminates child process and remo
 
 | Function | Permission | Description |
 |---|---|---|
-| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string, up to 2 characters displayed in tab strip), and `env` (map of `KEY = "val"` or array of `"KEY=val"` strings). Returns `id` (string) on success, or `nil, err`. |
+| `term.spawn(spec)` | `terminal.control` | Spawns a new terminal tab running the specified program. `spec` is a table containing `shell` (string), `args` (array of strings), `cwd` (string), `label` (string; the panel's tab strip shows up to 2 characters, an editor tab shows all of it), `env` (map of `KEY = "val"` or array of `"KEY=val"` strings), and `location` (`"panel"`, the default, for a terminal panel tab, or `"editor"` for an editor tab titled `label` or the program name). Returns `id` (string) on success, or `nil, err`. |
 | `term.send(id, text)` | `terminal.control` | Writes input string to the terminal's PTY. Pass a trailing `\n` or `\r` to submit commands. Returns `true` on success, or `nil, err`. |
-| `term.focus(id)` | `terminal.control` | Reveals the bottom panel (if hidden) and switches active tab focus to the specified terminal. Returns `true` on success, or `nil, err`. |
-| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes the tab from the terminal panel. Returns `true` on success, or `nil, err`. |
+| `term.focus(id)` | `terminal.control` | Selects the terminal's tab and focuses it, revealing the bottom panel first for a panel terminal. Returns `true` on success, or `nil, err`. |
+| `term.close(id)` | `terminal.control` | Terminates the terminal child process, closes the PTY, and removes its tab (from the terminal panel or the editor). Returns `true` on success, or `nil, err`. |
 | `term.read(id, [max_bytes])` | `terminal.read` | Returns the retained raw PTY stream output (including ANSI escape sequences and command echo) up to `max_bytes` (capped at 64 KB; passing `0` or omitting returns all retained bytes). Returns `string` on success, or `nil, err`. |
 | `term.screen(id)` | `terminal.read` | Returns the current visible screen content as plain text lines separated by `\n` with trailing blanks trimmed. Automatically selects the active buffer (including alternate screen buffer when full-screen TUIs like vim or agents run). Contains no ANSI escape codes, making it ideal for regex pattern matching. Returns `string` on success, or `nil, err`. |
-| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.list()` | `terminal.read` | Returns an array of tables describing all open terminal tabs: `{ { id = string, label = string, location = "panel" \| "editor", cols = number, rows = number }, … }`. Returns an empty table if none are open. |
+| `term.request_palette()` | `terminal.palette` | Starts a fresh asynchronous serial capture of OSC 10/11/12/17 and OSC 4 indices 0–15. Returns `true`; requests during a capture coalesce into one additional capture after it finishes. A later call after completion starts a fresh capture, allowing plugin reload to reflect changed terminal colors. |
+| `term.palette()` | `terminal.palette` | Reads `{ status = "pending" \| "unavailable" \| "partial" \| "complete", colors = { ["10"] = color, ["11"] = color, ["4;0"] = color, … } }` without starting or restarting capture. No polling or terminal query occurs from reads. Each of the 20 serial queries has a 350 ms timeout, so an unresponsive terminal can take up to about 7 seconds to settle. Missing replies do not erase colors already captured. OSC replies have no request ID, so an unusually late reply may be mistaken for a later query of the same color. Cancellation stops further queries on shutdown, but cannot interrupt an OS-level TTY write already blocked; that goroutine may outlive shutdown until the write returns. This permission grants access only to captured color values, not terminal history or PTY output. |
+
+During palette queries, a lone Escape is held for at most 20 ms before reaching tcell's normal key parser, provided no partial reply is already buffered. Escape following a partial matching reply is ambiguous with the start of its terminator: it can remain buffered through the query timeout and the subsequent 350 ms recovery window, and may combine with the next key. If a reply is truncated, TTT suppresses its remaining bytes for at most another 350 ms after the query timeout, or until a terminator or a new non-terminating Escape sequence arrives. This bounds keyboard suppression when the terminal never finishes a reply. Text typed during that recovery window can be indistinguishable from a reply tail; tails arriving after recovery may instead reach the normal input parser.
 
 #### Raw Tail vs. Screen Text
 
@@ -748,7 +815,7 @@ Open a modal dialog built with the same widgets as plugin panels. No special per
 | `on_event` | function | none | Fallback event handler. |
 | `on_close` | function | none | Called after Escape or `close_dialog`, with focus restored. Not called during plugin teardown. |
 
-Returns `true` when opened, or `false` if another overlay is already open or the host is not wired. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
+Returns `true` when opened, or `false` if another modal overlay is already open or the host is not wired. Non-modal Find and Replace bars do not block opening the dialog and remain open when it closes. Escape closes the dialog. `close_dialog` closes only the calling plugin's dialog. Disabling, reloading, or uninstalling the plugin also closes it. An input with `autofocus = true` receives keyboard focus on opening; Tab and Shift+Tab navigate its widgets.
 
 ```lua
 local message = ""
@@ -866,15 +933,16 @@ local ok, err = fs.write(state_file, json.encode(state))
 
 Note: the plugin directory is a git clone that `Plugins: Update` pulls into, and it is deleted on uninstall — keep only regenerable state there.
 
-### `ttt.platform()` / `ttt.arch()` / `ttt.version()`
+### `ttt.platform()` / `ttt.arch()` / `ttt.version()` / `ttt.executable_path()`
 
-Return the host OS, CPU architecture, and running ttt version. No permission required.
+Return the host OS, CPU architecture, running ttt version, and the absolute path of the running ttt binary. No permission required.
 
 | Function          | Returns                                                                 |
 |-------------------|--------------------------------------------------------------------------|
 | `ttt.platform()`  | Go `GOOS` value: `"linux"`, `"darwin"`, or `"windows"`.                 |
 | `ttt.arch()`      | Go `GOARCH` value, e.g. `"amd64"`, `"arm64"`.                           |
 | `ttt.version()`   | ttt's version string, e.g. `"1.2.3"` (`"dev"` for unreleased builds).   |
+| `ttt.executable_path()` | Absolute path of the running binary, or `nil, err`. On Linux symlinks are already resolved, so a package-manager symlink yields its versioned target. |
 
 ```lua
 local ttt = require("ttt")
@@ -965,6 +1033,8 @@ Create the debounced function once (at load time, or stored on your state), not 
 
 Register a function that runs once when the plugin is installed (from the Plugins panel or **Plugins: Install from URL**). Use this for one-time setup like writing default settings. No permission required to register the hook; whatever the callback does is still permission-checked.
 
+If the callback raises an error, the install fails: the plugin is not loaded, and a fresh install is removed again. When the hook runs on re-approval of an already installed plugin, its previous approval is kept, so the next startup asks again and reruns the hook.
+
 ```lua
 local ttt = require("ttt")
 local settings = require("ttt.settings")
@@ -977,6 +1047,8 @@ end)
 ### `ttt.on_uninstall(callback)`
 
 Register a cleanup function that runs when the plugin is uninstalled. Use this to remove settings, files, or other state the plugin created during its lifetime. No permission required. Tabs, drawers, panels, status items, diagnostics and decorations are closed or cleared after the callback returns, so there's no need to clean those up here.
+
+If the callback raises an error, the plugin stays installed and the user is asked whether to remove it anyway. Raise an error when cleanup did not finish, so files the plugin created outside its directory are not orphaned silently.
 
 ```lua
 local ttt = require("ttt")
@@ -1261,6 +1333,7 @@ panel:tree({
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 | `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `active` | string | `nil` | `id` of the item to mark as current, like the Explorer's open file. It stays highlighted when the widget is not focused, unlike the keyboard selection, which only shows while focused. Omit it to mark nothing. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 **Keyboard navigation:** When focused, Up/Down arrows move selection, Enter activates `on_select`, Left/Right collapse/expand nodes. Shift+Enter opens the context menu on the selected node.
@@ -1304,6 +1377,7 @@ panel:list({
 | `key_commands` | table    | nil     | Map of single-char keys to command strings. When pressed, triggers `on_command(command, selected_node)`. |
 | `truncate_left` | boolean | `false` | Truncate overflowing labels from the left (`…tail`) so the end of the label stays visible. |
 | `badge_right` | boolean | `false` | Draw each item's `badge` against the right edge instead of after the label. When the label and badge do not both fit, the label keeps at least half of the row (all of it if shorter) and the badge is truncated to what is left, or hidden when fewer than 3 cells are left. |
+| `active` | string | `nil` | `id` of the item to mark as current, like the Explorer's open file. It stays highlighted when the widget is not focused, unlike the keyboard selection, which only shows while focused. Omit it to mark nothing. |
 | `inset` | number | `0` | Blank cells before each row's content. The selection highlight still spans the full width. |
 
 ### Button
@@ -1323,10 +1397,24 @@ panel:button({
 
 | Field      | Type     | Required | Description                                    |
 |------------|----------|----------|------------------------------------------------|
-| `label`    | string   | yes      | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `label`    | string   | see below | Button text. Use `&` for an accelerator: `"&Save"` underlines S. |
+| `spans`    | table    | see below | Styled runs: `{ {text = "12", style = "success"}, {text = " 3", style = "danger"} }`. Replaces `label` when non-empty. |
 | `on_click` | function | no       | Callback when the button is pressed.           |
 | `disabled` | boolean  | no       | Draws the button muted and ignores presses, for example while a request is in flight. |
 | `style`    | string   | no       | How the button looks when it is not focused. Default: `"filled"`. |
+
+Either `label` or `spans` must be given. A `spans` entry's `style` is a [named style](#styles); an unknown name keeps the button's own style for that run, and `text` entries are skipped when empty. While the button is focused or disabled it keeps its own focus/disabled colors, so span colors apply only to an unfocused, enabled button. `"bracket"` draws the spans inside `[...]`. Span updates on reconcile keep the button instance, so focus and callbacks survive; accelerators (`&`) apply to `label` only.
+
+```lua
+panel:button({
+  spans = {
+    { text = "12", style = "success" },
+    { text = " 1", style = "warning" },
+    { text = " 3", style = "danger" },
+  },
+  on_click = function() end,
+})
+```
 
 **Button styles.** Every style draws in the focused button colors while it has focus, and muted while disabled.
 
@@ -1398,7 +1486,9 @@ panel:input({
 | `on_change`        | function | nil     | Called after every text change. Receives the current text (string). |
 | `on_submit`        | function | nil     | Called when Enter is pressed and `multiline` is disabled. Receives the current text (string). |
 
-The input text and cursor position are automatically preserved across re-renders.
+Drag with the left mouse button to select input text, including across wrapped rows. Double-click selects a word. The input keeps the drag when the pointer leaves its bounds; releasing the button ends it.
+
+The input text, cursor position, and selection are automatically preserved across re-renders.
 
 ### VStack
 
@@ -1630,7 +1720,7 @@ panel:table({
 
 Double-clicking a data cell (not an action) highlights its text, and Ctrl+C then copies the cell's full value, even when the cell is truncated with `…`. Escape, a click elsewhere, or a render that changes or removes its row clears it.
 
-Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
+Fixed-width columns keep their `width`. Auto-sized columns share the width that is left equally, but none gets narrower than its `min_width`. When the fixed widths, the auto minimums and the two-cell gaps between columns add up to more than the table's width, the table scrolls horizontally: a scrollbar appears along its bottom row, and the header scrolls with the rows. Shift+wheel, Alt+wheel, a horizontal wheel, or dragging the scrollbar scrolls it; Left and Right jump to the previous or next column. Left and Right are left to the panel when the columns fit.
 
 #### Row actions
 
@@ -1989,6 +2079,10 @@ The plugin panel manages its own focus system. When the plugin panel is focused:
 
 Labels, titles, and key-value lists are not focusable. If your panel has only non-focusable widgets and raw cells, all events go directly to `on_event`.
 
+Built-in input editing and Markdown copy shortcuts follow [`keyboard.modifierKey`](/reference/settings/#keyboard), including live changes. Lua key interceptors (`key.press`), fallback `on_event` handlers, and command-line `on_key` hooks also follow this setting: in `super` and `control+super` modes, Super/Cmd shortcuts are reported as Ctrl shortcuts. For example, Super+R arrives as `{ key = "Ctrl-R", mod = "ctrl" }`, so existing Ctrl handlers work without changes.
+
+These handlers cannot distinguish Ctrl from Super in those modes. Physical Ctrl events remain available to Lua hooks in every mode; in `control` mode, Super is reported as `mod = "super"`. Holding Ctrl and Super together preserves both modifiers. Native event routing and terminal input retain the original events.
+
 ## Event Handling
 
 There are two levels of event handling:
@@ -2028,8 +2122,8 @@ For key and mouse events not consumed by widgets, the `on_event` function receiv
                      -- "Backspace", "Delete", "Home", "End", "PgUp", "PgDn",
                      -- or the character itself ("a", "A", "1", "/", etc.)
   rune = "a",        -- only set for printable character keys
-  mod = "ctrl",      -- "ctrl", "alt", "shift", joined with "+" when combined
-                     -- (e.g. "ctrl+shift"); nil when no modifier is held
+  mod = "ctrl",      -- "ctrl", "alt", "shift", "super", joined in that order with "+"
+                     -- (e.g. "ctrl+shift" or "shift+super"); nil when no modifier is held
 }
 ```
 
@@ -2264,6 +2358,7 @@ local deco = require("ttt.decorations")
 deco.set("/abs/path/to/main.go", {
   { line = 10, end_line = 14 },                                 -- tint lines 10 to 14
   { line = 12, col = 9, end_col = 17 },                         -- highlight text on line 12
+  { line = 15, col = 8, ghost_text = " + 1" },                  -- preview an insertion at column 8
   { line = 14, note = "Flags are parsed once, here." },         -- a note under line 14
   { line = 20, col = 5, end_line = 22, end_col = 2, style = "highlight" },
   { line = 30, end_line = 35, style = "hide" },                 -- conceal text without changing layout
@@ -2277,14 +2372,15 @@ deco.clear()                         -- clear all of this plugin's decorations
 
 Replaces this plugin's decorations for `path` with `items`. An item without
 `col` tints whole lines; an item with `col` and `end_col` highlights text; an
-item with `note` draws the note under `line`.
+item with `note` draws the note under `line`. A `ghost_text` item previews an insertion.
 
 | Field      | Type   | Required | Description                                                          |
 |------------|--------|----------|----------------------------------------------------------------------|
 | `line`     | number | yes      | 1-based start line.                                                  |
 | `end_line` | number | no       | 1-based end line. Defaults to `line`; `math.huge` reaches the end of the file. |
-| `col`      | number | no       | 1-based start **rune column** of a text highlight.                   |
-| `end_col`  | number | with `col` | 1-based end column on `end_line`, exclusive.                       |
+| `col`      | number | no       | 1-based **rune column** of a text highlight or ghost text anchor.                   |
+| `end_col`  | number | for text highlights | 1-based end column on `end_line`, exclusive.                       |
+| `ghost_text` | string | no | A muted, single-line preview before the rune at `col`. Omit `col` to preview at the end of `line`. Columns beyond the end-of-line position are ignored. Use a nonempty string without control characters. The preview shifts the displayed text on its row and clips at the pane edge. Editing the line clears the preview. |
 | `note`     | string | no       | Text drawn on rows under `line`, wrapped to the pane (at most 80 columns) and indented like the line. Blank lines separate paragraphs. A note item takes only `line` and `style`, and its style can't be `reverse` or `hide`. |
 | `style`    | string | no       | A named style whose background is used; for a note, its colors. Defaults to `highlight` for lines, `highlight_strong` for text and `note` for notes. `reverse` swaps the text and background colors instead, on text only. `hide` conceals text using its background color, keeping the characters' space and the buffer unchanged. |
 
@@ -2294,7 +2390,7 @@ color. Selection and search highlights take precedence. Clearing the decoration
 shows the text again; copying and saving still use the original text.
 
 Lines and columns are whole numbers from 1. An invalid item (no `line`,
-`end_line` before `line`, `col` without `end_col`, an empty text range, an
+`end_line` before `line`, a text highlight with only one column field, an empty text range, an
 unknown style, a blank or non-text `note`, or a note with `end_line`, `col`,
 `end_col` or style `reverse` or `hide`) raises an error and sets nothing. Lines past the end of the file
 are ignored.
@@ -2356,6 +2452,14 @@ local all = bookmarks.get_all()   -- {{line=3, icon="★", style="success"}, ...
 bookmarks.clear()   -- remove every bookmark in the current file
 ```
 
+Bookmarks are shared document state, not resources owned by the plugin that last changed them. Every plugin with `editor.bookmarks` permission works with the same bookmark set for the active file:
+
+- `get` and `get_all` read the current marks, regardless of who created them.
+- `set` replaces the mark on that line, and `remove` removes the current mark.
+- `set_all` replaces the entire set, while `clear` removes every mark in the file.
+
+TTT deliberately leaves bookmarks in place when a plugin is disabled, uninstalled, updated, reloaded, or replaced by the debug runner. They belong to the document and remain until the user or an authorized plugin changes them. Because the API is shared, `set_all` and `clear` can also change marks created by other plugins; plugins that need isolated state should keep their own data rather than treating document bookmarks as private storage.
+
 ### `bookmarks.set(line, icon, style)`
 
 Sets (or replaces) the bookmark on `line` (1-based). `icon` is a single
@@ -2402,8 +2506,8 @@ end)
 
 ### The `gutter.click` event
 
-Fires via `ttt.events` when the user clicks the bookmark column, the cell just
-left of the line number. The callback receives the active file's path and the
+Fires via `ttt.events` when the user clicks the left side of the gutter,
+including the left half of the displayed number (and the middle digit for odd widths). The callback receives the active file's path and the
 clicked 1-based line. Toggle a bookmark there to give the click meaning:
 
 ```lua
@@ -2418,9 +2522,7 @@ events.on("gutter.click", function(path, line)
 end)
 ```
 
-While at least one plugin listens for `gutter.click`, a click in the bookmark
-column goes to the plugin instead of toggling a fold. Without a listener the
-click behaves as it always has.
+Click the right half of the number or the gutter space to its right to toggle a fold.
 
 ## Editor Context Menu
 
@@ -2495,6 +2597,8 @@ end
 ### `fs.write(path, content)`
 
 Write content to a file. Requires `fs.write` permission.
+
+Missing parent directories are created only within a granted write path, including the granted directory itself if its parent already exists. Symlinks do not extend the grant.
 
 **Returns:** `true` on success, or `nil, error_string` on failure.
 
@@ -3047,6 +3151,8 @@ File and editor callbacks receive the file path of the affected file as their si
 
 Note that control keys set **both** fields: `ctrl+d` arrives as `{ key = "Ctrl-D", mod = "ctrl" }`. Match on `key`, and check `mod` only when you need to distinguish (for example `"j"` from `alt+j`).
 
+In `super` and `control+super` keyboard modes, Super+D produces the same Ctrl-D event. This conversion also applies to panel `on_event` and command-line `on_key` callbacks; see [Focus and Keyboard Navigation](#focus-and-keyboard-navigation) for the modifier rules.
+
 ```lua
 local events = require("ttt.events")
 
@@ -3101,6 +3207,16 @@ Read a setting value. Returns the value (string, number, boolean, or table depen
 ```lua
 local formatter = settings.get("formatters.go")  -- "gofmt" or nil
 local debounce = settings.get("autocomplete.debounce")  -- 150
+```
+
+#### `settings.set_default(key, value)`
+
+Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt.
+
+```lua
+ttt.on_install(function()
+  settings.set_default("formatters.go", "gofmt")
+end)
 ```
 
 #### `settings.set(key, value)`
@@ -3304,6 +3420,7 @@ Permissions are declared in the manifest's `permissions` object. Boolean permiss
 | `system.env`     | boolean  | Read environment variables (`ttt.system.env`).    |
 | `terminal.control` | boolean | Spawn terminal tabs, send text, focus tabs, and close tabs (`ttt.terminal`). Not constrained by `system.exec` or `fs.*`. |
 | `terminal.read`  | boolean  | Read raw PTY output and visible screen text, and list open terminals (`ttt.terminal`). Accesses any tab, including user tabs. |
+| `terminal.palette` | boolean | Request and read captured terminal color values (`ttt.terminal.request_palette`, `ttt.terminal.palette`); does not grant access to terminal tabs or PTY output. |
 | `network.rpc`    | string[] | Open RPC connections to the listed endpoints (`ttt.rpc`). See [RPC endpoint scoping](#rpc-endpoint-scoping). |
 | `network.http`   | boolean \| string[] | Make outbound HTTP requests (`ttt.net`). `true` allows any destination, local services included; an array (`["api.github.com", "127.0.0.1:4250"]`) restricts requests to those hosts or IPs, each with an optional port. See [Network host scoping](#network-host-scoping). |
 | `events.file`    | boolean  | Listen for file events: `file.open`, `file.close`, `file.save`. |

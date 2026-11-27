@@ -5,7 +5,9 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -21,7 +23,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	withTempConfigDir(t)
 
 	s := DefaultSettings()
+	s.Editor.TabBarStyle = "auto-hide"
 	s.Editor.TabSize = 7
+	s.Editor.RestoreTabs = true
 	s.Editor.WordWrap = true
 	s.Sidebar.PanelOrder = []string{"changes", "plugin.todo", "explorer"}
 	s.Sidebar.Width = 22
@@ -31,6 +35,7 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	enabled := false
 	s.Editor.SyntaxHighlight = &enabled
 	s.Welcome.RecentFolders = &enabled
+	s.Appearance.PointerShapes = &enabled
 	s.Terminal.Shell = "/bin/zsh"
 	s.Terminal.CtrlVPastes = false
 	s.Editor.SelectionStyle = SelectionStyleInvert
@@ -41,6 +46,12 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 
 	got := LoadSettings()
+	if !got.Editor.RestoreTabs {
+		t.Error("editor.restoreTabs did not round-trip")
+	}
+	if got.Editor.TabBarStyle != "auto-hide" {
+		t.Errorf("tabBarStyle = %q, want auto-hide", got.Editor.TabBarStyle)
+	}
 	if got.Editor.TabSize != 7 {
 		t.Errorf("tabSize = %d, want 7", got.Editor.TabSize)
 	}
@@ -67,6 +78,9 @@ func TestSaveSettingsRoundTrips(t *testing.T) {
 	}
 	if got.Welcome.IsRecentFoldersEnabled() {
 		t.Error("welcome.recentFolders=false did not round-trip; tri-state pointer lost")
+	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Error("appearance.pointerShapes=false did not round-trip; tri-state pointer lost")
 	}
 	if got.Terminal.Shell != "/bin/zsh" {
 		t.Errorf("shell = %q, want /bin/zsh", got.Terminal.Shell)
@@ -100,6 +114,64 @@ func TestLoadTerminalCtrlVPastes(t *testing.T) {
 			}
 			if got := LoadSettings().Terminal.CtrlVPastes; got != tt.want {
 				t.Errorf("CtrlVPastes = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestExplorerUseTrashSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{}`, true},
+		{`{"explorer":{"showHidden":false}}`, true},
+		{`{"explorer":{"useTrash":true}}`, true},
+		{`{"explorer":{"useTrash":false}}`, false},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		s := LoadSettings()
+		if s.Explorer.UseTrash != tc.want {
+			t.Fatalf("%s: useTrash = %v, want %v", tc.json, s.Explorer.UseTrash, tc.want)
+		}
+		if err := SaveSettings(s); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Explorer.UseTrash; got != tc.want {
+			t.Fatalf("useTrash round trip = %v, want %v", got, tc.want)
+		}
+	}
+}
+
+func TestTerminalPaddingSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tt := range []struct {
+		name string
+		json string
+		want int
+	}{
+		{"missing", `{}`, 1},
+		{"existing", `{"terminal":{"scrollback":2000}}`, 1},
+		{"zero", `{"terminal":{"padding_x":0}}`, 0},
+		{"custom", `{"terminal":{"padding_x":2}}`, 2},
+		{"negative", `{"terminal":{"padding_x":-1}}`, 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tt.json), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			s := LoadSettings()
+			if s.Terminal.PaddingX != tt.want {
+				t.Fatalf("padding = %d, want %d", s.Terminal.PaddingX, tt.want)
+			}
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			if got := LoadSettings().Terminal.PaddingX; got != tt.want {
+				t.Fatalf("round-tripped padding = %d, want %d", got, tt.want)
 			}
 		})
 	}
@@ -140,6 +212,156 @@ func TestSaveSettingsWritesValidJSON(t *testing.T) {
 	var probe map[string]any
 	if err := json.Unmarshal(data, &probe); err != nil {
 		t.Errorf("settings.json is not valid JSON: %v", err)
+	}
+}
+
+func TestSaveSettingsConcurrentReadersSeeValidJSON(t *testing.T) {
+	dir := withTempConfigDir(t)
+	path := filepath.Join(dir, "settings.json")
+	oldSettings := DefaultSettings()
+	oldSettings.Editor.TabSize = 3
+	oldData, err := json.Marshal(oldSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, oldData, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	newSettings := DefaultSettings()
+	newSettings.Editor.TabSize = 9
+	newData, err := json.Marshal(newSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	staged := make(chan struct{})
+	continueRename := make(chan struct{})
+	var releaseOnce sync.Once
+	release := func() { releaseOnce.Do(func() { close(continueRename) }) }
+	defer release()
+	saveDone := make(chan error, 1)
+	go func() {
+		saveDone <- writeFileAtomicallyWithRename(path, newData, 0o644, func(from, to string) error {
+			close(staged)
+			<-continueRename
+			return renameSettingsFile(from, to)
+		})
+	}()
+	select {
+	case <-staged:
+	case err := <-saveDone:
+		t.Fatalf("settings save failed before staging: %v", err)
+	}
+	assertTabSize := func(want int) {
+		t.Helper()
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatalf("read settings: %v", err)
+		}
+		var got Settings
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatalf("settings are invalid JSON: %v", err)
+		}
+		if got.Editor.TabSize != want {
+			t.Fatalf("tabSize = %d, want %d", got.Editor.TabSize, want)
+		}
+	}
+	assertTabSize(oldSettings.Editor.TabSize)
+	release()
+	if err := <-saveDone; err != nil {
+		t.Fatalf("save settings: %v", err)
+	}
+	assertTabSize(newSettings.Editor.TabSize)
+}
+
+func TestSaveSettingsPreservesSymlinkAndPermissions(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	targetMode := os.FileMode(0o644)
+	if runtime.GOOS != "windows" {
+		targetMode = 0o600
+	}
+	if err := os.WriteFile(target, []byte(`{}`), targetMode); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	want := DefaultSettings()
+	want.Editor.TabSize = 7
+	if err := SaveSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	targetInfo, err := os.Stat(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if runtime.GOOS != "windows" && targetInfo.Mode().Perm() != 0o600 {
+		t.Errorf("target permissions = %o, want 600", targetInfo.Mode().Perm())
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
+	}
+}
+
+func TestSaveSettingsThroughDanglingSymlink(t *testing.T) {
+	dir := withTempConfigDir(t)
+	target := filepath.Join(dir, "settings-target.json")
+	link := filepath.Join(dir, "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	want := DefaultSettings()
+	want.Editor.TabSize = 9
+	if err := SaveSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(link)
+	if err != nil || info.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("settings symlink was replaced: info=%v err=%v", info, err)
+	}
+	data, err := os.ReadFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got Settings
+	if err := json.Unmarshal(data, &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Editor.TabSize != want.Editor.TabSize {
+		t.Errorf("target tabSize = %d, want %d", got.Editor.TabSize, want.Editor.TabSize)
+	}
+}
+
+func TestSaveSettingsFailureLeavesExistingFileUntouched(t *testing.T) {
+	dir := withTempConfigDir(t)
+	path := filepath.Join(dir, "settings.json")
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	want := []byte("preserve me")
+	sentinel := filepath.Join(path, "sentinel")
+	if err := os.WriteFile(sentinel, want, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeFileAtomically(path, []byte(`{"ok":true}`), 0o644); err == nil {
+		t.Fatal("rename over existing directory unexpectedly succeeded")
+	}
+	got, err := os.ReadFile(sentinel)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("existing destination changed after failed write: %q, err=%v", got, err)
 	}
 }
 
@@ -300,5 +522,81 @@ func TestHighlightTimeLimitIsHiddenUntilSet(t *testing.T) {
 	s.Editor.HighlightTimeLimit = 5000
 	if v := string(editorKeys(s)["highlightTimeLimit"]); v != "5000" {
 		t.Fatalf("editor.highlightTimeLimit = %q, want 5000 written once set", v)
+	}
+}
+
+func TestAppearanceSettingsPointerShapesExplicitFalseSurvives(t *testing.T) {
+	withTempConfigDir(t)
+
+	s := DefaultSettings()
+	disabled := false
+	s.Appearance.PointerShapes = &disabled
+	if err := SaveSettings(s); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	got := LoadSettings()
+	if got.Appearance.PointerShapes == nil || *got.Appearance.PointerShapes != false {
+		t.Fatalf("pointerShapes = %v, want explicit false pointer", got.Appearance.PointerShapes)
+	}
+	if got.Appearance.PointerShapesEnabled() {
+		t.Fatal("PointerShapesEnabled() returned true, want false")
+	}
+}
+
+func TestAppearanceSettingsPointerShapesMissingDefaultsToEnabled(t *testing.T) {
+	dir := withTempConfigDir(t)
+	raw := []byte(`{"version":1,"appearance":{"icons":"none"}}` + "\n")
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), raw, 0644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+
+	got := LoadSettings()
+	if !got.Appearance.PointerShapesEnabled() {
+		t.Fatal("missing appearance.pointerShapes must default to enabled")
+	}
+}
+
+func TestApplicationArgsRoundTrip(t *testing.T) {
+	for _, args := range [][]string{nil, {}, {"{file}", "--preview"}} {
+		app := Application{Name: "viewer", Command: "viewer", Args: args}
+		data, err := json.Marshal(app)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got Application
+		if err := json.Unmarshal(data, &got); err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(got.Args, args) {
+			t.Fatalf("round trip %s changed args: %v", data, got.Args)
+		}
+	}
+}
+
+func TestNativeLinkSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{}`, false},
+		{`{"links":{}}`, false},
+		{`{"links":{"native":true}}`, true},
+		{`{"links":{"native":false}}`, false},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0600); err != nil {
+			t.Fatal(err)
+		}
+		s := LoadSettings()
+		if s.Links.Native != tc.want || s.Extra["links"] != nil {
+			t.Fatalf("%s: links=%+v extra=%v", tc.json, s.Links, s.Extra)
+		}
+		if err := SaveSettings(s); err != nil {
+			t.Fatal(err)
+		}
+		if LoadSettings().Links.Native != tc.want {
+			t.Fatal("links.native did not survive save/load")
+		}
 	}
 }

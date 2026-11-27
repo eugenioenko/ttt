@@ -24,6 +24,7 @@ func (e *EditorPaneWidget) syncFromMulti() {
 	p := e.Multi.PrimaryCursor()
 	e.Cursor.Line = p.Line
 	e.Cursor.Col = p.Col
+	e.Cursor.Goal = p.Goal
 	if e.Selection != nil {
 		*e.Selection = p.Sel
 	}
@@ -36,6 +37,7 @@ func (e *EditorPaneWidget) syncToMulti() {
 	c := &e.Multi.Cursors[e.Multi.Primary]
 	c.Line = e.Cursor.Line
 	c.Col = e.Cursor.Col
+	c.Goal = e.Cursor.Goal
 	if e.Selection != nil {
 		c.Sel = *e.Selection
 	}
@@ -54,11 +56,46 @@ func (e *EditorPaneWidget) collapseMulti() {
 	e.Multi = nil
 }
 
-func (e *EditorPaneWidget) multiExecRune(r rune) {
+func (e *EditorPaneWidget) addCursorVertical(delta int) {
+	if e.Buf == nil || len(e.Buf.Lines) == 0 {
+		return
+	}
+	e.ensureMulti()
 	e.syncToMulti()
+	// The unchanged primary preserves the goal column across short rows.
+	p := e.Multi.PrimaryCursor()
+	_, x := e.layout().rowOf(p.Line, p.Col)
+	if !e.WordWrap {
+		x = bufColToVisualCol(e.Buf.Lines[p.Line], p.Col, e.resolveTabSize())
+	}
+	i := 0
+	if delta > 0 {
+		i = len(e.Multi.Cursors) - 1
+	}
+	edge := e.Multi.Cursors[i]
+	line, col, _ := e.wrappedRowMove(edge.Line, edge.Col, delta, x)
+	if line == edge.Line && col == edge.Col {
+		return
+	}
+	e.Multi.Add(line, col)
+	e.syncFromMulti()
+	e.scrollViewportTo(line, col)
+}
+
+func (e *EditorPaneWidget) multiExecRune(r rune) {
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
+		if cmd := e.surroundSelection(r, &cs.Sel, &cs.Line, &cs.Col); cmd != nil {
+			e.applyAutoClosingEdit(cmd)
+			cmds = append(cmds, cmd)
+			for _, child := range cmd.Commands {
+				insert := child.(*undo.InsertRuneCommand)
+				e.shiftLaterCursors(i, insert.Line, insert.Col, 1)
+			}
+			continue
+		}
 		hadSelection := cs.Sel.Active
 		if cs.Sel.Active {
 			start, end := cs.Sel.Range(cs.Line, cs.Col)
@@ -108,7 +145,7 @@ func (e *EditorPaneWidget) multiExecRune(r rune) {
 // multiExecTab inserts one indent unit at every cursor, mirroring how a typed
 // character is applied across cursors.
 func (e *EditorPaneWidget) multiExecTab() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	indent := e.indentUnit()
 	n := len([]rune(indent))
 	var cmds []undo.EditCommand
@@ -142,7 +179,7 @@ func (e *EditorPaneWidget) multiExecTab() {
 }
 
 func (e *EditorPaneWidget) multiExecBackspace() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -194,7 +231,7 @@ func (e *EditorPaneWidget) multiExecBackspace() {
 }
 
 func (e *EditorPaneWidget) multiExecDelete() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -215,7 +252,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 		cs.Line = e.Buf.ClampLine(cs.Line)
 		lineLen := len([]rune(e.Buf.Lines[cs.Line]))
 		if cs.Col < lineLen {
-			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col}
+			cmd := &undo.DeleteRuneCommand{Line: cs.Line, Col: cs.Col, Forward: true}
 			e.applyAutoClosingEdit(cmd)
 			cmds = append(cmds, cmd)
 			e.shiftLaterCursors(i, cs.Line, cs.Col, -1)
@@ -237,7 +274,7 @@ func (e *EditorPaneWidget) multiExecDelete() {
 }
 
 func (e *EditorPaneWidget) multiExecEnter() {
-	e.syncToMulti()
+	e.normalizeMultiCursors()
 	var cmds []undo.EditCommand
 	for i := len(e.Multi.Cursors) - 1; i >= 0; i-- {
 		cs := &e.Multi.Cursors[i]
@@ -280,19 +317,19 @@ func (e *EditorPaneWidget) multiExecEnter() {
 }
 
 func (e *EditorPaneWidget) adjustLaterCursors(editedIdx int, start, end selection.Position) {
+	adjust := func(line, col *int) {
+		if *line == end.Line && *col >= end.Col {
+			*col = start.Col + (*col - end.Col)
+			*line = start.Line
+		} else if *line > end.Line {
+			*line -= end.Line - start.Line
+		}
+	}
 	for j := editedIdx + 1; j < len(e.Multi.Cursors); j++ {
 		cs := &e.Multi.Cursors[j]
-		if start.Line == end.Line {
-			if cs.Line == start.Line && cs.Col >= end.Col {
-				cs.Col -= end.Col - start.Col
-			}
-		} else {
-			if cs.Line == end.Line {
-				cs.Col = start.Col + (cs.Col - end.Col)
-				cs.Line = start.Line
-			} else if cs.Line > end.Line {
-				cs.Line -= end.Line - start.Line
-			}
+		adjust(&cs.Line, &cs.Col)
+		if cs.Sel.Active {
+			adjust(&cs.Sel.Anchor.Line, &cs.Sel.Anchor.Col)
 		}
 	}
 }
@@ -301,10 +338,10 @@ func (e *EditorPaneWidget) shiftLaterCursors(editedIdx, line, col, delta int) {
 	for j := editedIdx + 1; j < len(e.Multi.Cursors); j++ {
 		cs := &e.Multi.Cursors[j]
 		if cs.Line == line && cs.Col >= col {
-			cs.Col += delta
-			if cs.Col < 0 {
-				cs.Col = 0
-			}
+			cs.Col = max(0, cs.Col+delta)
+		}
+		if cs.Sel.Active && cs.Sel.Anchor.Line == line && cs.Sel.Anchor.Col >= col {
+			cs.Sel.Anchor.Col = max(0, cs.Sel.Anchor.Col+delta)
 		}
 	}
 }
@@ -480,7 +517,8 @@ func (e *EditorPaneWidget) SplitSelectionToLines() {
 	e.scrollViewport()
 }
 
-func (e *EditorPaneWidget) normalizeClipboardCursors() {
+// Merge before editing so replacing a selection cannot strand a cursor inside it.
+func (e *EditorPaneWidget) normalizeMultiCursors() {
 	e.syncToMulti()
 	e.Multi.MergeSelections()
 	e.syncFromMulti()
@@ -492,7 +530,7 @@ func (e *EditorPaneWidget) multiCopyPieces() []string {
 		return nil
 	}
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	pieces := make([]string, 0, len(e.Multi.Cursors))
 
 	for _, cs := range e.Multi.Cursors {
@@ -534,11 +572,12 @@ func pastePieces(text string, n int) []string {
 
 // multiPasteText inserts clipboard text at each cursor in one undo step.
 func (e *EditorPaneWidget) multiPasteText(text string) {
+	version := e.Buf.Version()
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	pieces := pastePieces(text, len(e.Multi.Cursors))
 	var commands []undo.EditCommand
 
@@ -632,6 +671,7 @@ func (e *EditorPaneWidget) multiPasteText(text string) {
 
 	e.bufferDirty = true
 	e.syncFromMulti()
+	e.remapFolds(version)
 	e.refreshFolds()
 	e.scrollViewport()
 }
@@ -656,8 +696,9 @@ func (e *EditorPaneWidget) multiCut() {
 	if e.Multi == nil || len(e.Multi.Cursors) == 0 {
 		return
 	}
+	version := e.Buf.Version()
 
-	e.normalizeClipboardCursors()
+	e.normalizeMultiCursors()
 	// Avoid deleting the same original line more than once.
 	seenLines := make(map[int]bool)
 	unique := make([]multicursor.CursorState, 0, len(e.Multi.Cursors))
@@ -746,6 +787,7 @@ func (e *EditorPaneWidget) multiCut() {
 	}
 
 	e.bufferDirty = true
+	e.remapFolds(version)
 	e.refreshFolds()
 	e.Multi.Deduplicate()
 	e.syncFromMulti()

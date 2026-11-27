@@ -31,7 +31,11 @@ func logFile(b *testing.B, dir string, sizeMiB int) string {
 	if err != nil {
 		b.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			b.Error(err)
+		}
+	}()
 	line := fmt.Sprintf("%-*s\n", logLineBytes-1, "2026-10-12T12:00:00.000Z INFO service=api request_id=0123456789abcdef message=\""+logMarker+"\" status=200 latency_ms=12 path=/api/events payload="+strings.Repeat("abcdefgh", 8))
 	if len(line) != logLineBytes {
 		b.Fatal("log entry exceeds its fixed byte length")
@@ -111,7 +115,7 @@ func runTTT(b *testing.B, binary, configDir, path, script string) float64 {
 	b.StopTimer()
 	// Background processes ttt started, such as git blame, outlive it and
 	// would load the next run.
-	syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
+	_ = syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
 	if err != nil {
 		b.Fatalf("open %s after %s: %v\n%s", filepath.Base(path), time.Since(started), err, out)
 	}

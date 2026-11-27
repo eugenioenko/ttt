@@ -9,7 +9,7 @@ import (
 func TestEditorConfigBasic(t *testing.T) {
 	dir := t.TempDir()
 	ec := filepath.Join(dir, ".editorconfig")
-	os.WriteFile(ec, []byte(`
+	requireNoError(t, os.WriteFile(ec, []byte(`
 root = true
 
 [*]
@@ -22,7 +22,7 @@ tab_width = 4
 
 [Makefile]
 indent_style = tab
-`), 0644)
+`), 0644))
 
 	props := LoadEditorConfig(filepath.Join(dir, "main.go"))
 	if props.IndentStyle != "space" {
@@ -45,12 +45,12 @@ indent_style = tab
 func TestEditorConfigBraceExpansion(t *testing.T) {
 	dir := t.TempDir()
 	ec := filepath.Join(dir, ".editorconfig")
-	os.WriteFile(ec, []byte(`
+	requireNoError(t, os.WriteFile(ec, []byte(`
 root = true
 
 [*.{json,yaml,yml}]
 indent_size = 2
-`), 0644)
+`), 0644))
 
 	props := LoadEditorConfig(filepath.Join(dir, "config.json"))
 	if props.IndentSize != 2 {
@@ -65,6 +65,42 @@ indent_size = 2
 	props = LoadEditorConfig(filepath.Join(dir, "main.go"))
 	if props.IndentSize != 0 {
 		t.Errorf("expected indent_size 0 (unset), got %d", props.IndentSize)
+	}
+}
+
+func TestEditorConfigPathGlobs(t *testing.T) {
+	dir := t.TempDir()
+	ec := filepath.Join(dir, ".editorconfig")
+	requireNoError(t, os.WriteFile(ec, []byte(`
+root = true
+
+[lib/**.js]
+indent_size = 2
+
+[*.[ch]]
+indent_size = 3
+
+[file{1..3}.txt]
+indent_size = 5
+`), 0644))
+
+	tests := []struct {
+		path string
+		want int
+	}{
+		{"lib/a.js", 2},
+		{"lib/sub/a.js", 2},
+		{"a.js", 0},
+		{"src/a.c", 3},
+		{"a.h", 3},
+		{"a.cpp", 0},
+		{"file2.txt", 5},
+		{"file4.txt", 0},
+	}
+	for _, tt := range tests {
+		if got := LoadEditorConfig(filepath.Join(dir, tt.path)).IndentSize; got != tt.want {
+			t.Errorf("%s: expected indent_size %d, got %d", tt.path, tt.want, got)
+		}
 	}
 }
 
@@ -101,9 +137,9 @@ func TestGlobMatch(t *testing.T) {
 func TestLoadEditorConfigMJS(t *testing.T) {
 	dir := t.TempDir()
 	ec := filepath.Join(dir, ".editorconfig")
-	os.WriteFile(ec, []byte("root = true\n\n[*]\nindent_style = tab\nindent_size = 4\n"), 0644)
+	requireNoError(t, os.WriteFile(ec, []byte("root = true\n\n[*]\nindent_style = tab\nindent_size = 4\n"), 0644))
 	f := filepath.Join(dir, "astro.config.mjs")
-	os.WriteFile(f, []byte(""), 0644)
+	requireNoError(t, os.WriteFile(f, []byte(""), 0644))
 	props := LoadEditorConfig(f)
 	if props.IndentStyle != "tab" {
 		t.Errorf("expected indent_style=tab, got %q", props.IndentStyle)

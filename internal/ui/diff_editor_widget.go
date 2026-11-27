@@ -12,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 
@@ -433,6 +434,18 @@ func (d *DiffEditorWidget) SetDiffColorGutterNumbers(enabled bool) {
 func (d *DiffEditorWidget) setGutterStyle(style string) {
 	for _, p := range d.panes() {
 		p.GutterStyle = style
+	}
+}
+
+func (d *DiffEditorWidget) SetIndentGuides(enabled bool) {
+	for _, p := range d.viewPanes() {
+		p.IndentGuides = enabled
+	}
+}
+
+func (d *DiffEditorWidget) SetFullLineSelection(enabled bool) {
+	for _, p := range d.viewPanes() {
+		p.FullLineSelection = enabled
 	}
 }
 
@@ -916,12 +929,12 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 	r := d.GetRect()
 	d.ensurePanes()
 	if d.Loading {
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
 		}
-		for i, ch := range "Loading..." {
+		for i, ch := range i18n.Text("general.loadingDots") {
 			if i < w {
 				surface.SetCell(i, 0, term.Cell{Ch: ch, Style: term.StyleDefault})
 			}
@@ -973,7 +986,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 		d.wrapKey = wk
 		d.left.wrapCols, d.right.wrapCols = 0, 0
 	}
-	for pass := 0; pass < 3; pass++ {
+	for range 3 {
 		widths := [2]int{d.left.Viewport.Width, d.right.Viewport.Width}
 		d.alignSplit()
 		lead.Render(surfaceFor(lead))
@@ -993,7 +1006,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 			break
 		}
 	}
-	for y := 0; y < h; y++ {
+	for y := range h {
 		surface.SetCell(divider, y, term.Cell{Ch: '│', Style: term.StyleBorder})
 	}
 }
@@ -1230,12 +1243,17 @@ func (d *DiffEditorWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 		}
 		if !d.IsUnified() && d.captured == nil {
 			d.focusLeft = target == d.left
-			if d.editable && !d.focusLeft {
-				d.left.Selection.Clear()
+			for _, p := range d.viewPanes() {
+				if p != target {
+					p.Selection.Clear()
+				}
 			}
 		}
 	}
 	result := target.HandleEvent(ev)
+	if target.links.pressed {
+		d.pressed = false
+	}
 	if btn == tcell.ButtonNone {
 		d.captured = nil
 	} else if result == EventCaptured {
@@ -1250,9 +1268,31 @@ func (d *DiffEditorWidget) ClearSelection() {
 	}
 }
 
-func (d *DiffEditorWidget) CopySelection() string {
-	p := d.lead()
-	if !p.Selection.Active {
+func (d *DiffEditorWidget) selectionPane() *EditorPaneWidget {
+	lead := d.lead()
+	if lead != nil && lead.Selection.Active {
+		return lead
+	}
+	if d.IsUnified() {
+		return nil
+	}
+	for _, p := range d.viewPanes() {
+		if p != nil && p.Selection.Active {
+			return p
+		}
+	}
+	return nil
+}
+
+func (d *DiffEditorWidget) HasReadOnlySelection() bool {
+	p := d.selectionPane()
+	return p != nil && p.ReadOnly
+}
+
+// SelectedText returns the active selection text, or an empty string if no selection is active.
+func (d *DiffEditorWidget) SelectedText() string {
+	p := d.selectionPane()
+	if p == nil {
 		return ""
 	}
 	start, end := p.Selection.Range(p.Cursor.Line, p.Cursor.Col)
@@ -1260,9 +1300,17 @@ func (d *DiffEditorWidget) CopySelection() string {
 		Anchor:  diffSelPos{Line: start.Line, Col: start.Col},
 		Current: diffSelPos{Line: end.Line, Col: end.Col},
 	}
-	text := sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
+	return sel.Text(len(p.Buf.Lines), func(line int) (string, bool) {
 		return p.Buf.Lines[line], p.DiffOverlay.kind(line) != diff.Collapsed
 	})
+}
+
+func (d *DiffEditorWidget) CopySelection() string {
+	p := d.selectionPane()
+	if p == nil {
+		return ""
+	}
+	text := d.SelectedText()
 	if text != "" {
 		p.Selection.Clear()
 	}

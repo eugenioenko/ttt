@@ -18,6 +18,8 @@ type CheckboxWidget struct {
 	focused bool
 }
 
+var _ PointerShaper = (*CheckboxWidget)(nil)
+
 func NewCheckboxWidget(config CheckboxConfig) *CheckboxWidget {
 	return &CheckboxWidget{Config: config}
 }
@@ -70,6 +72,13 @@ func (c *CheckboxWidget) toggle() {
 	}
 }
 
+func (c *CheckboxWidget) PointerShapeAt(mx, my int) string {
+	if c.GetRect().Contains(mx, my) {
+		return term.PointerHand
+	}
+	return ""
+}
+
 func (c *CheckboxWidget) HandleEvent(ev tcell.Event) EventResult {
 	switch tev := ev.(type) {
 	case *tcell.EventKey:
@@ -83,8 +92,7 @@ func (c *CheckboxWidget) HandleEvent(ev tcell.Event) EventResult {
 	case *tcell.EventMouse:
 		if tev.Buttons()&tcell.Button1 != 0 {
 			mx, my := tev.Position()
-			r := c.GetRect()
-			if mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
+			if c.GetRect().Contains(mx, my) {
 				c.toggle()
 				return EventConsumed
 			}

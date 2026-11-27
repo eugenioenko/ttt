@@ -91,17 +91,26 @@ func NewExecHandler(a *App) http.Handler {
 	return mux
 }
 
-// StartListenServer starts the --listen HTTP command server. Blocks until
-// the listener fails, so callers run it in a goroutine.
-func StartListenServer(a *App) {
+func StartListenServer(a *App) func() {
 	addr := ListenAddress()
 	ln, err := net.Listen("tcp", addr)
 	if err != nil {
 		slog.Error("listen: failed to bind", "addr", addr, "error", err)
-		return
+		return func() {}
 	}
 	slog.Info("listen: HTTP command server started", "addr", addr)
-	if err := http.Serve(ln, NewExecHandler(a)); err != nil {
-		slog.Error("listen: server stopped", "error", err)
+	return serveExec(a, ln)
+}
+
+func serveExec(a *App, ln net.Listener) func() {
+	server := &http.Server{Handler: NewExecHandler(a)}
+	go func() {
+		if err := server.Serve(ln); err != nil && !errors.Is(err, http.ErrServerClosed) && !errors.Is(err, net.ErrClosed) {
+			slog.Error("listen: server stopped", "error", err)
+		}
+	}()
+	return func() {
+		_ = ln.Close()
+		_ = server.Close()
 	}
 }

@@ -1,12 +1,15 @@
 package app
 
 import (
+	"path/filepath"
 	"testing"
 
-	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/plugin"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
-	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
@@ -30,55 +33,12 @@ func TestCommitHistoryHeightRestoresAndPersists(t *testing.T) {
 	}
 }
 
-func TestSidebarWidthRestoresAndPersists(t *testing.T) {
-	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = "" })
-
-	settings := config.DefaultSettings()
-	settings.Sidebar.Width = 22
-	a := buildTestApp(t, settings)
-	if a.SplitPanel.DividerPos != 22 {
-		t.Fatalf("restored sidebar width = %d, want 22", a.SplitPanel.DividerPos)
-	}
-
-	a.SetSidebarWidth(18)
-	if got := a.State.SidebarWidth; got != 18 {
-		t.Fatalf("sidebar width = %d, want 18", got)
-	}
-	if got := config.LoadState().SidebarWidth; got != 18 {
-		t.Fatalf("persisted sidebar width = %d, want 18", got)
-	}
-}
-
-func TestSidebarDraggedClosedRestoresUsableWidth(t *testing.T) {
-	config.OverrideConfigDir = t.TempDir()
-	t.Cleanup(func() { config.OverrideConfigDir = "" })
-
-	a := buildTestApp(t, config.DefaultSettings())
-	a.SetSidebarWidth(18)
-	for w := 5; w >= 0; w-- {
-		a.resizeSidebar(w)
-	}
-	a.persistSidebarLayout()
-	if got := config.LoadState(); got.SidebarWidth != 18 || !got.SidebarHidden {
-		t.Fatalf("persisted state = %+v, want width 18 and hidden", got)
-	}
-
-	if err := config.SaveState(config.State{SidebarWidth: 2}); err != nil {
-		t.Fatal(err)
-	}
-	a = buildTestApp(t, config.DefaultSettings())
-	if a.SplitPanel.DividerPos != ui.DefaultSidebarWidth {
-		t.Fatalf("restored sidebar width = %d, want %d", a.SplitPanel.DividerPos, ui.DefaultSidebarWidth)
-	}
-}
-
 // commitTo writes only the fields the form owns. Settings changed elsewhere
 // while the tab sat open — including ones the form never shows — must survive.
 // Assigning the whole working struct instead would roll them back.
 func TestCommitToLeavesUnownedSettingsAlone(t *testing.T) {
 	opened := config.DefaultSettings()
-	v := &settingsView{working: opened, categories: settingsCategories()}
+	v := &settingsView{working: opened, baseline: opened, categories: settingsCategories()}
 	v.working.Editor.TabSize = 7
 
 	live := opened
@@ -108,7 +68,7 @@ func TestCommitToCoversEveryField(t *testing.T) {
 	for _, cat := range settingsCategories() {
 		for _, f := range cat.Fields {
 			switch f.Kind {
-			case settingSection:
+			case settingSection, settingShortcut:
 			case settingBool:
 				if f.GetBool == nil || f.SetBool == nil {
 					t.Errorf("%s → %s: bool field missing an accessor", cat.Title, f.Label)
@@ -123,6 +83,45 @@ func TestCommitToCoversEveryField(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestToggleIndentGuidesPersistsAndAppliesToEditorAndDiff(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	a := buildTestApp(t, config.DefaultSettings())
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-        old\n+        new\n")
+	a.EditorGroup.OpenDiffTab("diff", "Diff", "test.go", fd, nil, nil, false)
+	a.ToggleIndentGuides()
+
+	if !a.Settings.Editor.IndentGuides || !a.EditorGroup.Editor.IndentGuides {
+		t.Fatal("indent guides were not enabled on the editor")
+	}
+	d := a.EditorGroup.ActiveDiffWidget()
+	if d == nil {
+		t.Fatal("diff tab was not active")
+	}
+	const width, height = 60, 6
+	grid := make([][]term.Cell, height)
+	for y := range grid {
+		grid[y] = make([]term.Cell, width)
+	}
+	d.SetRect(ui.Rect{W: width, H: height})
+	d.Render(ui.NewRenderSurface(grid, ui.Rect{W: width, H: height}))
+	guides := 0
+	for _, row := range grid {
+		for _, cell := range row {
+			if cell.Ch == '│' && cell.Style == term.StyleIndentGuide {
+				guides++
+			}
+		}
+	}
+	if guides < 2 {
+		t.Fatalf("diff pane rendered %d indent guides, want at least 2", guides)
+	}
+	if !config.LoadSettings().Editor.IndentGuides {
+		t.Fatal("indent guides were not persisted")
 	}
 }
 
@@ -158,6 +157,46 @@ func TestCollapsedDiffEmphasisSettingLivesInDiff(t *testing.T) {
 	}
 }
 
+func TestIndentationSettingsRequireRestart(t *testing.T) {
+	want := map[string]bool{"Tab size": false, "Insert spaces": false}
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if _, ok := want[field.Label]; !ok {
+				continue
+			}
+			want[field.Label] = true
+			if !field.Restart {
+				t.Errorf("%s → %s is not marked as requiring a restart", category.Title, field.Label)
+			}
+		}
+	}
+	for label, found := range want {
+		if !found {
+			t.Errorf("%s field not found", label)
+		}
+	}
+}
+
+func TestSaveCleanupSettingsRequireRestart(t *testing.T) {
+	want := map[string]bool{"Insert final newline": false, "Trim trailing whitespace": false}
+	for _, category := range settingsCategories() {
+		for _, field := range category.Fields {
+			if _, ok := want[field.Label]; !ok {
+				continue
+			}
+			want[field.Label] = true
+			if !field.Restart {
+				t.Errorf("%s → %s is not marked as requiring a restart", category.Title, field.Label)
+			}
+		}
+	}
+	for label, found := range want {
+		if !found {
+			t.Errorf("%s field not found", label)
+		}
+	}
+}
+
 func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	a := buildTestApp(t, config.DefaultSettings())
 	a.EditorGroup.OnContentTabClose = func(id string) {
@@ -181,79 +220,142 @@ func TestShowSettingsReopenPreservesPendingWorkingView(t *testing.T) {
 	}
 }
 
-func TestSidebarClosedStateRestores(t *testing.T) {
+func TestSidebarTabStyleAppliesAtStartupAndLive(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
-	folder := t.TempDir()
-	build := func() *App {
-		cfg := config.AppConfig{
-			Keybindings: config.DefaultKeybindings(),
-			Settings:    config.DefaultSettings(),
-			Theme:       config.DefaultTheme(),
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	a := buildTestApp(t, settings)
+	explorerLabel := func() string {
+		for _, item := range a.Sidebar.Tabs.Config.Items {
+			if item.ID == "explorer" {
+				return item.Label
+			}
 		}
-		borders := BuildBorderSet(cfg.Theme.Borders)
-		return BuildAppFromConfig(&cfg, &borders, workspace.New([]string{folder}), nil)
+		return ""
+	}
+	icon := string(icons.Rune(icons.PanelExplorer))
+	if got := explorerLabel(); got != icon {
+		t.Fatalf("startup label = %q, want %q", got, icon)
 	}
 
-	a := build()
-	if !a.Sidebar.Visible {
-		t.Fatal("sidebar should start visible with a folder open")
-	}
-	a.ToggleSidebar()
-	if a = build(); a.Sidebar.Visible || a.SplitPanel.ShowLeft {
-		t.Fatal("sidebar closed in the previous session should stay closed")
+	next := *a.Settings
+	next.Sidebar.TabStyle = config.SidebarTabStyleLabelIcon
+	a.ApplySettings(next)
+	if got, want := explorerLabel(), icon+" Explore"; got != want {
+		t.Fatalf("label after apply = %q, want %q", got, want)
 	}
 
-	a.ToggleSidebar()
-	if a = build(); !a.Sidebar.Visible {
-		t.Fatal("sidebar reopened in the previous session should start visible")
-	}
-
-	a.Reg = command.NewRegistry()
-	RegisterCommands(a)
-	a.ShowEmptyState()
-	if a = build(); !a.Sidebar.Visible {
-		t.Fatal("hiding the sidebar for the empty state must not persist")
+	next.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	next.Appearance.Icons = config.IconsNerdFont
+	a.ApplySettings(next)
+	if got, want := explorerLabel(), icons.Get(config.IconsNerdFont, icons.PanelExplorer); got != want {
+		t.Fatalf("label after icon mode change = %q, want %q", got, want)
 	}
 }
 
-func TestPanelSizeRestoresAndPersists(t *testing.T) {
+func TestPluginSidebarIconFollowsIconMode(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	settings.Sidebar.TabStyle = config.SidebarTabStyleIcon
+	a := buildTestApp(t, settings)
+	a.PluginManager = plugin.NewManager(t.TempDir(), filepath.Join(t.TempDir(), "plugins.ttt.json"))
+	a.PluginManager.SidebarPanels = []plugin.SidebarRegistration{
+		{ID: "plugin.both", Title: "Both", Icon: plugin.PanelIcon{Plain: "T", Nerd: "N"}},
+		{ID: "plugin.nerdonly", Title: "NerdOnly", Icon: plugin.PanelIcon{Nerd: "N"}},
+	}
+	a.Sidebar.AddPanel("plugin.both", "Both", a.Changes.Adapter)
+	a.Sidebar.AddPanel("plugin.nerdonly", "NerdOnly", a.Changes.Adapter)
+	labels := func() map[string]string {
+		got := map[string]string{}
+		for _, item := range a.Sidebar.Tabs.Config.Items {
+			got[item.ID] = item.Label
+		}
+		return got
+	}
+
+	next := *a.Settings
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "T" || got["plugin.nerdonly"] != "NerdOnly" {
+		t.Fatalf("plain mode labels = %v", got)
+	}
+
+	next.Appearance.Icons = config.IconsNerdFont
+	a.ApplySettings(next)
+	if got := labels(); got["plugin.both"] != "N" || got["plugin.nerdonly"] != "N" {
+		t.Fatalf("nerd mode labels = %v", got)
+	}
+}
+
+func TestApplySettingsPointerShapes(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+
+	settings := config.DefaultSettings()
+	a := buildTestApp(t, settings)
+	sim := term.NewSimScreen()
+	a.Screen = term.NewTcellScreenFrom(sim)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should default to enabled")
+	}
+
+	next := *a.Settings
+	disabled := false
+	next.Appearance.PointerShapes = &disabled
+	a.ApplySettings(next)
+
+	if a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be disabled after ApplySettings")
+	}
+
+	enabled := true
+	next.Appearance.PointerShapes = &enabled
+	a.ApplySettings(next)
+
+	if !a.Screen.PointerShapesEnabled() {
+		t.Fatal("pointer shapes should be enabled after ApplySettings")
+	}
+}
+
+func TestFullLineSelectionAppliesLiveToEditorsAndDiffs(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
 
 	a := buildTestApp(t, config.DefaultSettings())
-	a.ContentSplit.BottomH = 12
-	a.ContentSplit.RightW = 45
-	a.persistPanelSize()
-
-	a.ContentSplit.BottomH = 2
-	a.ContentSplit.RightW = 10
-	a.persistPanelSize()
-	if got := config.LoadState(); got.PanelHeight != 12 || got.PanelWidth != 45 {
-		t.Fatalf("persisted panel size = %dx%d, want 12x45", got.PanelHeight, got.PanelWidth)
+	t.Cleanup(a.CloseTasks)
+	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -1 +1 @@\n-old\n+new\n")
+	a.EditorGroup.OpenDiffTab("diff", "Diff", "test.go", fd, nil, nil, false)
+	d := a.EditorGroup.ActiveDiffWidget()
+	if d == nil {
+		t.Fatal("diff tab was not active")
+	}
+	if a.EditorGroup.Editor.FullLineSelection || d.KeyPane().FullLineSelection {
+		t.Fatal("full line selection was on by default")
 	}
 
-	a = buildTestApp(t, config.DefaultSettings())
-	if a.ContentSplit.BottomH != 12 || a.ContentSplit.RightW != 45 {
-		t.Fatalf("restored panel size = %dx%d, want 12x45", a.ContentSplit.BottomH, a.ContentSplit.RightW)
+	for _, want := range []bool{true, false} {
+		s := *a.Settings
+		s.Editor.FullLineSelection = want
+		a.ApplySettings(s)
+		if got := a.EditorGroup.Editor.FullLineSelection; got != want {
+			t.Fatalf("editor FullLineSelection = %v, want %v", got, want)
+		}
+		if got := d.KeyPane().FullLineSelection; got != want {
+			t.Fatalf("diff pane FullLineSelection = %v, want %v", got, want)
+		}
 	}
 
-	if err := config.SaveState(config.State{PanelHeight: 2, PanelWidth: 10}); err != nil {
-		t.Fatal(err)
-	}
-	a = buildTestApp(t, config.DefaultSettings())
-	if a.ContentSplit.BottomH < ui.MinPanelHeight || a.ContentSplit.RightW < ui.MinPanelWidth {
-		t.Fatalf("restored tiny panel size = %dx%d", a.ContentSplit.BottomH, a.ContentSplit.RightW)
-	}
-}
-
-func TestReopeningTinyPanelResetsSize(t *testing.T) {
-	a := buildTestApp(t, config.DefaultSettings())
-	a.ContentSplit.SetRect(ui.Rect{W: 100, H: 40})
-	a.ContentSplit.BottomH = 2
-	a.ContentSplit.RightW = 3
-	a.ensureUsablePanelSize()
-	if a.ContentSplit.BottomH != 20 || a.ContentSplit.RightW != ui.DefaultPanelWidth {
-		t.Fatalf("panel size = %dx%d, want 20x%d", a.ContentSplit.BottomH, a.ContentSplit.RightW, ui.DefaultPanelWidth)
+	s := *a.Settings
+	s.Editor.FullLineSelection = true
+	a.ApplySettings(s)
+	a.SplitEditor()
+	for _, group := range a.editorGroups() {
+		if !group.Editor.FullLineSelection {
+			t.Fatal("full line selection did not reach a new split")
+		}
 	}
 }

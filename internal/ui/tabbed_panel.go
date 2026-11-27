@@ -4,6 +4,7 @@ import (
 	"slices"
 	"sort"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -23,6 +24,8 @@ type TabbedPanel struct {
 	panels         []panelEntry
 	preferredOrder []string
 	flagged        map[string]bool
+	tabStyle       string
+	panelIcons     map[string]string
 }
 
 func NewTabbedPanel() TabbedPanel {
@@ -58,6 +61,37 @@ func (tp *TabbedPanel) SetPanelOrder(order []string) {
 	tp.preferredOrder = tp.normalizedPanelOrder(order)
 	tp.applyPreferredOrder()
 	tp.syncTabs()
+}
+
+// SetTabStyle chooses how tabs present a panel. A panel without an icon always
+// shows its title so it stays identifiable.
+func (tp *TabbedPanel) SetTabStyle(style string) {
+	tp.tabStyle = style
+	tp.syncTabs()
+}
+
+// SetPanelIcon may be called before the panel exists, and the icon survives
+// RemovePanel, because the Plugins panel is added after the core icons are set.
+func (tp *TabbedPanel) SetPanelIcon(id, icon string) {
+	if tp.panelIcons == nil {
+		tp.panelIcons = map[string]string{}
+	}
+	tp.panelIcons[id] = icon
+	tp.syncTabs()
+}
+
+func (tp *TabbedPanel) tabLabel(p panelEntry) string {
+	icon := tp.panelIcons[p.ID]
+	if icon == "" {
+		return p.Title
+	}
+	switch tp.tabStyle {
+	case config.SidebarTabStyleIcon:
+		return icon
+	case config.SidebarTabStyleLabelIcon:
+		return icon + " " + p.Title
+	}
+	return p.Title
 }
 
 func (tp *TabbedPanel) normalizedPanelOrder(order []string) []string {
@@ -316,7 +350,11 @@ func (tp *TabbedPanel) HiddenTabs() ([]string, []string) {
 	for _, idx := range tp.Tabs.HiddenTabs() {
 		if idx >= 0 && idx < len(tp.panels) {
 			ids = append(ids, tp.panels[idx].ID)
-			titles = append(titles, tp.panels[idx].Title)
+			label := tp.panels[idx].Title
+			if tp.tabStyle == config.SidebarTabStyleLabelIcon {
+				label = tp.tabLabel(tp.panels[idx])
+			}
+			titles = append(titles, label)
 		}
 	}
 	return ids, titles
@@ -333,7 +371,7 @@ func (tp *TabbedPanel) syncTabs() {
 	for i, p := range tp.panels {
 		items[i] = widgets.TabItem{
 			ID:      p.ID,
-			Label:   p.Title,
+			Label:   tp.tabLabel(p),
 			Active:  p.ID == tp.ActivePanel,
 			Dirty:   dirty[p.ID],
 			Flagged: tp.flagged[p.ID],

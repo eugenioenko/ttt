@@ -1,9 +1,7 @@
 package app
 
 import (
-	"bufio"
 	"encoding/json"
-	"os"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
@@ -16,9 +14,12 @@ type LocationResult struct {
 }
 
 type DiagnosticsResult struct {
-	Server      string
-	Path        string
-	Diagnostics []ui.Diagnostic
+	Server string
+	Path   string
+	// Root is the root of the client that published. A document that moved
+	// roots after this result was sent must not have it applied.
+	Root        string
+	Diagnostics []lsp.Diagnostic
 }
 
 type SignatureHelpResult struct {
@@ -53,40 +54,53 @@ type CodeActionResult struct {
 	Edit *lsp.WorkspaceEdit
 }
 
-func ReadLineFromFile(path string, line int) string {
-	f, err := os.Open(path)
-	if err != nil {
-		return ""
-	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for i := 0; scanner.Scan(); i++ {
-		if i == line {
-			return scanner.Text()
-		}
-	}
-	return ""
+type CodeActionsResult struct {
+	Path        string
+	Server      string
+	Version     uint64
+	Buffer      *buffer.Buffer
+	OpenBuffers map[string]codeActionBufferSnapshot
+	Actions     []lsp.CodeAction
+	Err         error
+}
+
+type codeActionBufferSnapshot struct {
+	Buffer  *buffer.Buffer
+	Version uint64
+}
+
+type CodeActionCommandResult struct {
+	Err    error
+	Notify bool
+}
+
+type LSPApplyEditRequest struct {
+	Edit      lsp.WorkspaceEdit
+	Result    chan lsp.ApplyWorkspaceEditResult
+	Lifecycle *execRequestLifecycle
 }
 
 func FileURI(path string) string { return lsp.FileURI(path) }
 
 func URIToPath(uri string) string { return lsp.URIToPath(uri) }
 
-func LspToUICompletions(items []lsp.CompletionItem) []ui.CompletionItem {
+func LspToUICompletions(items []lsp.CompletionItem, lines []string) []ui.CompletionItem {
 	result := make([]ui.CompletionItem, 0, len(items))
 	for _, item := range items {
 		uiItem := ui.CompletionItem{
-			Label:      item.Label,
-			Detail:     item.Detail,
-			InsertText: item.InsertText,
-			FilterText: item.FilterText,
-			SortText:   item.SortText,
-			Kind:       lspKindToUI(item.Kind),
+			Label:            item.Label,
+			Detail:           item.Detail,
+			InsertText:       item.InsertText,
+			InsertTextFormat: item.InsertTextFormat,
+			FilterText:       item.FilterText,
+			SortText:         item.SortText,
+			Kind:             lspKindToUI(item.Kind),
 		}
 		if uiItem.InsertText == "" && item.TextEdit != nil {
 			uiItem.InsertText = item.TextEdit.NewText
 		}
 		for _, edit := range item.AdditionalTextEdits {
+			edit.Range = lsp.RangeToRunes(lines, edit.Range)
 			uiItem.AdditionalEdits = append(uiItem.AdditionalEdits, ui.AdditionalEdit{
 				StartLine: edit.Range.Start.Line,
 				StartCol:  edit.Range.Start.Character,
@@ -125,9 +139,10 @@ func lspKindToUI(kind lsp.CompletionItemKind) ui.CompletionKind {
 	}
 }
 
-func LspToUIDiagnostics(diags []lsp.Diagnostic) []ui.Diagnostic {
+func LspToUIDiagnostics(diags []lsp.Diagnostic, lines []string) []ui.Diagnostic {
 	result := make([]ui.Diagnostic, len(diags))
 	for i, d := range diags {
+		d.Range = lsp.RangeToRunes(lines, d.Range)
 		result[i] = ui.Diagnostic{
 			StartLine: d.Range.Start.Line,
 			StartCol:  d.Range.Start.Character,
@@ -136,6 +151,7 @@ func LspToUIDiagnostics(diags []lsp.Diagnostic) []ui.Diagnostic {
 			Severity:  ui.DiagnosticSeverity(d.Severity),
 			Message:   d.Message,
 			Source:    d.Source,
+			Code:      d.Code,
 		}
 	}
 	return result
@@ -154,8 +170,9 @@ func LspToSignatureHelpResult(sig *lsp.SignatureHelp) *SignatureHelpResult {
 		param := info.Parameters[paramIdx]
 		var offsets [2]int
 		if err := json.Unmarshal(param.Label, &offsets); err == nil {
-			result.ParamStart = offsets[0]
-			result.ParamEnd = offsets[1]
+			runes := []rune(info.Label)
+			result.ParamStart = len(string(runes[:lsp.UTF16ToRune(info.Label, offsets[0])]))
+			result.ParamEnd = len(string(runes[:lsp.UTF16ToRune(info.Label, offsets[1])]))
 		} else {
 			var label string
 			if err := json.Unmarshal(param.Label, &label); err == nil {

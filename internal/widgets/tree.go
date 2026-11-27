@@ -8,17 +8,21 @@ import (
 )
 
 type TreeNode struct {
-	ID             string      `json:"id"`
-	Label          string      `json:"label"`
-	Icon           string      `json:"icon,omitempty"`
-	IconStyle      term.Style  `json:"-"`
-	LabelIcon      string      `json:"-"`
-	LabelIconStyle term.Style  `json:"-"`
-	Badge          string      `json:"badge,omitempty"`
-	BadgeStyle     term.Style  `json:"-"`
-	Children       []*TreeNode `json:"children,omitempty"`
-	Actions        []Action    `json:"actions,omitempty"`
-	Muted          bool        `json:"-"`
+	ID                string      `json:"id"`
+	Label             string      `json:"label"`
+	Icon              string      `json:"icon,omitempty"`
+	IconStyle         term.Style  `json:"-"`
+	IconName          icons.Name  `json:"-"`
+	SelectedIconStyle term.Style  `json:"-"`
+	LabelIcon         string      `json:"-"`
+	LabelIconStyle    term.Style  `json:"-"`
+	Badge             string      `json:"badge,omitempty"`
+	BadgeStyle        term.Style  `json:"-"`
+	Children          []*TreeNode `json:"children,omitempty"`
+	Actions           []Action    `json:"actions,omitempty"`
+	Muted             bool        `json:"-"`
+	// Heading rows are never selected or activated; keys skip over them.
+	Heading bool `json:"-"`
 	// LabelStyle overrides the label color; Muted and selection take precedence.
 	LabelStyle   term.Style `json:"-"`
 	Expandable   bool       `json:"-"`
@@ -28,6 +32,7 @@ type TreeNode struct {
 	depth    int
 	parent   *TreeNode
 	chevronX int
+	labelX   int
 }
 
 type Action struct {
@@ -79,6 +84,8 @@ type TreeWidget struct {
 	BaseWidget
 	Config   TreeConfig
 	flatList []*TreeNode
+	filter   func(*TreeNode) bool
+	filtered map[*TreeNode]bool
 
 	selected  int
 	scrollTop int
@@ -105,6 +112,7 @@ func NewTreeWidget(cfg TreeConfig) *TreeWidget {
 	}
 	t := &TreeWidget{Config: cfg}
 	t.flatten()
+	t.skipHeadings(true)
 	return t
 }
 
@@ -161,7 +169,11 @@ func (t *TreeWidget) SetItems(items []*TreeNode) {
 // re-flattens every item and turns an append loop into O(n²).
 func (t *TreeWidget) AppendItem(item *TreeNode) {
 	t.Config.Items = append(t.Config.Items, item)
-	t.flattenNode(item, 0)
+	if t.filter != nil {
+		t.flatten()
+	} else {
+		t.flattenNode(item, 0)
+	}
 	t.clampSelected()
 }
 
@@ -293,7 +305,33 @@ func (t *TreeWidget) restoreExpanded(node *TreeNode, expanded map[string]bool, n
 	}
 }
 
+// SetFilter searches materialized nodes only, revealing ancestors without
+// changing expansion state or invoking lazy loading.
+func (t *TreeWidget) SetFilter(match func(*TreeNode) bool) {
+	selectedID := t.selectedID()
+	t.filter = match
+	t.flatten()
+	t.restoreVisibleSelection(selectedID)
+	t.lastSel = -1
+}
+
 func (t *TreeWidget) flatten() {
+	t.filtered = nil
+	if t.filter != nil {
+		t.filtered = make(map[*TreeNode]bool)
+		var include func(*TreeNode) bool
+		include = func(node *TreeNode) bool {
+			visible := t.filter(node)
+			for _, child := range node.Children {
+				visible = include(child) || visible
+			}
+			t.filtered[node] = visible
+			return visible
+		}
+		for _, root := range t.Config.Items {
+			include(root)
+		}
+	}
 	t.flatList = nil
 	for _, root := range t.Config.Items {
 		t.flattenNode(root, 0)
@@ -301,9 +339,12 @@ func (t *TreeWidget) flatten() {
 }
 
 func (t *TreeWidget) flattenNode(node *TreeNode, depth int) {
+	if t.filter != nil && !t.filtered[node] {
+		return
+	}
 	node.depth = depth
 	t.flatList = append(t.flatList, node)
-	if node.Expanded && len(node.Children) > 0 {
+	if (node.Expanded || t.filter != nil) && len(node.Children) > 0 {
 		for _, child := range node.Children {
 			child.parent = node
 			t.flattenNode(child, depth+1)
@@ -317,6 +358,23 @@ func (t *TreeWidget) clampSelected() {
 	}
 	if t.selected < 0 {
 		t.selected = 0
+	}
+	t.skipHeadings(true)
+}
+
+func (t *TreeWidget) skipHeadings(forward bool) {
+	for _, dir := range []bool{forward, !forward} {
+		for i := t.selected; i >= 0 && i < len(t.flatList); {
+			if !t.flatList[i].Heading {
+				t.selected = i
+				return
+			}
+			if dir {
+				i++
+			} else {
+				i--
+			}
+		}
 	}
 }
 
@@ -420,6 +478,7 @@ func (t *TreeWidget) rightSideWidth(node *TreeNode) int {
 
 func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) {
 	node.chevronX = -1
+	node.labelX = -1
 	if t.Config.RenderItem != nil {
 		t.Config.RenderItem(surface, node, idx, y, w, idx == t.selected)
 		return
@@ -446,7 +505,7 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		if chevron == 0 {
 			chevron = icons.Rune(icons.ChevronRight)
 		}
-		if node.Expanded {
+		if node.Expanded || t.filter != nil && len(node.Children) > 0 {
 			chevron = t.Config.ChevronExpanded
 			if chevron == 0 {
 				chevron = icons.Rune(icons.ChevronDown)
@@ -463,12 +522,18 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 		x++
 	}
 
-	if icon := node.Icon; icon != "" {
-		iconStyle := node.IconStyle
-		if iconStyle == term.StyleDefault {
-			iconStyle = style
+	icon := node.Icon
+	if node.IconName != "" {
+		if glyph := icons.Active(node.IconName); glyph != "" {
+			icon = glyph
 		}
+	}
+	if icon != "" {
+		iconStyle := node.IconStyle
 		if idx == t.selected {
+			iconStyle = node.SelectedIconStyle
+		}
+		if iconStyle == term.StyleDefault {
 			iconStyle = style
 		}
 		x = drawRunesClipped(surface, x, y, maxX, []rune(icon), iconStyle)
@@ -501,22 +566,23 @@ func (t *TreeWidget) renderNode(surface Surface, node *TreeNode, idx, y, w int) 
 			labelStyle = node.LabelStyle
 		}
 	}
-	labelRunes := []rune(node.Label)
+	label := node.Label
 	badgeW := 0
 	if t.Config.BadgeRight && node.Badge != "" {
 		gap := 0
 		if len(node.Actions) > 0 {
 			gap = 1
 		}
-		badgeW = rightBadgeWidth(maxX-x, textwidth.Runes(labelRunes), textwidth.String(node.Badge), gap)
+		badgeW = rightBadgeWidth(maxX-x, textwidth.GraphemeWidth(label), textwidth.String(node.Badge), gap)
 		if badgeW > 0 {
 			maxX -= badgeW + gap
 		}
 	}
 	if t.Config.TruncateLeft || node.TruncateLeft {
-		labelRunes = truncateRunesLeft(labelRunes, maxX-x)
+		label = truncateLabelLeft(label, maxX-x)
 	}
-	x = drawRunesClipped(surface, x, y, maxX, labelRunes, labelStyle)
+	node.labelX = t.contentX + x
+	x = drawLabelClipped(surface, x, y, maxX, label, labelStyle)
 
 	if node.Badge != "" && !t.Config.BadgeRight {
 		x++
@@ -633,6 +699,9 @@ func (t *TreeWidget) HandleEvent(ev tcell.Event) EventResult {
 	default:
 		return EventIgnored
 	}
+	if t.selected != prev {
+		t.skipHeadings(t.selected > prev)
+	}
 	reselected := t.activated && t.Config.ReselectOnActivate && t.Selected() != nil
 	if (t.selected != prev || reselected) && t.Config.OnSelect != nil {
 		t.Config.OnSelect(t.Selected())
@@ -705,6 +774,9 @@ func (t *TreeWidget) handleMouse(ev *tcell.EventMouse) EventResult {
 	idx := t.scrollTop + (my - t.contentY)
 	if idx < 0 || idx >= len(t.flatList) {
 		return EventIgnored
+	}
+	if t.flatList[idx].Heading {
+		return EventConsumed
 	}
 
 	if btn&tcell.Button2 != 0 {
@@ -862,6 +934,8 @@ func (t *TreeWidget) handleShortcutKey(r rune) EventResult {
 	}
 	return EventIgnored
 }
+
+func (n *TreeNode) LabelX() int { return n.labelX }
 
 func (n *TreeNode) isExpandable() bool {
 	return len(n.Children) > 0 || n.Expandable

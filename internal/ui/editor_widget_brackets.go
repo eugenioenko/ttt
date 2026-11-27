@@ -106,6 +106,7 @@ func (e *EditorPaneWidget) scanMatchingBracket() (int, int, bool) {
 func (e *EditorPaneWidget) GoToMatchingBracket() {
 	line, col, ok := e.findMatchingBracket()
 	if ok {
+		e.ResetCursorGoal()
 		e.ExpandFoldContaining(line)
 		e.Cursor.Line = line
 		e.Cursor.Col = col

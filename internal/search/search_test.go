@@ -2,10 +2,12 @@ package search
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,6 +16,100 @@ func requireRipgrep(t *testing.T) {
 	t.Helper()
 	if _, err := exec.LookPath("rg"); err != nil {
 		t.Skip("ripgrep not installed")
+	}
+}
+
+func TestFindAllMatchesLongJSONRecord(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "fixture.txt")
+	// JSON escaping can exceed the old 1 MiB record limit even for shorter lines.
+	line := strings.Repeat("\t", 600*1024) + "asdf"
+	if err := os.WriteFile(path, []byte(line+"\nasdf\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	found, err := FindAllMatches(context.Background(), Options{Query: "asdf"}, []string{path})
+	if err != nil {
+		t.Fatal(err)
+	}
+	matches := found[path]
+	if len(matches) != 2 {
+		t.Fatalf("matches = %d, want 2", len(matches))
+	}
+	for i, want := range []Match{
+		{FilePath: path, LineNum: 1, ColStart: len(line) - 4, ColEnd: len(line), LineText: line},
+		{FilePath: path, LineNum: 2, ColStart: 0, ColEnd: 4, LineText: "asdf"},
+	} {
+		if matches[i] != want {
+			t.Errorf("match %d has incorrect path, line, columns, or text", i)
+		}
+	}
+}
+
+func TestFindAllMatchesRejectsIncompleteScanAtRecordLimit(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "fixture.txt")
+	content := "asdf\n" + strings.Repeat("x", MaxRecordBytes) + "asdf\n"
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatal(err)
+	}
+	found, err := FindAllMatches(context.Background(), Options{Query: "asdf"}, []string{path})
+	if !errors.Is(err, ErrRecordTooLarge) || found != nil {
+		t.Fatalf("got %d files, error = %v; want no replacement matches and record limit error", len(found), err)
+	}
+}
+
+func TestSearchCaseSensitivity(t *testing.T) {
+	requireRipgrep(t)
+	t.Setenv("RIPGREP_CONFIG_PATH", "")
+	path := filepath.Join(t.TempDir(), "cases.txt")
+	if err := os.WriteFile(path, []byte("combobox\nComboBox\nCOMBOBOX\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	for _, capped := range []bool{true, false} {
+		for _, useRegex := range []bool{false, true} {
+			for _, caseSensitive := range []bool{false, true} {
+				for _, tc := range []struct {
+					query     string
+					exactLine int
+				}{
+					{"combobox", 1},
+					{"ComboBox", 2},
+					{"COMBOBOX", 3},
+					{"Combobox", 0},
+				} {
+					name := fmt.Sprintf("capped=%t/regex=%t/caseSensitive=%t/query=%s", capped, useRegex, caseSensitive, tc.query)
+					t.Run(name, func(t *testing.T) {
+						pattern := tc.query
+						if useRegex {
+							pattern = "^" + tc.query + "$"
+						}
+						opts := Options{Query: pattern, CaseSensitive: caseSensitive, UseRegex: useRegex}
+						args := append(BaseArgs(opts, capped), path)
+						ctx := context.Background()
+						found, err := scanCommand(ctx, exec.CommandContext(ctx, "rg", args...))
+						if err != nil {
+							t.Fatal(err)
+						}
+						var lines []int
+						for _, match := range found[path] {
+							lines = append(lines, match.LineNum)
+						}
+						want := []int{1, 2, 3}
+						if caseSensitive {
+							want = nil
+							if tc.exactLine != 0 {
+								want = []int{tc.exactLine}
+							}
+						}
+						if !slices.Equal(lines, want) {
+							t.Fatalf("matched lines = %v, want %v", lines, want)
+						}
+					})
+				}
+			}
+		}
 	}
 }
 

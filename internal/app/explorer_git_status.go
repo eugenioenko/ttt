@@ -3,7 +3,7 @@ package app
 import (
 	"path/filepath"
 
-	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -11,10 +11,7 @@ import (
 func explorerGitStyles(groups []changesGroup) map[string]term.Style {
 	styles := make(map[string]term.Style)
 	for _, group := range groups {
-		for _, file := range group.Staged {
-			addExplorerGitStyle(styles, group.Dir, file)
-		}
-		for _, file := range group.Unstaged {
+		for _, file := range group.Changes {
 			addExplorerGitStyle(styles, group.Dir, file)
 		}
 	}
@@ -23,8 +20,8 @@ func explorerGitStyles(groups []changesGroup) map[string]term.Style {
 
 // addExplorerGitStyle colors the file and every ancestor up to the repository
 // root, so a collapsed folder still shows that something under it changed.
-func addExplorerGitStyle(styles map[string]term.Style, root string, file git.FileStatus) {
-	style := ui.GitDecorationStyle(file.Status, file.Staged)
+func addExplorerGitStyle(styles map[string]term.Style, root string, file scm.Change) {
+	style := ui.ChangeStyle(file.Kind, file.Group == scm.Staged)
 	if style == term.StyleDefault {
 		return
 	}

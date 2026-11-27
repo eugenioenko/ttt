@@ -11,6 +11,7 @@ import (
 
 type MarkdownWidget struct {
 	BaseWidget
+	ControlModifiers  *tcell.ModMask
 	MaxWidth          int
 	FillStyle         term.Style
 	FullWidthDividers bool
@@ -304,7 +305,7 @@ func (m *MarkdownWidget) mouseToContent(mx, my int) selection.Position {
 func (m *MarkdownWidget) HandleEvent(ev tcell.Event) EventResult {
 	switch e := ev.(type) {
 	case *tcell.EventKey:
-		if e.Key() == tcell.KeyCtrlC && m.sel.Active {
+		if term.ControlKeyMatches(e, tcell.KeyCtrlC, m.ControlModifiers) && m.sel.Active {
 			text := m.sel.Text(m.wrappedTextLines(), m.selEnd.Line, m.selEnd.Col)
 			if text != "" {
 				clipboard.Set(text)

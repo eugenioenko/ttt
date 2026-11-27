@@ -178,7 +178,7 @@ func diffLineVisualWidth(text string) int {
 }
 
 func diffWrapStarts(text string, width int) []int {
-	return wrapLineSegments([]rune(text), width, diffTabWidth)
+	return wrapLineSegments(text, width, diffTabWidth, false)
 }
 
 // drawTextSegment draws one horizontally clipped or wrapped segment. Rune

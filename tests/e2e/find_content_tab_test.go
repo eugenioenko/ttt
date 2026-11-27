@@ -40,7 +40,7 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 			if err := os.WriteFile(textPath, []byte("cat\ncat\ncat\n"), 0644); err != nil {
 				t.Fatal(err)
 			}
-			h.app.EditorGroup.OpenFile(textPath)
+			h.openFile(textPath)
 			h.app.EditorGroup.CommitActiveTab()
 			h.redraw()
 
@@ -52,7 +52,7 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 
 			contentPath := filepath.Join(h.dir, tc.file)
 			tc.write(t, contentPath)
-			h.app.EditorGroup.OpenFile(contentPath)
+			h.openFile(contentPath)
 			h.redraw()
 
 			if h.app.EditorGroup.IsEditorActive() {
@@ -60,8 +60,8 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 			}
 			h.assertContains(tc.want)
 			fb := findBarWidget(t, h)
-			if fb.Input.Text != "cat" {
-				t.Fatalf("query = %q, want it kept", fb.Input.Text)
+			if fb.Input.Text() != "cat" {
+				t.Fatalf("query = %q, want it kept", fb.Input.Text())
 			}
 			if len(fb.Matches) != 0 {
 				t.Fatalf("content tab matches = %d, want 0", len(fb.Matches))
@@ -71,8 +71,8 @@ func TestFindShowsNoMatchesOnContentTab(t *testing.T) {
 
 			h.app.EditorGroup.SwitchTab(0)
 			h.redraw()
-			if fb.Input.Text != "cat" {
-				t.Fatalf("query after return = %q, want cat", fb.Input.Text)
+			if fb.Input.Text() != "cat" {
+				t.Fatalf("query after return = %q, want cat", fb.Input.Text())
 			}
 			if len(fb.Matches) != 3 {
 				t.Fatalf("text tab matches = %d, want 3", len(fb.Matches))

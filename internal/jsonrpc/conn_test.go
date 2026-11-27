@@ -14,8 +14,8 @@ func pipeConn(t *testing.T, opts Options) (*Conn, *Codec) {
 	connR, peerW := io.Pipe()
 	peerR, connW := io.Pipe()
 	t.Cleanup(func() {
-		peerW.Close()
-		connW.Close()
+		_ = peerW.Close()
+		_ = connW.Close()
 	})
 	return NewConn(connR, connW, opts), NewCodec(peerR, peerW)
 }
@@ -53,15 +53,15 @@ func TestConnAnswersPeerRequest(t *testing.T) {
 		},
 	})
 
-	peer.Send(map[string]any{"jsonrpc": "2.0", "id": "a", "method": "add", "params": []int{2, 3}})
+	requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "id": "a", "method": "add", "params": []int{2, 3}}))
 	if reply := receive(t, peer); string(reply.ID) != `"a"` || string(reply.Result) != "5" {
 		t.Fatalf("add reply = id %s result %s", reply.ID, reply.Result)
 	}
-	peer.Send(map[string]any{"jsonrpc": "2.0", "id": 7, "method": "fail"})
+	requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "id": 7, "method": "fail"}))
 	if reply := receive(t, peer); reply.Error == nil || reply.Error.Code != CodeInternalError || reply.Error.Message != "boom" {
 		t.Fatalf("fail reply error = %+v", reply.Error)
 	}
-	peer.Send(map[string]any{"jsonrpc": "2.0", "id": 8, "method": "custom"})
+	requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "id": 8, "method": "custom"}))
 	if reply := receive(t, peer); reply.Error == nil || reply.Error.Code != 42 {
 		t.Fatalf("custom reply error = %+v", reply.Error)
 	}
@@ -69,7 +69,7 @@ func TestConnAnswersPeerRequest(t *testing.T) {
 
 func TestConnWithoutRequestHandlerRepliesMethodNotFound(t *testing.T) {
 	_, peer := pipeConn(t, Options{})
-	peer.Send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "anything"})
+	requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "anything"}))
 	if reply := receive(t, peer); reply.Error == nil || reply.Error.Code != CodeMethodNotFound {
 		t.Fatalf("reply error = %+v", reply.Error)
 	}
@@ -79,7 +79,7 @@ func TestConnNullResultIsSent(t *testing.T) {
 	_, peer := pipeConn(t, Options{
 		OnRequest: func(string, json.RawMessage) (any, error) { return nil, nil },
 	})
-	peer.Send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "noop"})
+	requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "id": 1, "method": "noop"}))
 	if reply := receive(t, peer); string(reply.Result) != "null" || reply.Error != nil {
 		t.Fatalf("reply = result %q error %+v", reply.Result, reply.Error)
 	}
@@ -155,7 +155,7 @@ func TestConnDeliversNotificationsInOrder(t *testing.T) {
 		OnNotification: func(method string, _ json.RawMessage) { got <- method },
 	})
 	for _, m := range []string{"a", "b", "c"} {
-		peer.Send(map[string]any{"jsonrpc": "2.0", "method": m})
+		requireNoError(t, peer.Send(map[string]any{"jsonrpc": "2.0", "method": m}))
 	}
 	for _, want := range []string{"a", "b", "c"} {
 		select {
@@ -211,7 +211,7 @@ func TestConnCloseReleasesCallsBeforeOnClose(t *testing.T) {
 		released <- err
 	}()
 	<-sent
-	peerW.Close()
+	requireNoError(t, peerW.Close())
 	select {
 	case err := <-closed:
 		if !errors.Is(err, ErrClosed) {

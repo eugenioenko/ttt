@@ -9,23 +9,30 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/buffer"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
-const (
-	welcomeTabID         = "welcome"
-	welcomeFavoritesHint = "Right-click a folder in the Explorer to add it to favorites"
+const welcomeTabID = "welcome"
+
+var (
+	welcomeFavoritesHint string
+	welcomeCommands      []struct{ label, commandID string }
 )
 
-var welcomeCommands = []struct{ label, commandID string }{
-	{"Open Folder…", "workspace.openFolder"},
-	{"Clone Repository…", "workspace.clone"},
-	{"New File", "file.new"},
-	{"Open Workspace…", "workspace.open"},
-	{"Settings", "settings.openUI"},
-	{"Command Palette", "command.palette"},
+func initWelcomeText() {
+	welcomeFavoritesHint = i18n.Text("welcome.favoritesHint")
+
+	welcomeCommands = []struct{ label, commandID string }{
+		{i18n.Text("welcome.openFolder"), "workspace.openFolder"},
+		{i18n.Text("welcome.cloneRepository"), "workspace.clone"},
+		{i18n.Text("general.newFile"), "file.new"},
+		{i18n.Text("welcome.openWorkspace"), "workspace.open"},
+		{i18n.Text("general.settings"), "settings.openUI"},
+		{i18n.Text("welcome.commandPalette"), "command.palette"},
+	}
 }
 
 // welcomeItems lists the start actions with their shortcuts, then the
@@ -40,23 +47,17 @@ func (a *App) welcomeItems() []welcomeItem {
 		}
 		items = append(items, welcomeItem{label: c.label, detail: shortcut, run: func() { a.Reg.Execute(c.commandID) }})
 	}
-	for _, fav := range a.Settings.Welcome.Favorites {
-		abs, err := filepath.Abs(workspace.ExpandPath(fav))
-		if err != nil {
-			continue
-		}
-		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
-			continue
-		}
+	for _, fav := range a.favoriteDirs() {
+		abs := fav.abs
 		item := welcomeItem{
 			label:  filepath.Base(abs),
-			detail: fav,
+			detail: fav.path,
 			tight:  true,
 			run:    func() { a.openFolderPath(abs) },
 			copy:   func() { a.FileOpCopyAbsolutePath(abs) },
 		}
 		if len(items) == len(welcomeCommands) {
-			item.section = "Favorites"
+			item.section = i18n.Text("general.favorites")
 			item.tight = false
 		}
 		items = append(items, item)
@@ -80,7 +81,7 @@ func (a *App) welcomeItems() []welcomeItem {
 			copy:   func() { a.FileOpCopyAbsolutePath(abs) },
 		}
 		if first {
-			item.section = "Recent"
+			item.section = i18n.Text("welcome.recent")
 			item.tight = false
 			first = false
 		}
@@ -99,7 +100,7 @@ func (a *App) ShowWelcome() {
 	a.refreshWelcome()
 	adapter := ui.NewWidgetAdapter(view)
 	onlyBlankUntitled := a.editorIsBlank()
-	a.EditorGroup.OpenPluginTab(welcomeTabID, "Welcome", adapter)
+	a.EditorGroup.OpenPluginTab(welcomeTabID, i18n.Text("welcome.welcome"), adapter)
 	if onlyBlankUntitled {
 		a.EditorGroup.CloseOtherTabs()
 	}
@@ -117,7 +118,7 @@ func (a *App) refreshWelcome() {
 	v.items = a.welcomeItems()
 	v.note = welcomeFavoritesHint
 	for _, item := range v.items {
-		if item.section == "Favorites" {
+		if item.section == i18n.Text("general.favorites") {
 			v.note = ""
 		}
 	}
@@ -158,6 +159,28 @@ func (a *App) closeWelcome() {
 	a.EditorGroup.ClosePluginTab(welcomeTabID)
 }
 
+type favoriteDir struct {
+	path string
+	abs  string
+}
+
+// favoriteDirs returns the favorites that exist as directories, each with its
+// path as written in settings.
+func (a *App) favoriteDirs() []favoriteDir {
+	var out []favoriteDir
+	for _, fav := range a.Settings.Welcome.Favorites {
+		abs, err := filepath.Abs(workspace.ExpandPath(fav))
+		if err != nil {
+			continue
+		}
+		if info, err := os.Stat(abs); err != nil || !info.IsDir() {
+			continue
+		}
+		out = append(out, favoriteDir{path: fav, abs: abs})
+	}
+	return out
+}
+
 // favoriteIndex finds abs in welcome.favorites, comparing expanded paths.
 func (a *App) favoriteIndex(abs string) int {
 	for i, fav := range a.Settings.Welcome.Favorites {
@@ -185,12 +208,16 @@ func tildePath(abs string) string {
 // a.Settings whole would also write this window's layout over whatever another
 // ttt window saved.
 func (a *App) saveFavorites(favs []string, msg string) {
+	disk, err := a.readSettings()
+	if err != nil && !os.IsNotExist(err) {
+		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))
+		return
+	}
 	a.Settings.Welcome.Favorites = favs
 	a.refreshWelcome()
-	disk := config.LoadSettings()
 	disk.Welcome.Favorites = favs
-	if err := config.SaveSettings(disk); err != nil {
-		a.StatusError("Failed to save favorites: " + err.Error())
+	if err := a.saveSettings(disk); err != nil {
+		a.StatusError(i18n.Format("status.failedToSaveFavorites", i18n.Args{"error": err.Error()}))
 		return
 	}
 	a.StatusNotify(msg)
@@ -198,16 +225,16 @@ func (a *App) saveFavorites(favs []string, msg string) {
 
 func (a *App) addFavorite(abs string) {
 	if a.favoriteIndex(abs) >= 0 {
-		a.StatusNotify(filepath.Base(abs) + " is already a favorite")
+		a.StatusNotify(i18n.Format("status.isAlreadyAFavorite", i18n.Args{"filename": filepath.Base(abs)}))
 		return
 	}
-	a.saveFavorites(append(a.Settings.Welcome.Favorites, tildePath(abs)), "Added "+filepath.Base(abs)+" to favorites")
+	a.saveFavorites(append(a.Settings.Welcome.Favorites, tildePath(abs)), i18n.Format("welcome.addedToFavorites", i18n.Args{"filename": filepath.Base(abs)}))
 }
 
 func (a *App) removeFavorite(i int) {
 	favs := a.Settings.Welcome.Favorites
 	name := filepath.Base(favs[i])
-	a.saveFavorites(append(favs[:i:i], favs[i+1:]...), "Removed "+name+" from favorites")
+	a.saveFavorites(append(favs[:i:i], favs[i+1:]...), i18n.Format("welcome.removedFromFavorites", i18n.Args{"name": name}))
 }
 
 // AddFavorite adds the right-clicked Explorer root, or a workspace folder.
@@ -225,11 +252,11 @@ func (a *App) AddFavorite() {
 	}
 	switch len(items) {
 	case 0:
-		a.StatusWarn("No open folder to add to favorites")
+		a.StatusWarn(i18n.Text("status.noOpenFolderToAddToFavorites"))
 	case 1:
 		a.addFavorite(items[0].ID)
 	default:
-		a.ShowSelectDialog("Add to Favorites", items, a.addFavorite, nil)
+		a.ShowSelectDialog(i18n.Text("welcome.addToFavorites"), items, a.addFavorite, nil)
 	}
 }
 
@@ -245,14 +272,14 @@ func (a *App) RemoveFavorite() {
 	}
 	favs := a.Settings.Welcome.Favorites
 	if len(favs) == 0 {
-		a.StatusWarn("No favorites")
+		a.StatusWarn(i18n.Text("status.noFavorites"))
 		return
 	}
 	items := make([]widgets.SelectItem, len(favs))
 	for i, fav := range favs {
 		items[i] = widgets.SelectItem{ID: strconv.Itoa(i), Label: fav}
 	}
-	a.ShowSelectDialog("Remove from Favorites", items, func(id string) {
+	a.ShowSelectDialog(i18n.Text("welcome.removeFromFavorites"), items, func(id string) {
 		if i, err := strconv.Atoi(id); err == nil && i < len(a.Settings.Welcome.Favorites) {
 			a.removeFavorite(i)
 		}
@@ -261,16 +288,16 @@ func (a *App) RemoveFavorite() {
 
 const maxRecentFolders = 10
 
-// pushRecent puts paths at the front of recent, most recent first, without
+// pushRecent puts items at the front of recent, most recent first, without
 // duplicates.
-func pushRecent(recent, paths []string) []string {
-	out := slices.Clone(paths)
-	for _, p := range recent {
-		if !slices.Contains(out, p) {
-			out = append(out, p)
+func pushRecent(recent, items []string, limit int) []string {
+	out := slices.Clone(items)
+	for _, item := range recent {
+		if !slices.Contains(out, item) {
+			out = append(out, item)
 		}
 	}
-	return out[:min(len(out), maxRecentFolders)]
+	return out[:min(len(out), limit)]
 }
 
 // RememberRecentFolders records the open folders for the welcome page. It
@@ -285,14 +312,14 @@ func (a *App) RememberRecentFolders() {
 		return
 	}
 	disk := config.LoadState()
-	recent := pushRecent(disk.RecentFolders, paths)
+	recent := pushRecent(disk.RecentFolders, paths, maxRecentFolders)
 	a.State.RecentFolders = recent
 	if slices.Equal(recent, disk.RecentFolders) {
 		return
 	}
 	disk.RecentFolders = recent
 	if err := config.SaveState(disk); err != nil {
-		a.StatusError("Failed to save recent folders: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSaveRecentFolders", i18n.Args{"error": err.Error()}))
 	}
 }
 
@@ -304,6 +331,6 @@ func (a *App) clearRecentFolders() {
 	}
 	disk.RecentFolders = nil
 	if err := config.SaveState(disk); err != nil {
-		a.StatusError("Failed to clear recent folders: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToClearRecentFolders", i18n.Args{"error": err.Error()}))
 	}
 }

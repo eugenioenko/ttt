@@ -1,13 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"runtime/debug"
-	"strings"
+	"syscall"
 	"time"
 
 	"path/filepath"
@@ -17,12 +19,14 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/update"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -52,15 +56,15 @@ func handlePanic(screen *term.TcellScreen) {
 	if r == nil {
 		return
 	}
-	if screen != nil {
-		screen.Fini()
-	}
 	stack := debug.Stack()
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
 	crashPath := config.ConfigFilePath("crash.log")
 	header := fmt.Sprintf("ttt crash report — %s\nVersion: %s\n\n", time.Now().Format(time.RFC3339), version)
-	os.WriteFile(crashPath, []byte(header+crashMsg), 0644)
-	fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	if err := os.WriteFile(crashPath, []byte(header+crashMsg), 0644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	}
 	fmt.Fprintln(os.Stderr, crashMsg)
 	os.Exit(1)
 }
@@ -74,7 +78,6 @@ type cliFlags struct {
 	debug        bool
 	listen       bool
 	stdin        bool
-	targets      bool
 	noForward    bool
 }
 
@@ -113,7 +116,9 @@ func parseFlags() cliFlags {
 		case "--size":
 			f.noForward = true
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH)
+				if _, err := fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH); err != nil {
+					f.sizeW, f.sizeH = 0, 0
+				}
 				i++
 			}
 		case "--debug":
@@ -124,17 +129,12 @@ func parseFlags() cliFlags {
 			f.listen = true
 		case "--workspace":
 			f.noForward = true
-			f.targets = true
 			i++
 		case "--new-window":
 			f.noForward = true
 		case "-":
 			f.noForward = true
 			f.stdin = true
-		default:
-			if !strings.HasPrefix(args[i], "-") {
-				f.targets = true
-			}
 		}
 	}
 	return f
@@ -150,15 +150,22 @@ func stdinIsPiped() bool {
 	return info.Mode()&os.ModeNamedPipe != 0 || info.Mode().IsRegular()
 }
 
-func initTerminalScreen(listen bool) *term.TcellScreen {
-	screen, err := term.NewTcellScreen()
+func initTerminalScreen(listen bool) (*term.TcellScreen, *app.TerminalPalette, *term.OSCReader) {
+	tty, err := tcell.NewDevTty()
 	if err != nil {
 		if listen {
 			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
 		}
 		panic(err)
 	}
-	return screen
+	screen, osc, err := term.NewTerminfoScreenFromTty(tty)
+	if err != nil {
+		if listen {
+			panic(fmt.Errorf("--listen needs a real terminal (TTY); for headless use --exec instead: %w", err))
+		}
+		panic(err)
+	}
+	return screen, app.NewTerminalPalette(osc), osc
 }
 
 func initSimulationScreen(w, h int) *term.TcellScreen {
@@ -172,12 +179,31 @@ func initSimulationScreen(w, h int) *term.TcellScreen {
 }
 
 func main() {
+	buildInfo, _ := debug.ReadBuildInfo()
+	version = update.ResolveVersion(version, buildInfo)
 	exitCode := 0
 	defer func() {
 		if exitCode != 0 {
 			os.Exit(exitCode)
 		}
 	}()
+	restartRequested := false
+	var restartMethod update.Kind
+	restartLaunch, restartErr := captureRestartTarget(os.Args[0])
+	defer func() {
+		if restartRequested {
+			code, err := 1, restartErr
+			if err == nil {
+				code, err = restartLaunch.restart(restartMethod)
+			}
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				code = 1
+			}
+			exitCode = code
+		}
+	}()
+	update.CleanupOldExecutable()
 
 	for _, arg := range os.Args[1:] {
 		switch arg {
@@ -185,7 +211,8 @@ func main() {
 			fmt.Printf(`ttt %s - TTT Editor, Terminal Text Tool, an IDE for your terminal
 
 Usage: ttt [options] [files/folders/URLs...]
-Set reuseWindow in settings.json to open files in the newest running editor.
+Set reuseWindow in settings.json to open files and add folders in a running editor.
+The integrated terminal prefers its parent editor; otherwise the newest wins.
 
 Arguments:
   files               Open one or more files
@@ -194,8 +221,7 @@ Arguments:
   .                   Open the current directory
   PR URL              Open a GitHub pull request for review
   -                   Read stdin into an untitled tab (automatic when stdin
-                      is a pipe or a redirected file and nothing else is
-                      given to open)
+                      is a pipe or a redirected file, except with --exec)
 
 Options:
   --help, -h          Show this help message
@@ -244,10 +270,16 @@ Docs: https://tttedit.dev
 
 	flags := parseFlags()
 	cfg := config.Load(flags.configFile)
-	if cfg.Settings.ReuseWindow && !flags.noForward {
-		if targets := app.ForwardableTargets(); len(targets) > 0 {
-			err := app.ForwardFiles(targets)
+	stdinPiped := stdinIsPiped()
+	if cfg.Settings.ReuseWindow && !flags.noForward && !stdinPiped {
+		if files, folders := app.ForwardableTargets(); len(files) > 0 || len(folders) > 0 {
+			pid, err := app.ForwardTargets(files, folders)
 			if err == nil {
+				if pid > 0 {
+					fmt.Fprintf(os.Stderr, "opened in running editor (pid %d)\n", pid)
+				} else {
+					fmt.Fprintln(os.Stderr, "opened in running editor")
+				}
 				return
 			}
 			if !errors.Is(err, app.ErrForwardUnavailable) {
@@ -256,7 +288,9 @@ Docs: https://tttedit.dev
 			}
 		}
 	}
-	config.ParseKeyBindings(cfg.Keybindings)
+	if err := config.ParseKeyBindings(cfg.Keybindings); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
 	if flags.debug {
 		cfg.Settings.DebugMode = true
@@ -264,15 +298,13 @@ Docs: https://tttedit.dev
 
 	logFile := initLogger(cfg.Settings.DebugMode)
 	if logFile != nil {
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
-	// Without "-", stdin is read only when nothing else was asked for: a shell
-	// loop running `ttt "$f"` must keep its input, and --exec runs from scripts
-	// and tests whose stdin is a pipe. The UI reads keys from the terminal.
+	// --exec inherits scripted stdin; only "-" explicitly consumes it.
 	var stdinText *string
-	if flags.stdin || (flags.exec == "" && !flags.targets && stdinIsPiped()) {
+	if flags.stdin || (flags.exec == "" && stdinPiped) {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "ttt: reading stdin: %v\n", err)
@@ -285,17 +317,28 @@ Docs: https://tttedit.dev
 	}
 
 	var screen *term.TcellScreen
+	var capturedPalette *app.TerminalPalette
+	var oscReader *term.OSCReader
 	if flags.exec != "" {
 		clipboard.DisableSystem()
 		screen = initSimulationScreen(flags.sizeW, flags.sizeH)
 	} else {
-		screen = initTerminalScreen(flags.listen)
+		screen, capturedPalette, oscReader = initTerminalScreen(flags.listen)
 	}
-	defer screen.Fini()
 	defer handlePanic(screen)
+	if capturedPalette != nil {
+		defer func() {
+			capturedPalette.Close()
+			screen.Fini()
+			oscReader.Close()
+		}()
+	} else {
+		defer screen.Fini()
+	}
 
 	app.ApplyThemeStyles(screen, cfg.Theme, app.WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), app.WithEditorSelectionStyle(cfg.Settings.Editor.SelectionStyle), app.WithPluginSelectionStyle(cfg.Settings.Plugins.SelectionStyle))
 	screen.SetCursorStyle(term.ParseCursorStyle(cfg.Settings.Editor.CursorStyle))
+	screen.SetPointerShapesEnabled(cfg.Settings.Appearance.PointerShapesEnabled())
 
 	// Route OSC 52 clipboard writes through the tty, not raw stderr
 	if tty, ok := screen.Tty(); ok {
@@ -319,6 +362,9 @@ Docs: https://tttedit.dev
 	defer func() { editor.CloseImageLayer() }()
 
 	editor.Version = version
+	if capturedPalette != nil {
+		editor.TerminalPalette = capturedPalette
+	}
 	editor.Keybindings = cfg.Keybindings
 	editor.Reg = cmdRegistry
 	running := true
@@ -330,6 +376,10 @@ Docs: https://tttedit.dev
 	pluginsDir := filepath.Join(filepath.Dir(registryPath), "plugins")
 	localPluginsDir := filepath.Join(editor.Workspace.Primary(), "plugins")
 	pluginManager := plugin.NewManager(pluginsDir, registryPath, localPluginsDir)
+	pluginManager.SetSystemDir(cfg.Settings.Plugins.SystemDir)
+	pluginManager.OnDiscoveryError = func(path string, err error) {
+		editor.StatusError(i18n.Format("plugins.discoveryFailed", i18n.Args{"path": path, "error": err.Error()}))
+	}
 	editor.PluginManager = pluginManager
 	defer pluginManager.Shutdown()
 
@@ -338,7 +388,7 @@ Docs: https://tttedit.dev
 		pluginManager.SetLogFactory(func(pluginName string) func(string, string) {
 			return func(level, message string) {
 				editor.LogOutput(level, pluginName, message)
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 		})
 		// Before LoadAll, so ttt.version() is available during plugin init.
@@ -364,22 +414,17 @@ Docs: https://tttedit.dev
 
 		for _, p := range pluginManager.Plugins() {
 			p.RequestRedraw = func() {
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 			p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
-				screen.PostEvent(tcell.NewEventInterrupt(result))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 			})
 		}
 		editor.RegisterStartupPluginCommands()
 
 		pluginsPanel := app.NewPluginsPanel(pluginManager)
-		editor.Sidebar.AddPanel("plugins", "Plugins", pluginsPanel.Adapter)
+		editor.Sidebar.AddPanel("plugins", i18n.Text("plugins.plugins"), pluginsPanel.Adapter)
 		editor.WirePluginsPanel(pluginsPanel)
-
-		go func() {
-			entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-			screen.PostEvent(tcell.NewEventInterrupt(&app.RemoteRegistryResult{Entries: entries, Err: err}))
-		}()
 
 		if len(pendingApprovals) > 0 {
 			editor.PendingPluginApprovals = pendingApprovals
@@ -435,15 +480,29 @@ Docs: https://tttedit.dev
 
 	if flags.listen {
 		editor.LogOutput("info", "ttt", "Listening on "+app.ListenAddress()+" (POST /exec)")
-		go app.StartListenServer(editor)
+		stopListen := app.StartListenServer(editor)
+		defer stopListen()
 	}
 
+	editor.CheckLanguagePackUpdates()
+	if flags.exec == "" {
+		editor.CheckForUpdatesOnStartup(time.Now())
+	}
+	shutdown, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGTERM)
+	defer stopSignals()
+	stopShutdown := context.AfterFunc(shutdown, func() {
+		stopSignals()
+		_ = app.StopExecLoop(editor)
+	})
+	defer stopShutdown()
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)
 		}
 	})
 	stopForward()
+	restartRequested = editor.RestartRequested
+	restartMethod = editor.RestartMethod
 	if execOutcome != nil {
 		select {
 		case outcome := <-execOutcome:

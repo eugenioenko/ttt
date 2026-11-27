@@ -3,12 +3,23 @@ package command
 import "sort"
 
 type Command struct {
-	ID       string
-	Title    string
-	Shortcut string
-	Keywords []string
-	Handler  func()
-	Hidden   bool
+	ID           string
+	Title        string
+	DisplayTitle string
+	Shortcut     string
+	Keywords     []string
+	Handler      func()
+	Hidden       bool
+	// PaletteHidden keeps the command out of the command palette only.
+	// Registry.List() does not filter on it, so keybindings and plugins still see it.
+	PaletteHidden bool
+}
+
+func (c Command) PaletteTitle() string {
+	if c.DisplayTitle != "" {
+		return c.DisplayTitle
+	}
+	return c.Title
 }
 
 type Registry struct {
@@ -21,6 +32,10 @@ func NewRegistry() *Registry {
 
 func (r *Registry) Register(cmd Command) {
 	r.commands[cmd.ID] = cmd
+}
+
+func (r *Registry) Unregister(id string) {
+	delete(r.commands, id)
 }
 
 func (r *Registry) Execute(id string) bool {

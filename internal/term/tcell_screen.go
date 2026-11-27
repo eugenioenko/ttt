@@ -25,9 +25,11 @@ func DefaultStyleMap() StyleMap {
 // TcellScreen implements the Screen interface using tcell.
 type TcellScreen struct {
 	scr      tcell.Screen
+	osc      *OSCReader
 	styleMap StyleMap
 	// Called on every mouse event; only a change is written to the tty.
-	pointerShape string
+	pointerShape         string
+	pointerShapesEnabled bool
 }
 
 func NewTcellScreen() (*TcellScreen, error) {
@@ -40,11 +42,29 @@ func NewTcellScreen() (*TcellScreen, error) {
 	}
 	s.EnableMouse()
 	s.EnablePaste()
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}, nil
+	s.EnableFocus()
+	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, nil
+}
+
+// NewTerminfoScreenFromTty initializes a tcell screen using tty while routing
+// replies to registered OSC 4/10/11 queries away from the keyboard input stream.
+func NewTerminfoScreenFromTty(tty tcell.Tty, opts ...tcell.TerminfoScreenOption) (*TcellScreen, *OSCReader, error) {
+	osc := NewOSCReader(tty)
+	s, err := tcell.NewTerminfoScreenFromTty(OSCTty{Tty: tty, Reader: osc}, opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := s.Init(); err != nil {
+		return nil, nil, err
+	}
+	s.EnableMouse()
+	s.EnablePaste()
+	s.EnableFocus()
+	return &TcellScreen{scr: s, osc: osc, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}, osc, nil
 }
 
 func NewTcellScreenFrom(s tcell.Screen) *TcellScreen {
-	return &TcellScreen{scr: s, styleMap: DefaultStyleMap()}
+	return &TcellScreen{scr: s, styleMap: DefaultStyleMap(), pointerShapesEnabled: true}
 }
 
 func (t *TcellScreen) SetStyleMap(m StyleMap) {
@@ -83,7 +103,10 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 		if c.Attrs&CellAttrBlink != 0 {
 			s = s.Blink(true)
 		}
-		t.scr.Put(x, y, runeString(c.Ch), s)
+		if c.Link != (Hyperlink{}) {
+			s = s.Url(c.Link.URL()).UrlId(c.Link.ID())
+		}
+		t.scr.Put(x, y, c.text(), s)
 		return
 	}
 	s := t.styleMap[c.Style]
@@ -135,13 +158,23 @@ func (t *TcellScreen) SetCell(x, y int, c Cell) {
 			// the displayed background is the terminal's default foreground.
 			s = s.Reverse(reverse)
 			t.scr.Put(x, y, " ", s)
-			if textwidth.Rune(c.Ch) == 2 {
+			if textwidth.GraphemeWidth(c.text()) == 2 {
 				t.scr.Put(x+1, y, " ", s)
 			}
 			return
 		}
 	}
-	t.scr.Put(x, y, runeString(c.Ch), s)
+	if c.Link != (Hyperlink{}) {
+		s = s.Url(c.Link.URL()).UrlId(c.Link.ID())
+	}
+	t.scr.Put(x, y, c.text(), s)
+}
+
+func (c Cell) text() string {
+	if c.Text != "" {
+		return c.Text
+	}
+	return runeString(c.Ch)
 }
 
 func (t *TcellScreen) Show() {
@@ -160,7 +193,10 @@ func (t *TcellScreen) PollEvent() tcell.Event {
 }
 
 func (t *TcellScreen) Fini() {
-	if t.pointerShape != "" {
+	if t.osc != nil {
+		t.osc.BeginShutdown()
+	}
+	if t.pointerShapesEnabled && t.pointerShape != "" && t.pointerShape != "default" {
 		t.SetPointerShape("default")
 	}
 	t.scr.Fini()
@@ -192,6 +228,9 @@ func (t *TcellScreen) SetCursorStyle(style CursorStyle) {
 // SetPointerShape writes OSC 22 straight to the tty: tcell has no API for it.
 // Terminals without support drop the sequence.
 func (t *TcellScreen) SetPointerShape(shape string) {
+	if !t.pointerShapesEnabled {
+		return
+	}
 	if shape == t.pointerShape {
 		return
 	}
@@ -206,6 +245,29 @@ func (t *TcellScreen) SetPointerShape(shape string) {
 	t.pointerShape = shape
 }
 
+func (t *TcellScreen) PointerShapesEnabled() bool {
+	return t.pointerShapesEnabled
+}
+
+func (t *TcellScreen) SetPointerShapesEnabled(enabled bool) {
+	if t.pointerShapesEnabled == enabled {
+		return
+	}
+	t.pointerShapesEnabled = enabled
+	if !enabled {
+		// When changing enabled to disabled after ttt has already changed the pointer,
+		// restore the default pointer once before suppressing subsequent writes.
+		if t.pointerShape != "" && t.pointerShape != "default" {
+			if tty, ok := t.scr.Tty(); ok {
+				_, _ = fmt.Fprintf(tty, "\x1b]22;default\x1b\\")
+			}
+		}
+		// Reset cached pointerShape so that re-enabling will not be suppressed
+		// by a stale cache value matching the current shape.
+		t.pointerShape = ""
+	}
+}
+
 // PostEvent injects an event into the screen's event queue (tcell v3 has no
 // PostEvent; the queue channel is written directly). The send is non-blocking:
 // PostEvent is occasionally called from the event-loop goroutine itself (e.g.
@@ -217,6 +279,7 @@ func (t *TcellScreen) SetPointerShape(shape string) {
 // Fini closes the queue, and a send on a closed channel panics even inside a
 // select with a default case. Async posters (PTY output, LSP, file watcher)
 // can race shutdown, so both send paths recover and drop the event instead.
+// The error result is always nil; it is retained for event-poster interfaces.
 func (t *TcellScreen) PostEvent(ev tcell.Event) error {
 	defer func() { _ = recover() }()
 	q := t.scr.EventQ()

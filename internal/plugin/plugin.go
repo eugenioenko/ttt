@@ -13,6 +13,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/gdamore/tcell/v3"
 	lua "github.com/yuin/gopher-lua"
 )
 
@@ -48,10 +49,13 @@ type Plugin struct {
 	Enabled  bool
 	State    *lua.LState
 
+	InstalledFromURL bool
+
 	StorageDir string
 	store      *pluginStore
 
 	SidebarTitle       string
+	SidebarIcon        PanelIcon
 	SidebarMenuEntries []widgets.MenuEntry
 	sidebarMenuFunc    *lua.LFunction
 	RenderFunc         *lua.LFunction
@@ -66,6 +70,7 @@ type Plugin struct {
 
 	Commands          []PluginCommand
 	PluginKeybindings []PluginKeybinding
+	ControlModifiers  *tcell.ModMask
 	FileHandlers      []FileHandler
 
 	RequestRedraw     func()
@@ -131,11 +136,12 @@ type Plugin struct {
 
 	EditorContextProvider *lua.LFunction
 
-	Editor     EditorAPI
-	Filesystem FilesystemAPI
-	System     SystemAPI
-	Network    NetworkAPI
-	Settings   SettingsAPI
+	Editor         EditorAPI
+	Filesystem     FilesystemAPI
+	System         SystemAPI
+	Network        NetworkAPI
+	installDefault func(string, any) error
+	Settings       SettingsAPI
 
 	EventListeners map[string][]*lua.LFunction
 
@@ -372,7 +378,7 @@ func (p *Plugin) HasSidebarMenu() bool {
 
 func (p *Plugin) CallSidebarAction(cmd string) {
 	if p.sidebarMenuFunc != nil && p.State != nil {
-		p.CallLuaFunc(p.sidebarMenuFunc, lua.LString(cmd))
+		_ = p.CallLuaFunc(p.sidebarMenuFunc, lua.LString(cmd))
 	}
 }
 

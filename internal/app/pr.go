@@ -1,10 +1,9 @@
 package app
 
 import (
-	"fmt"
-
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 
 	"github.com/gdamore/tcell/v3"
@@ -18,36 +17,57 @@ type PrFetchResult struct {
 }
 
 type DiffContentResult struct {
+	Widget   *ui.DiffEditorWidget
 	TabName  string
 	OldLines []string
 	NewLines []string
 	Err      error
 }
 
+func (a *App) applyDiffContent(result *DiffContentResult) {
+	for _, group := range a.editorGroups() {
+		for i := range group.TabCount() {
+			dv, ok := group.TabContent(i).(*ui.DiffEditorWidget)
+			if !ok || dv != result.Widget {
+				continue
+			}
+			if result.Err != nil {
+				dv.FailLoading()
+				a.StatusError(i18n.Format("status.failedToFetchFileContent", i18n.Args{"error": result.Err.Error()}))
+			} else {
+				dv.SetOldLines(result.OldLines)
+				dv.SetNewLines(result.NewLines)
+				dv.FinishLoading()
+			}
+			return
+		}
+	}
+}
+
 func (a *App) FetchAndOpenPR(url string) {
 	owner, repo, number, err := github.ParsePRURL(url)
 	if err != nil {
-		a.StatusError("Invalid PR URL: " + err.Error())
+		a.StatusError(i18n.Format("status.invalidPRURL", i18n.Args{"error": err.Error()}))
 		return
 	}
 
-	a.StatusNotify(fmt.Sprintf("Fetching PR #%d...", number))
+	a.StatusNotify(i18n.Format("status.fetchingPR", i18n.Args{"number": number}))
 
 	go func() {
 		info, err := github.FetchPRInfo(owner, repo, number)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
 			return
 		}
 
 		diffText, err := github.FetchPRDiff(owner, repo, number)
 		if err != nil {
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Err: err}))
 			return
 		}
 
 		diffs := github.SplitMultiFileDiff(diffText)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Info: info, Diffs: diffs}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PrFetchResult{URL: url, Info: info, Diffs: diffs}))
 	}()
 }
 
@@ -71,19 +91,19 @@ func (a *App) OpenPRDetail(group *ui.ChangesGroup) {
 		if diffText, ok := group.PRDiffs[f.Path]; ok && diffText != "" {
 			parsed := diff.Parse(diffText)
 			if len(parsed.Hunks) == 0 {
-				file.Error = "Empty diff for " + f.Path
+				file.Error = i18n.Format("pr.emptyDiffFor", i18n.Args{"path": f.Path})
 			} else {
 				file.Diff = parsed
 			}
 		} else {
-			file.Error = "No diff available for " + f.Path
+			file.Error = i18n.Format("pr.noDiffAvailableFor", i18n.Args{"path": f.Path})
 		}
 		files = append(files, file)
 	}
 	detail := ui.NewCommitDetailWidget(group.Dir, group.PRURL, "", a.EditorGroup.SyntaxHighlight)
-	detail.Header = "Pull request"
-	detail.Metadata = fmt.Sprintf("%s · %d file(s) changed", group.Name, len(files))
-	detail.EmptyMessage = "(No pull request description)"
+	detail.Header = i18n.Text("pr.pullRequest")
+	detail.Metadata = i18n.Format("pr.fileSChanged", i18n.Args{"groupName": group.Name, "filesCount": len(files)})
+	detail.EmptyMessage = i18n.Text("pr.noPullRequestDescription")
 	a.EditorGroup.ApplyDiffDefaults(detail)
 	detail.SetDetail(group.PRBody, files, "")
 	a.EditorGroup.OpenPluginTab(tabID, group.Name, detail)

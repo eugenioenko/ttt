@@ -21,7 +21,7 @@ func openSelectedEditorFile(t *testing.T, h *testHarness) {
 	if err := os.WriteFile(f, []byte(clipboardEditorText+"\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(f)
+	h.openFile(f)
 	h.app.EditorGroup.SelectAll()
 	h.redraw()
 }

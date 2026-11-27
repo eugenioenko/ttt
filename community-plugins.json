@@ -1,5 +1,14 @@
 [
   {
+    "name": "auto-save",
+    "displayName": "Auto Save",
+    "author": "Fishason",
+    "description": "Save the active file automatically 1 second after you stop typing, like VS Code's afterDelay auto save",
+    "repo": "https://github.com/Fishason/ttt-auto-save",
+    "version": "0.1.0",
+    "tags": ["save", "autosave", "auto-save", "editor"]
+  },
+  {
     "name": "bookmarks",
     "featured": true,
     "displayName": "Bookmarks",
@@ -19,6 +28,17 @@
     "path": "color-picker",
     "version": "0.1.0",
     "tags": ["color", "css", "design", "utility"]
+  },
+  {
+    "name": "desktop-launcher-linux",
+    "displayName": "Desktop Launcher (Linux)",
+    "author": "SimonOcampo1",
+    "description": "Add ttt to your desktop's app launcher, opening in the terminal you installed it from",
+    "repo": "https://github.com/SimonOcampo1/ttt-desktop-launcher",
+    "path": "desktop-launcher-linux",
+    "version": "0.1.0",
+    "featured": true,
+    "tags": ["desktop", "launcher", "linux", "integration"]
   },
   {
     "name": "docker-manager",
@@ -95,6 +115,16 @@
     "tags": ["omarchy", "theme", "appearance", "colors"]
   },
   {
+    "name": "opentdf",
+    "featured": true,
+    "displayName": "OpenTDF",
+    "author": "eugenioenko",
+    "description": "Browse and manage an OpenTDF platform: namespaces, attributes, actions, key access servers and keys",
+    "repo": "https://github.com/eugenioenko/ttt-opentdf",
+    "version": "0.1.0",
+    "tags": ["opentdf", "security", "policy", "access-control"]
+  },
+  {
     "name": "pdf-viewer",
     "featured": true,
     "displayName": "PDF Viewer",
@@ -103,6 +133,16 @@
     "repo": "https://github.com/sercanatalik/ttt-pdf",
     "version": "0.4.0",
     "tags": ["pdf", "viewer", "search", "documents"]
+  },
+  {
+    "name": "plist-viewer",
+    "displayName": "PLIST Viewer",
+    "author": "danielmrdev",
+    "description": "Open macOS/iOS binary property lists as an interactive two-column tree",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "plist-viewer",
+    "version": "0.1.0",
+    "tags": ["plist", "macos", "ios", "viewer", "tree", "binary"]
   },
   {
     "name": "port-finder",
@@ -115,6 +155,26 @@
     "tags": ["ports", "network", "process", "utility"]
   },
   {
+    "name": "postgres",
+    "featured": true,
+    "displayName": "PostgreSQL",
+    "author": "eugenioenko",
+    "description": "Browse PostgreSQL schemas, tables and views, page through rows, inspect structure and run queries through psql",
+    "repo": "https://github.com/eugenioenko/ttt-postgres",
+    "version": "0.2.0",
+    "tags": ["postgres", "postgresql", "database", "sql", "psql"]
+  },
+  {
+    "name": "pr-review",
+    "displayName": "PR Review",
+    "author": "eugenioenko",
+    "description": "Browse GitHub pull requests, inspect native diffs, and submit reviews.",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "pr-review",
+    "version": "0.1.0",
+    "tags": ["github", "pull-requests", "review", "diff", "gh"]
+  },
+  {
     "name": "spell",
     "featured": true,
     "displayName": "Spell Check",
@@ -123,6 +183,36 @@
     "repo": "https://github.com/eugenioenko/ttt-spell",
     "version": "0.1.0",
     "tags": ["spelling", "aspell", "prose", "writing", "markdown"]
+  },
+  {
+    "name": "sqlite",
+    "featured": true,
+    "displayName": "SQLite",
+    "author": "eugenioenko",
+    "description": "Browse SQLite databases: attached schemas, tables and views, paged rows, structure, and a query tab",
+    "repo": "https://github.com/eugenioenko/ttt-sqlite",
+    "version": "0.1.0",
+    "tags": ["sqlite", "sqlite3", "database", "sql"]
+  },
+  {
+    "name": "terminal-theme",
+    "displayName": "Terminal Theme",
+    "author": "danielmrdev",
+    "description": "Generate a TTT theme snapshot from the palette of the terminal running TTT",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "terminal-theme",
+    "version": "0.1.0",
+    "tags": ["terminal", "theme", "appearance", "colors"]
+  },
+  {
+    "name": "theme-catppuccin-mocha",
+    "displayName": "Catppuccin Mocha Theme",
+    "author": "salmonumbrella",
+    "description": "Catppuccin Mocha color theme for ttt",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "theme-catppuccin-mocha",
+    "version": "0.1.0",
+    "tags": ["theme", "appearance", "colors", "catppuccin"]
   },
   {
     "name": "theme-tokyo-neon",
@@ -164,6 +254,15 @@
     "path": "plugin",
     "version": "0.2.0",
     "tags": ["mcp", "ai", "agents", "automation"]
+  },
+  {
+    "name": "ttt-minimap",
+    "displayName": "Minimap",
+    "author": "Steve Greenley",
+    "description": "VS Code-style braille minimap of the active buffer in a right-docked panel",
+    "repo": "https://github.com/SteveGreenley/ttt-minimap",
+    "version": "0.1.1",
+    "tags": ["minimap", "overview", "braille", "navigation", "scroll"]
   },
   {
     "name": "vim",
@@ -296,6 +395,16 @@
     "tags": ["grammar", "just", "justfile"]
   },
   {
+    "name": "lang-cpp-header",
+    "displayName": "C/C++ Header Syntax Highlighting",
+    "author": "eugenioenko",
+    "description": "Syntax highlighting for .h header files using ttt's built-in C++ grammar",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lang-cpp-header",
+    "version": "0.1.0",
+    "tags": ["grammar", "c", "cpp", "header"]
+  },
+  {
     "name": "lsp-go",
     "displayName": "Go Language Server",
     "author": "eugenioenko",
@@ -312,6 +421,16 @@
     "description": "Auto-configure typescript-language-server for TypeScript and JavaScript",
     "repo": "https://github.com/eugenioenko/ttt-plugins",
     "path": "lsp-typescript",
+    "version": "0.1.0",
+    "tags": ["lsp", "typescript", "javascript"]
+  },
+  {
+    "name": "lsp-typescript-native",
+    "displayName": "TypeScript 7+ Language Server",
+    "author": "danielmrdev",
+    "description": "Auto-configure TypeScript 7+'s built-in language server (tsc --lsp) for TypeScript and JavaScript; use instead of lsp-typescript",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "lsp-typescript-native",
     "version": "0.1.0",
     "tags": ["lsp", "typescript", "javascript"]
   },
@@ -554,5 +673,305 @@
     "path": "lsp-haskell",
     "version": "0.1.0",
     "tags": ["lsp", "haskell", "hls"]
+  },
+  {
+    "name": "ttt-i18n-ar",
+    "displayName": "العربية Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Arabic",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-ar",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "ar"]
+  },
+  {
+    "name": "ttt-i18n-bn",
+    "displayName": "বাংলা Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Bengali",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-bn",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "bn"]
+  },
+  {
+    "name": "ttt-i18n-cs",
+    "displayName": "Čeština Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Czech",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-cs",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "cs"]
+  },
+  {
+    "name": "ttt-i18n-da",
+    "displayName": "Dansk Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Danish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-da",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "da"]
+  },
+  {
+    "name": "ttt-i18n-de",
+    "displayName": "Deutsch Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in German",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-de",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "de"]
+  },
+  {
+    "name": "ttt-i18n-el",
+    "displayName": "Ελληνικά Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Greek",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-el",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "el"]
+  },
+  {
+    "name": "ttt-i18n-es",
+    "displayName": "Español Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Spanish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-es",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "es"]
+  },
+  {
+    "name": "ttt-i18n-fa",
+    "displayName": "فارسی Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Persian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-fa",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "fa"]
+  },
+  {
+    "name": "ttt-i18n-fi",
+    "displayName": "Suomi Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Finnish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-fi",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "fi"]
+  },
+  {
+    "name": "ttt-i18n-fr",
+    "displayName": "Français Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in French",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-fr",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "fr"]
+  },
+  {
+    "name": "ttt-i18n-he",
+    "displayName": "עברית Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Hebrew",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-he",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "he"]
+  },
+  {
+    "name": "ttt-i18n-hi",
+    "displayName": "हिन्दी Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Hindi",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-hi",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "hi"]
+  },
+  {
+    "name": "ttt-i18n-hu",
+    "displayName": "Magyar Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Hungarian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-hu",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "hu"]
+  },
+  {
+    "name": "ttt-i18n-id",
+    "displayName": "Bahasa Indonesia Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Indonesian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-id",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "id"]
+  },
+  {
+    "name": "ttt-i18n-it",
+    "displayName": "Italiano Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Italian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-it",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "it"]
+  },
+  {
+    "name": "ttt-i18n-ja",
+    "displayName": "日本語 Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Japanese",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-ja",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "ja"]
+  },
+  {
+    "name": "ttt-i18n-ko",
+    "displayName": "한국어 Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Korean",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-ko",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "ko"]
+  },
+  {
+    "name": "ttt-i18n-nb",
+    "displayName": "Norsk bokmål Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Norwegian Bokmål",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-nb",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "nb"]
+  },
+  {
+    "name": "ttt-i18n-nl",
+    "displayName": "Nederlands Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Dutch",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-nl",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "nl"]
+  },
+  {
+    "name": "ttt-i18n-pl",
+    "displayName": "Polski Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Polish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-pl",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "pl"]
+  },
+  {
+    "name": "ttt-i18n-pt-br",
+    "displayName": "Português (Brasil) Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Brazilian Portuguese",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-pt-br",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "pt-BR"]
+  },
+  {
+    "name": "ttt-i18n-ro",
+    "displayName": "Română Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Romanian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-ro",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "ro"]
+  },
+  {
+    "name": "ttt-i18n-ru",
+    "displayName": "Русский Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Russian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-ru",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "ru"]
+  },
+  {
+    "name": "ttt-i18n-sv",
+    "displayName": "Svenska Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Swedish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-sv",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "sv"]
+  },
+  {
+    "name": "ttt-i18n-th",
+    "displayName": "ไทย Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Thai",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-th",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "th"]
+  },
+  {
+    "name": "ttt-i18n-tr",
+    "displayName": "Türkçe Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Turkish",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-tr",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "tr"]
+  },
+  {
+    "name": "ttt-i18n-uk",
+    "displayName": "Українська Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Ukrainian",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-uk",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "uk"]
+  },
+  {
+    "name": "ttt-i18n-vi",
+    "displayName": "Tiếng Việt Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Vietnamese",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-vi",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "vi"]
+  },
+  {
+    "name": "ttt-i18n-zh-cn",
+    "displayName": "简体中文 Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Simplified Chinese (mainland China)",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-zh-cn",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "zh-CN"]
+  },
+  {
+    "name": "ttt-i18n-zh-tw",
+    "displayName": "繁體中文 Language Pack",
+    "author": "eugenioenko",
+    "description": "TTT code editor interface in Traditional Chinese (Taiwan)",
+    "repo": "https://github.com/eugenioenko/ttt-plugins",
+    "path": "ttt-i18n-zh-tw",
+    "version": "0.1.0",
+    "tags": ["language-pack", "i18n", "zh-TW"]
   }
 ]

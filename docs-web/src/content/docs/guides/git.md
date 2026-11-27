@@ -9,17 +9,19 @@ TTT refreshes repository status after editor and source-control mutations. While
 
 ## Staging & Unstaging
 
-- **Spacebar** toggles stage/unstage on the selected file
+- **Spacebar** toggles stage/unstage on the selected file, or on the selected folder and every file under it
 - **`a`** stages all unstaged files
 - **`u`** unstages all staged files
 - **`+` button** on each unstaged file stages that file
 - **`−` button** on each staged file unstages that file
+- **`+` / `−` button** on a folder row stages or unstages every file under it, untracked files included; folder rows exist in tree view only
 - **`+` button** on the "Changes" section header stages all files
 - **`−` button** on the "Staged" section header unstages all files
 
 ## Discarding Changes
 
-- **`d`** discards changes to the selected unstaged file (with confirmation)
+- **`d`** discards changes to the selected unstaged file, or to every file under the selected folder (with confirmation)
+- Right-clicking a folder row offers **Stage Folder**, **Unstage Folder** and **Discard Folder Changes**
 - **`D`** discards all unstaged changes in the current group (with confirmation)
 - **`✕` button** on the "Changes" section header discards all unstaged changes
 - Untracked files are deleted; modified files are restored to HEAD
@@ -99,3 +101,20 @@ The line number area displays diff indicators that show which lines have been ad
 ## Git Blame
 
 The status bar shows inline blame info for the current line: author, relative time, and commit summary.
+
+## Jujutsu (jj)
+
+TTT also works with [Jujutsu](https://jj-vcs.github.io/jj/) repositories. When a folder is inside a jj workspace and the `jj` binary is on your `PATH`, the changes panel, diffs, commit history, explorer colors, and gutter use jj instead of git. A colocated workspace, which has both `.jj` and `.git`, uses jj. No jj configuration is required.
+
+jj has no staging area, so the panel shows a single **Changes** section:
+
+- The working-copy commit's changes are listed, including files with recorded conflicts
+- The commit input runs `jj commit`, which records every change and starts a new empty change on top
+- **`d`**, **`D`**, and **Discard** run `jj restore`, which you can revert with `jj undo`
+- Commit history lists the ancestors of the working-copy commit, labeled with their change IDs
+- The gutter and diffs compare against the working-copy parent
+- The status bar shows the working-copy commit's bookmarks, or its change ID when it has none
+
+Staging, pull, push, sync, and new branch are git operations and are not available in jj workspaces.
+
+Symbolic links in past commits show as empty files in history diffs, because the jj CLI cannot print a link's target. Links in the working copy show their target.

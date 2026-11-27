@@ -137,15 +137,56 @@ func newInputPanel(t *testing.T) (*PluginPanelWidget, *mockSurface) {
 	return pw, surface
 }
 
-func TestPanelLeavesInputDragsToTheInput(t *testing.T) {
-	pw, _ := newInputPanel(t)
-	mouse(pw, 14, 6, tcell.Button1)
-	if got := mouse(pw, 18, 6, tcell.Button1); got == widgets.EventCaptured {
-		t.Fatal("the panel captured a drag inside the input")
+func TestPanelInputShortcutModifierNormalizesFallback(t *testing.T) {
+	pw, surface := newInputPanel(t)
+	allowed := tcell.ModMeta
+	pw.plugin.ControlModifiers = &allowed
+	pw.Render(surface)
+	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "a", tcell.ModMeta))
+	if !pw.FocusedInput().HasSelection() {
+		t.Fatal("plugin input did not accept Super+A")
 	}
-	mouse(pw, 18, 6, tcell.ButtonNone)
-	if pw.sel.active {
-		t.Fatal("a drag inside the input selected panel text")
+	var seen *lua.LTable
+	pw.eventFunc = pw.plugin.State.NewFunction(func(L *lua.LState) int {
+		seen = L.CheckTable(1)
+		return 0
+	})
+	pw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "k", tcell.ModMeta))
+	if seen == nil || seen.RawGetString("key").String() != "Ctrl-K" || seen.RawGetString("mod").String() != "ctrl" || seen.RawGetString("rune") != lua.LNil {
+		t.Fatal("fallback callback did not receive the enabled Super key as Ctrl-K")
+	}
+}
+
+func TestPanelSelectionShortcutModifierCopy(t *testing.T) {
+	clipboard.DisableSystem()
+	pw, _ := newTextPanel(t)
+	allowed := tcell.ModCtrl | tcell.ModMeta
+	pw.plugin.ControlModifiers = &allowed
+	for _, key := range []*tcell.EventKey{
+		tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta),
+		tcell.NewEventKey(tcell.KeyRune, "C", tcell.ModCtrl|tcell.ModShift),
+	} {
+		pw.SelectAllText()
+		clipboard.Set("unchanged")
+		pw.HandleEvent(key)
+		if !strings.Contains(clipboard.Get(), "alpha beta") {
+			t.Fatalf("panel selection did not copy with %s", key.Name())
+		}
+	}
+}
+
+func TestPanelLeavesInputDragsToTheInput(t *testing.T) {
+	pw, surface := newInputPanel(t)
+	pw.SetRect(widgets.Rect{W: 30, H: 3})
+	pw.Render(surface)
+	mouse(pw, 4, 1, tcell.Button1)
+	pw.Render(surface)
+	if got := mouse(pw, 8, 1, tcell.Button1); got != widgets.EventCaptured {
+		t.Fatal("the input did not capture its drag")
+	}
+	mouse(pw, 8, 1, tcell.ButtonNone)
+	if pw.sel.active || !pw.FocusedInput().HasSelection() {
+		t.Fatal("a drag inside the input should select only input text")
 	}
 }
 

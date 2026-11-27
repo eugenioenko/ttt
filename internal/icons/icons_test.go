@@ -9,7 +9,7 @@ import (
 )
 
 func TestGetResolvesByMode(t *testing.T) {
-	if got := Get(config.IconsNerdFont, Branch); got != "" {
+	if got := Get(config.IconsNerdFont, Branch); got != "\ue702" {
 		t.Errorf("nerd branch = %q", got)
 	}
 	for _, mode := range []string{config.IconsNone, ""} {
@@ -48,6 +48,7 @@ func TestNerdGlyphsAreSingleRune(t *testing.T) {
 // kept because no narrow glyph reads as well.
 var ambiguousDefaults = map[Name]bool{
 	Commit: true, Lock: true, Dirty: true,
+	ArrowUp: true, ArrowDown: true,
 	Class: true, Interface: true, Module: true, Constant: true, Variable: true,
 	String: true, Keyword: true, Snippet: true, Symbol: true,
 }

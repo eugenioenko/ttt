@@ -2,11 +2,16 @@ package buffer
 
 import (
 	"bufio"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/eugenioenko/ttt/internal/filewrite"
 )
+
+const UTF8ByteOrderMark = "\ufeff"
 
 // LoadFile loads a file into the buffer, replacing its contents.
 func (b *Buffer) LoadFile(filename string) error {
@@ -14,7 +19,7 @@ func (b *Buffer) LoadFile(filename string) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, statErr := f.Stat()
 	var sb strings.Builder
@@ -34,12 +39,13 @@ func (b *Buffer) LoadFile(filename string) error {
 // SetText replaces the buffer's contents with text, as loading a file with
 // that content would, and leaves the buffer clean.
 func (b *Buffer) SetText(text string) {
+	text, b.UTF8BOM = strings.CutPrefix(text, UTF8ByteOrderMark)
 	b.LineEnding = detectLineEnding(text)
 	lines := SplitLines(text)
 	if len(lines) == 0 {
 		lines = []string{""}
 	}
-	if b.ShowTrailingNewline && (len(lines) == 0 || lines[len(lines)-1] != "") {
+	if b.ShowTrailingNewline && (strings.HasSuffix(text, "\n") || lines[len(lines)-1] != "") {
 		lines = append(lines, "")
 	}
 	b.SetLines(lines)
@@ -82,8 +88,9 @@ func (b *Buffer) recordDiskInfo(info os.FileInfo) {
 
 // DiskChanged reports whether the file on disk has been modified since the
 // buffer last loaded or saved it. It returns false when there is no recorded
-// disk state (a new buffer never written to disk) or when the file no longer
-// exists — a missing file is handled by the save itself, which recreates it.
+// disk state (a new buffer never written to disk) or when stat fails. Callers
+// that need to distinguish missing files from other stat errors must check
+// those separately. Saving a missing file recreates it without a conflict.
 func (b *Buffer) DiskChanged(filename string) bool {
 	if !b.diskInfoSet {
 		return false
@@ -103,7 +110,9 @@ func (b *Buffer) DiskSize() int64 { return b.diskSize }
 // temporary file in the same directory, fsyncs it, then renames it over the
 // target. This guarantees the file on disk is always either the complete old
 // or complete new content, never a truncated partial write. The target's
-// permissions are preserved; symlinks are followed so the link is kept intact.
+// permissions, owner and group are preserved; symlinks are followed so the
+// link is kept intact. When the owner or group can't be given to a new file,
+// the target is overwritten in place instead (see writeInPlace).
 func (b *Buffer) SaveFile(filename string) error {
 	lines := b.CleanedLines()
 
@@ -114,40 +123,45 @@ func (b *Buffer) SaveFile(filename string) error {
 		target = resolved
 	}
 
-	dir := filepath.Dir(target)
 	mode := os.FileMode(0644)
-	if info, err := os.Stat(target); err == nil {
-		mode = info.Mode().Perm()
+	orig, statErr := os.Stat(target)
+	if statErr == nil {
+		mode = orig.Mode().Perm()
 	}
 
-	tmp, err := os.CreateTemp(dir, ".ttt-*.tmp")
+	staged, err := filewrite.Stage(target, 0o600, func(tmp *os.File) error {
+		w := bufio.NewWriter(tmp)
+		if err := b.writeLines(w, lines); err != nil {
+			return err
+		}
+		return w.Flush()
+	})
 	if err != nil {
 		return err
 	}
-	tmpName := tmp.Name()
-	// Best-effort cleanup if we bail out before the rename succeeds.
-	defer os.Remove(tmpName)
-
-	w := bufio.NewWriter(tmp)
-	if err := b.writeLines(w, lines); err != nil {
-		tmp.Close()
-		return err
+	defer staged.Discard()
+	tmp := staged.File
+	// Once keepOwner hands the file to the target's owner, they can replace
+	// the temporary path, so metadata changes go through the descriptor, never the path.
+	// The mode is applied only after the group is right, so the temp file never
+	// lets the saver's own group read it.
+	inPlace := statErr == nil && keepOwner(tmp, orig) != nil
+	if !inPlace {
+		if err := tmp.Chmod(mode); err != nil {
+			return err
+		}
 	}
-	if err := w.Flush(); err != nil {
-		tmp.Close()
-		return err
+	replace := os.Rename
+	if inPlace {
+		replace = func(from, to string) error {
+			if err := writeInPlace(to, from); err != nil {
+				return err
+			}
+			_ = os.Remove(from)
+			return nil
+		}
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmpName, mode); err != nil {
-		return err
-	}
-	if err := os.Rename(tmpName, target); err != nil {
+	if err := staged.Commit(replace); err != nil {
 		return err
 	}
 
@@ -155,6 +169,106 @@ func (b *Buffer) SaveFile(filename string) error {
 	b.savedLineEnding = b.LineEnding
 	if info, err := os.Stat(target); err == nil {
 		b.recordDiskInfo(info)
+	}
+	return nil
+}
+
+// writeInPlace overwrites target with the contents of src without replacing the
+// file, so its owner and group stay. A recovery copy of target's old contents is
+// made first and kept if the overwrite fails partway.
+func writeInPlace(target, src string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+	out, err := os.OpenFile(target, os.O_RDWR, 0)
+	if err != nil {
+		return err
+	}
+	recovery, err := copyToTemp(out, filepath.Dir(target), "."+filepath.Base(target)+".ttt-recovery-*")
+	if err != nil {
+		_ = out.Close()
+		return err
+	}
+	if err := checkSameFile(out, target); err != nil {
+		_ = out.Close()
+		_ = os.Remove(recovery)
+		return err
+	}
+	err = out.Truncate(0)
+	if err == nil {
+		_, err = out.Seek(0, io.SeekStart)
+	}
+	if err == nil {
+		_, err = io.Copy(out, in)
+	}
+	if err == nil {
+		err = out.Sync()
+	}
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return &RecoveryError{Path: recovery, Err: err}
+	}
+	_ = os.Remove(recovery)
+	return nil
+}
+
+// RecoveryError is returned when an in-place save fails after the previous
+// contents of the file were copied to Path.
+type RecoveryError struct {
+	Path string
+	Err  error
+}
+
+func (e *RecoveryError) Error() string {
+	return fmt.Sprintf("%v (the previous contents are saved in %s)", e.Err, e.Path)
+}
+
+func (e *RecoveryError) Unwrap() error { return e.Err }
+
+// ReplacedError is returned when another file replaced Path while it was being
+// saved in place, so nothing was written.
+type ReplacedError struct {
+	Path string
+}
+
+func (e *ReplacedError) Error() string {
+	return fmt.Sprintf("%s was replaced while saving", e.Path)
+}
+
+func copyToTemp(in *os.File, dir, pattern string) (string, error) {
+	out, err := os.CreateTemp(dir, pattern)
+	if err != nil {
+		return "", err
+	}
+	_, err = io.Copy(out, in)
+	if err == nil {
+		err = out.Sync()
+	}
+	if closeErr := out.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(out.Name())
+		return "", err
+	}
+	return out.Name(), nil
+}
+
+func checkSameFile(f *os.File, name string) error {
+	open, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	cur, err := os.Stat(name)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(open, cur) {
+		return &ReplacedError{Path: name}
 	}
 	return nil
 }
@@ -180,6 +294,11 @@ func (b *Buffer) CleanedLines() []string {
 }
 
 func (b *Buffer) writeLines(w io.Writer, lines []string) error {
+	if b.UTF8BOM {
+		if _, err := io.WriteString(w, UTF8ByteOrderMark); err != nil {
+			return err
+		}
+	}
 	eol := effectiveLineEnding(b.LineEnding)
 	for i, line := range lines {
 		if _, err := io.WriteString(w, line); err != nil {

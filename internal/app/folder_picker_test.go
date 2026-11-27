@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"slices"
 	"testing"
+
+	"github.com/eugenioenko/ttt/internal/widgets"
+	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
 func labels(entries []folderPickerEntry) []string {
@@ -90,5 +93,35 @@ func TestFilterEntriesKeepsTheWayOut(t *testing.T) {
 
 	if got := labels(filterEntries(entries, "")); len(got) != 4 {
 		t.Errorf("empty filter = %v, want everything", got)
+	}
+}
+
+func TestPlaceNodesKeepsPlacesAndFavorites(t *testing.T) {
+	places := []workspace.Place{{Name: "Home", Path: "/home/u"}, {Name: "Documents", Path: "/home/u/Documents"}}
+	nodeFields := func(nodes []*widgets.TreeNode) (labels, ids []string) {
+		for _, n := range nodes {
+			if n.Label == "Places" && (!n.Heading || !n.Muted) {
+				t.Errorf("Places must be a muted heading, got %+v", n)
+			}
+			labels = append(labels, n.Label)
+			ids = append(ids, n.ID)
+		}
+		return labels, ids
+	}
+
+	gotLabels, gotIDs := nodeFields(placeNodes(nil, places))
+	if !slices.Equal(gotLabels, []string{"Places", "Home", "Documents"}) {
+		t.Errorf("without favorites = %v, want Places heading and every place", gotLabels)
+	}
+	if !slices.Equal(gotIDs, []string{"", "/home/u", "/home/u/Documents"}) {
+		t.Errorf("ids without favorites = %v, heading must have no ID", gotIDs)
+	}
+
+	gotLabels, gotIDs = nodeFields(placeNodes([]favoriteDir{{path: "~/repos/ttt", abs: "/home/u/repos/ttt"}}, places))
+	if !slices.Equal(gotLabels, []string{"Favorites", "ttt", "", "Places", "Home", "Documents"}) {
+		t.Errorf("labels = %v", gotLabels)
+	}
+	if !slices.Equal(gotIDs, []string{"", "/home/u/repos/ttt", "", "", "/home/u", "/home/u/Documents"}) {
+		t.Errorf("ids = %v, headings must have no ID", gotIDs)
 	}
 }

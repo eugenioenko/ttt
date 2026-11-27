@@ -93,6 +93,11 @@ func TestHighlightMarkdown(t *testing.T) {
 	assertSpanStyle(t, h, "some *italic* text", term.StyleSyntaxItalic)
 	assertSpanStyle(t, h, "inline `code` here", term.StyleSyntaxCode)
 	assertSpanStyle(t, h, "[link](https://example.com)", term.StyleSyntaxLink)
+
+	lines := []string{"```go", "package main", "```"}
+	if got := styleAt(h.HighlightLineAt(lines, 1), 0); got != term.StyleSyntaxKeyword {
+		t.Errorf("fenced Go style = %v, want keyword from the embedded Go grammar", got)
+	}
 }
 
 func TestHighlightDiff(t *testing.T) {
@@ -102,6 +107,45 @@ func TestHighlightDiff(t *testing.T) {
 	}
 	assertSpanStyle(t, h, "+added line", term.StyleSyntaxInserted)
 	assertSpanStyle(t, h, "-removed line", term.StyleSyntaxDeleted)
+}
+
+func TestHighlightGitCommitMessage(t *testing.T) {
+	lines := []string{
+		"feat: highlight commit messages",
+		"",
+		"Describe the change.",
+		"",
+		"# Please enter the commit message for your changes.",
+		"diff --git a/main.go b/main.go",
+		"--- a/main.go",
+		"+++ b/main.go",
+		"@@ -1 +1 @@",
+		"-old",
+		"+new",
+	}
+	for _, filename := range []string{"/tmp/project/.git/COMMIT_EDITMSG", "/tmp/project/.git/MERGE_MSG"} {
+		t.Run(filename, func(t *testing.T) {
+			h := New(filename)
+			if h == nil {
+				t.Fatal("expected Git commit message highlighter")
+			}
+			if got := h.Language(); got != "Git Commit" {
+				t.Fatalf("language = %q, want Git Commit", got)
+			}
+			allComment(t, h.HighlightLineAt(lines, 4), lines[4], "commit instructions")
+			for _, tc := range []struct {
+				line  int
+				style term.Style
+			}{
+				{9, term.StyleSyntaxDeleted},
+				{10, term.StyleSyntaxInserted},
+			} {
+				if got := styleAt(h.HighlightLineAt(lines, tc.line), 1); got != tc.style {
+					t.Errorf("line %q style = %v, want %v", lines[tc.line], got, tc.style)
+				}
+			}
+		})
+	}
 }
 
 func TestHighlightJSON(t *testing.T) {

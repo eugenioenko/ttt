@@ -10,6 +10,9 @@ import (
 )
 
 func TestCachedHighlightStyleFollowsLiveStyleMap(t *testing.T) {
+	previousTokenTheme := highlight.CurrentTokenTheme()
+	highlight.SetTokenTheme(nil)
+	t.Cleanup(func() { highlight.SetTokenTheme(previousTokenTheme) })
 	h := highlight.New("main.go")
 	line := "func main() {}"
 	spans := h.HighlightLine(line)

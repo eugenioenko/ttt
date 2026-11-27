@@ -32,7 +32,6 @@ type Bookmark struct {
 type EditorPaneWidget struct {
 	BaseWidget
 	lineScratch             []screenCell
-	runeScratch             []rune
 	Buf                     *buffer.Buffer
 	Cursor                  *cursor.Cursor
 	Viewport                *view.Viewport
@@ -44,6 +43,8 @@ type EditorPaneWidget struct {
 	TabSize                 int
 	UseTabs                 bool
 	LineNumbers             bool
+	IndentGuides            bool
+	FullLineSelection       bool
 	GutterStyle             string
 	LegacyScrollbarGlyphs   bool
 	ScrollbarGitMarks       bool
@@ -51,15 +52,19 @@ type EditorPaneWidget struct {
 	FoldChevronExpanded     rune
 	WordWrap                bool
 	WordWrapColumn          int
+	WrapWords               bool
 	AutoDedent              bool
 	AutoClosing             config.AutoClosingSettings
+	AutoSurround            config.AutoSurroundSettings
 	autoClosing             *autoClosingState
 	autoClosingPath         string
+	plainText               bool
 	AutoIndent              bool
 	BracketPairColorization bool
 	BracketColorStyles      []term.Style
 	Highlighter             *highlight.Highlighter
 	SearchQuery             string
+	SearchOptions           SearchOptions
 	SearchMatches           []FindMatch
 	SearchActive            int
 	lastClickTime           int64
@@ -97,9 +102,17 @@ type EditorPaneWidget struct {
 	rowMap                  []editorRow
 	rowMapTop               int
 	rowMapOffset            int
+	links                   editorLinks
+	LinkWorkDir             string
+	ControlModifiers        *tcell.ModMask
+	NativeLinks             bool
+	OnOpenURL               func(string)
+	OnOpenFile              func(string, int, int)
+	OnLinkHover             func(*EditorPaneWidget)
+	ResolveFileLinks        FileLinkResolver
 	topRowOffset            int
 	topOffsetLine           int
-	wrapGoal                wrapGoal
+	goalContext             cursorGoalContext
 	phantoms                map[int]int
 	phantomGen              uint64
 	DiffOverlay             *DiffOverlay
@@ -164,12 +177,7 @@ func (e *EditorPaneWidget) GutterWidth() int {
 	}
 }
 
-func (e *EditorPaneWidget) bookmarkColumn() int {
-	if e.GutterStyle == "extended" {
-		return 1
-	}
-	return 0
-}
+const bookmarkColumn = 0
 
 func (e *EditorPaneWidget) validBookmarkLine(line int) bool {
 	return e.Buf != nil && line >= 0 && line < len(e.Buf.Lines)
@@ -229,10 +237,7 @@ func (e *EditorPaneWidget) computeMaxLineWidth() int {
 	tabW := e.resolveTabSize()
 	maxW := 0
 	topLine := e.Viewport.TopLine
-	botLine := topLine + e.Viewport.Height
-	if botLine > len(e.Buf.Lines) {
-		botLine = len(e.Buf.Lines)
-	}
+	botLine := min(topLine+e.Viewport.Height, len(e.Buf.Lines))
 	for i := topLine; i < botLine; i++ {
 		lw := bufColToVisualCol(e.Buf.Lines[i], len([]rune(e.Buf.Lines[i])), tabW)
 		if lw > maxW {
@@ -258,6 +263,19 @@ func (e *EditorPaneWidget) clampLeftCol() {
 	if e.Viewport.LeftCol < 0 {
 		e.Viewport.LeftCol = 0
 	}
+}
+
+func (e *EditorPaneWidget) RefreshSearch() {
+	if e.SearchQuery == "" || e.Buf == nil {
+		return
+	}
+	matches, err := FindInLines(e.Buf.Lines, e.SearchQuery, e.SearchOptions)
+	if err != nil {
+		return
+	}
+	e.SearchMatches = matches
+	e.SearchActive = min(e.SearchActive, max(len(matches)-1, 0))
+	e.buildSearchIndex()
 }
 
 func (e *EditorPaneWidget) buildSearchIndex() {
@@ -311,7 +329,7 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 }
 
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
-	prevLines := len(e.Buf.Lines)
+	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
 	e.applyAutoClosingEdit(cmd)
 	if undo.IsNoop(cmd) {
 		return
@@ -320,12 +338,33 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 		e.Undo.Push(cmd)
 	}
 	e.bufferDirty = true
-	if len(e.Buf.Lines) != prevLines {
+	e.refreshFoldsAfterEdit(version, prevLines)
+}
+
+const asyncFoldLines = 50_000
+
+func (e *EditorPaneWidget) refreshFoldsAfterEdit(version uint64, prevLines int) {
+	if e.remapFolds(version) || len(e.Buf.Lines) != prevLines {
 		e.refreshFolds()
 	}
 }
 
-const asyncFoldLines = 50_000
+func (e *EditorPaneWidget) remapFolds(version uint64) bool {
+	if e.Folds == nil || !e.Folds.HasCollapsedFolds() || version == e.Buf.Version() {
+		return false
+	}
+	shifted := false
+	if !e.Buf.ChangesSince(version, func(c buffer.Change) {
+		if c.Removed != c.Added {
+			e.Folds.ShiftCollapsed(c.Start, c.Removed, c.Added)
+			shifted = true
+		}
+	}) {
+		e.Folds.ExpandAll()
+		return true
+	}
+	return shifted
+}
 
 func (e *EditorPaneWidget) refreshFolds() {
 	if e.Folds == nil {
@@ -341,6 +380,16 @@ func (e *EditorPaneWidget) refreshFolds() {
 }
 
 func (e *EditorPaneWidget) ExecCommand(cmd undo.EditCommand) { e.exec(cmd) }
+
+func (e *EditorPaneWidget) undoSelectionPosition() *undo.EditPosition {
+	if e.Selection == nil || !e.Selection.Active {
+		return nil
+	}
+	return &undo.EditPosition{
+		Cursor:    undo.CursorPos{Line: e.Cursor.Line, Col: e.Cursor.Col},
+		Selection: *e.Selection,
+	}
+}
 
 func (e *EditorPaneWidget) FlushOnChange() {
 	if e.bufferDirty {
@@ -426,10 +475,7 @@ func (e *EditorPaneWidget) pasteText(text string) {
 		e.Cursor.Col += len([]rune(lines[0]))
 	} else {
 		currentLine := []rune(e.Buf.Lines[e.Cursor.Line])
-		col := e.Cursor.Col
-		if col > len(currentLine) {
-			col = len(currentLine)
-		}
+		col := min(e.Cursor.Col, len(currentLine))
 		suffix := string(currentLine[col:])
 		e.exec(&undo.PasteCommand{
 			Line:   e.Cursor.Line,
@@ -448,6 +494,7 @@ func (e *EditorPaneWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		return e.handleMouse(mev)
 	}
+	e.observeLinkInput(ev)
 	if kev, ok := ev.(*tcell.EventKey); ok {
 		return e.handleKey(kev)
 	}
@@ -513,11 +560,8 @@ func (e *EditorPaneWidget) indentUnit() string {
 
 func (e *EditorPaneWidget) dedentForCloser() {
 	runes := []rune(e.Buf.Lines[e.Cursor.Line])
-	col := e.Cursor.Col
-	if col > len(runes) {
-		col = len(runes)
-	}
-	for i := 0; i < col; i++ {
+	col := min(e.Cursor.Col, len(runes))
+	for i := range col {
 		if runes[i] != ' ' && runes[i] != '\t' {
 			return
 		}
@@ -696,6 +740,23 @@ func (e *EditorPaneWidget) scrollDown(n int) {
 		newTop = total - 1
 	}
 	e.setTopRow(l, newTop)
+}
+
+// ScrollRows moves the cursor and viewport by delta screen rows. The cursor
+// keeps its screen row unless a file edge stops it, so the view follows Vim's
+// Ctrl+D rather than scrolling away from the caret.
+func (e *EditorPaneWidget) ScrollRows(delta int) {
+	l := e.layout()
+	top := e.topRow(l)
+	before, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	e.moveCursorRows(delta)
+	after, _ := l.rowOf(e.Cursor.Line, e.Cursor.Col)
+	top += after - before
+	if maxTop := l.total() - e.Viewport.Height; maxTop >= 0 && top > maxTop {
+		top = maxTop
+	}
+	e.setTopRow(l, top)
+	e.scrollViewport()
 }
 
 func (e *EditorPaneWidget) SmartHome() {

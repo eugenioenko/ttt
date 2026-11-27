@@ -118,7 +118,7 @@ func TestEventsKeyPressConsumed(t *testing.T) {
 	}
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "j", tcell.ModNone)
-	tbl := keyEventToLua(p.State, ev)
+	tbl := keyEventToLua(p.State, ev, p.ControlModifiers)
 	if !p.DispatchKeyEvent(tbl) {
 		t.Fatal("expected key.press to be consumed")
 	}
@@ -142,9 +142,37 @@ func TestEventsKeyPressNotConsumed(t *testing.T) {
 	}
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "k", tcell.ModNone)
-	tbl := keyEventToLua(p.State, ev)
+	tbl := keyEventToLua(p.State, ev, p.ControlModifiers)
 	if p.DispatchKeyEvent(tbl) {
 		t.Fatal("expected key.press not to be consumed")
+	}
+}
+
+func TestEventsKeyPressModifierPreference(t *testing.T) {
+	p, cleanup := setupTestPluginForEvents(PermissionSet{Keybindings: true})
+	defer cleanup()
+	if err := p.State.DoString(`
+		require("ttt.events").on("key.press", function(ev)
+			return ev.key == "Ctrl-R" and ev.mod == "ctrl"
+		end)
+	`); err != nil {
+		t.Fatal(err)
+	}
+	manager := &Manager{plugins: []*Plugin{p}}
+	mask := tcell.ModCtrl
+	p.ControlModifiers = &mask
+	super := tcell.NewEventKey(tcell.KeyRune, "r", tcell.ModMeta)
+	for _, mode := range []tcell.ModMask{tcell.ModCtrl, tcell.ModMeta, tcell.ModCtrl | tcell.ModMeta} {
+		mask = mode
+		if got := manager.DispatchKeyEvent(super); got != (mode&tcell.ModMeta != 0) {
+			t.Fatalf("Super+R consumed = %v in mode %v", got, mode)
+		}
+		if !manager.DispatchKeyEvent(tcell.NewEventKey(tcell.KeyCtrlR, "", tcell.ModCtrl)) {
+			t.Fatalf("physical Ctrl+R must still reach the hook in mode %v", mode)
+		}
+		if super.Key() != tcell.KeyRune || super.Str() != "r" || super.Modifiers() != tcell.ModMeta {
+			t.Fatal("Lua conversion changed the native event")
+		}
 	}
 }
 
@@ -165,7 +193,7 @@ func TestEventsKeyPressWithModifiers(t *testing.T) {
 	}
 
 	ev := tcell.NewEventKey(tcell.KeyRune, "w", tcell.ModAlt)
-	tbl := keyEventToLua(p.State, ev)
+	tbl := keyEventToLua(p.State, ev, p.ControlModifiers)
 	p.DispatchKeyEvent(tbl)
 
 	if p.State.GetGlobal("got_key").String() != "w" {
@@ -192,7 +220,7 @@ func TestEventsKeyPressSpecialKey(t *testing.T) {
 	}
 
 	ev := tcell.NewEventKey(tcell.KeyEscape, "", tcell.ModNone)
-	tbl := keyEventToLua(p.State, ev)
+	tbl := keyEventToLua(p.State, ev, p.ControlModifiers)
 	p.DispatchKeyEvent(tbl)
 
 	if p.State.GetGlobal("got_key").String() != "Esc" {

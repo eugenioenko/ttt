@@ -7,6 +7,10 @@ All keybindings are customizable via `keybindings.json`. A complete example is a
 
 You can open your keybindings file directly from the command palette (**Ctrl+P**) with **Preferences: Open Keyboard Shortcuts**, or press **Ctrl+K Y**.
 
+## Using Command on macOS
+
+TTT can accept Cmd in place of Ctrl, or accept either modifier. Your terminal must also forward the shortcuts. See [Command Key on macOS](/guides/macos-command-key/) for TTT settings, Ghostty configuration, suggested Kitty and WezTerm configurations, and troubleshooting.
+
 ## Default Keybindings
 
 ### General
@@ -38,6 +42,8 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Ctrl+X | Cut |
 | Ctrl+V | Paste |
 | Ctrl+G | Go to line |
+| Ctrl+Up | Scroll line up (viewport only) |
+| Ctrl+Down | Scroll line down (viewport only) |
 | Ctrl+/ | Toggle comment |
 | Ctrl+K J | Join lines |
 | Ctrl+K K | Delete line |
@@ -75,6 +81,8 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 |----------|--------|
 | Ctrl+D | Select next occurrence |
 | Ctrl+K L | Select all occurrences |
+| Alt+Shift+Up | Add cursor above |
+| Alt+Shift+Down | Add cursor below |
 | Alt+Click | Add cursor at click position |
 | Ctrl+K U | Undo last cursor addition |
 | Escape | Collapse to single cursor |
@@ -100,10 +108,10 @@ You can open your keybindings file directly from the command palette (**Ctrl+P**
 | Ctrl+K C | Show changes |
 | Ctrl+0 | Focus sidebar |
 | Ctrl+K Y | Open keyboard shortcuts |
-| Alt+Shift+Up | Panel taller |
-| Alt+Shift+Down | Panel shorter |
 | Alt+Shift+Left | Sidebar narrower |
 | Alt+Shift+Right | Sidebar wider |
+
+Panel taller and Panel shorter remain available in the command palette and can be assigned custom shortcuts.
 
 ### Tabs
 

@@ -291,7 +291,46 @@ To add file extensions to an existing server, override the full entry with the a
 
 The optional `languages` field is for servers that handle multiple file types requiring different `languageId` values. It maps file extensions to language IDs. Without the `languages` field, the server key is used as the language ID and files are matched by their syntax highlighter name.
 
-The server is started lazily on first use and shut down when the editor exits. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
+Matching by highlighter name depends on which grammar highlights the file, and that can change: `.el` files show as `Common Lisp` unless the `lang-emacs-lisp` grammar plugin is installed. List the server's file extensions in `languages` so it starts regardless of the grammar:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "elisp": {
+        "command": ["your-elisp-server"],
+        "languages": { ".el": "elisp" }
+      }
+    }
+  }
+}
+```
+
+### Project roots: the `rootMarkers` field
+
+By default a server starts in the workspace folder that contains the file. In a multi-folder workspace, each folder gets its own server.
+
+Some servers need to start in the project's own directory, for example when one folder holds several projects. Add `rootMarkers` to list the files or directories that mark a project root. Glob patterns like `*.sln` work too. TTT walks up from the opened file and starts one server per root it finds:
+
+```json
+{
+  "lsp": {
+    "servers": {
+      "go": {
+        "command": ["gopls"],
+        "languages": { ".go": "go" },
+        "rootMarkers": ["go.work", "go.mod"]
+      }
+    }
+  }
+}
+```
+
+Markers are tried in order. An earlier marker anywhere above the file wins over a later marker in a nearer directory. Here a `go.work` workspace uses one server for all its modules, and a standalone module uses its own `go.mod`. If no marker is found, the server starts in the workspace folder.
+
+An open file stays on the server it was opened with. A marker added or removed later applies when the file is reopened, or to all files after **LSP: Server Restart**.
+
+The server is started lazily on first use. It shuts down when the editor exits, or one minute after the last open file it handles in its folder or project closes, which also clears its diagnostics. Initialization runs in the background without blocking typing. While a server is starting, save-time LSP formatting and code actions are skipped. A failed server stays failed until you explicitly restart it, so each keystroke does not trigger another startup attempt. Run **LSP: Server Restart** from the command palette to restart the server for the current file, for example after it hangs or after installing a dependency it caches. Its diagnostics are cleared and every open file it handles is reopened in the new server.
 
 ## Server Status
 
@@ -409,7 +448,7 @@ All LSP settings are nested under `lsp.*` in `settings.json`. Autocomplete setti
 | Setting | Type | Default | Description |
 |---------|------|---------|-------------|
 | `lsp.enabled` | boolean | `true` | Enable or disable LSP support entirely |
-| `lsp.hover` | boolean | `true` | Show hover information when the mouse rests over code (toggle from the Options menu, **LSP Hover**). Ctrl+K I works either way |
+| `lsp.hover` | boolean | `true` | Show hover information when the mouse rests over code (toggle from **Options > Code Assist > Hover Information**). Ctrl+K I works either way |
 | `lsp.hoverDelay` | number | `500` | Delay in milliseconds before showing hover info |
 | `lsp.saveOnRename` | boolean | `false` | Auto-save files affected by a rename |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before each save |

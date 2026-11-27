@@ -2,13 +2,20 @@ package app
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/i18n"
 )
+
+const formatterTimeout = 5 * time.Second
 
 func (a *App) RunExternalFormatter() {
 	if !a.EditorGroup.IsEditorActive() {
@@ -18,11 +25,11 @@ func (a *App) RunExternalFormatter() {
 	cmd := a.formatterForFile(path)
 	if cmd == "" {
 		ext := strings.TrimPrefix(filepath.Ext(path), ".")
-		a.StatusWarn(fmt.Sprintf("No formatter configured for .%s files", ext))
+		a.StatusWarn(i18n.Format("status.noFormatterConfiguredForFiles", i18n.Args{"ext": ext}))
 		return
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn("Format: " + err.Error())
+		a.StatusWarn(i18n.Format("status.format", i18n.Args{"error": formatterErrorMessage(err)}))
 	}
 }
 
@@ -32,10 +39,18 @@ func (a *App) FormatExternalOnSave(path string) bool {
 		return false
 	}
 	if err := a.applyExternalFormatter(cmd, path); err != nil {
-		a.StatusWarn("Format on save: " + err.Error())
-		return false
+		a.StatusWarn(i18n.Format("status.formatOnSave", i18n.Args{"error": formatterErrorMessage(err)}))
+		// A timeout must continue saving, not start another formatter through LSP.
+		return errors.Is(err, context.DeadlineExceeded)
 	}
 	return true
+}
+
+func formatterErrorMessage(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return i18n.Format("formatter.timeout", i18n.Args{"seconds": int(formatterTimeout / time.Second)})
+	}
+	return err.Error()
 }
 
 func (a *App) formatterForFile(path string) string {
@@ -51,19 +66,37 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 
 	original := strings.Join(editor.Buf.Lines, "\n")
 
-	expanded := strings.ReplaceAll(cmdStr, "{file}", filePath)
-	parts := strings.Fields(expanded)
-	if len(parts) == 0 {
+	parts := strings.Fields(cmdStr)
+	args := parts[:0]
+	for _, part := range parts {
+		part = strings.ReplaceAll(part, "{file}", filePath)
+		if part != "" {
+			args = append(args, part)
+		}
+	}
+	if len(args) == 0 {
 		return fmt.Errorf("empty formatter command")
 	}
 
-	cmd := exec.Command(parts[0], parts[1:]...)
-	cmd.Stdin = strings.NewReader(original)
+	ctx, cancel := context.WithTimeout(context.Background(), formatterTimeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, args[0], args[1:]...)
+	configureFormatterProcess(cmd)
+	// Detached descendants must not keep the output pipes open indefinitely.
+	cmd.WaitDelay = 100 * time.Millisecond
+	input := original
+	if editor.Buf.UTF8BOM {
+		input = buffer.UTF8ByteOrderMark + input
+	}
+	cmd.Stdin = strings.NewReader(input)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = err.Error()
@@ -72,10 +105,36 @@ func (a *App) applyExternalFormatter(cmdStr, filePath string) error {
 	}
 
 	formatted := stdout.String()
-	formatted = strings.TrimSuffix(formatted, "\n")
-
+	// Without BOM metadata, an existing leading U+FEFF is editable text.
+	if editor.Buf.UTF8BOM || !strings.HasPrefix(original, buffer.UTF8ByteOrderMark) {
+		formatted = strings.TrimPrefix(formatted, buffer.UTF8ByteOrderMark)
+	}
+	formatted = strings.ReplaceAll(formatted, "\r\n", "\n")
 	if formatted == original {
 		return nil
+	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
+	}
+	comparison := original
+	if editor.Buf.ShowTrailingNewline {
+		formatted = strings.TrimSuffix(formatted, "\n")
+		comparison = strings.TrimSuffix(comparison, "\n")
+	} else if editor.Buf.InsertFinalNewline {
+		// Save adds a newline only when the buffer has no trailing empty line.
+		// Keep multiple newlines intact so their blank lines survive saving.
+		if !strings.HasSuffix(formatted, "\n\n") {
+			formatted = strings.TrimSuffix(formatted, "\n")
+		}
+		if !strings.HasSuffix(comparison, "\n\n") {
+			comparison = strings.TrimSuffix(comparison, "\n")
+		}
+	}
+	if formatted == comparison {
+		return nil
+	}
+	if formatted == "" {
+		return errors.New(i18n.Text("formatter.emptyOutput"))
 	}
 
 	lastLine := len(editor.Buf.Lines) - 1

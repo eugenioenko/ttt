@@ -117,6 +117,11 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StylePaletteItem, theme.Dialog.Item)
 	applyStyleDef(&m, term.StylePaletteSelected, theme.Dialog.Selected)
 	applyStyleDef(&m, term.StyleLineNumber, theme.Editor.LineNumber)
+	indentGuide := theme.Editor.IndentGuide
+	if indentGuide.Fg == "" {
+		indentGuide.Fg = theme.Editor.LineNumber.Fg
+	}
+	applyStyleDef(&m, term.StyleIndentGuide, indentGuide)
 	applyStyleDef(&m, term.StyleMenuBar, theme.Menu.Item)
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)
@@ -308,6 +313,13 @@ func firstRune(s string, fallback rune) rune {
 
 func BuildBorderSet(bc config.BorderChars) term.BorderSet {
 	d := term.SingleBorderSet()
+	cross := d.Cross
+	for _, preset := range []term.BorderSet{term.DoubleBorderSet(), term.BoldBorderSet(), term.AsciiBorderSet(), term.NoneBorderSet()} {
+		if firstRune(bc.Horizontal, d.Horizontal) == preset.Horizontal && firstRune(bc.Vertical, d.Vertical) == preset.Vertical {
+			cross = preset.Cross
+			break
+		}
+	}
 	return term.BorderSet{
 		Horizontal:  firstRune(bc.Horizontal, d.Horizontal),
 		Vertical:    firstRune(bc.Vertical, d.Vertical),
@@ -319,6 +331,7 @@ func BuildBorderSet(bc config.BorderChars) term.BorderSet {
 		BottomTee:   firstRune(bc.BottomTee, d.BottomTee),
 		LeftTee:     firstRune(bc.LeftTee, d.LeftTee),
 		RightTee:    firstRune(bc.RightTee, d.RightTee),
+		Cross:       firstRune(bc.Cross, cross),
 	}
 }
 

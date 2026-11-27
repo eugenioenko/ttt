@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/view"
 )
@@ -85,6 +86,9 @@ func (a *App) requestBlame(key blameKey) {
 	if key.Dirty {
 		// Snapshot on the UI goroutine before the worker can race with edits.
 		lines = slices.Clone(buf.Lines)
+		if buf.UTF8BOM && len(lines) > 0 {
+			lines[0] = buffer.UTF8ByteOrderMark + lines[0]
+		}
 	}
 	eol := key.EOL
 	if eol == "" {

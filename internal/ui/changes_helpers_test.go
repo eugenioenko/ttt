@@ -25,8 +25,8 @@ func TestGitDecorationLiveCollapsesStagedVariants(t *testing.T) {
 // Collapsing staged variants after a folder aggregation must not change which
 // category won, which holds only while category order dominates staged-ness.
 func TestGitDecorationRankCategoryDominatesStagedness(t *testing.T) {
-	for i, lower := range gitDecorations {
-		for _, higher := range gitDecorations[i+1:] {
+	for i, lower := range changeDecorations {
+		for _, higher := range changeDecorations[i+1:] {
 			if GitDecorationRank(higher.staged) <= GitDecorationRank(lower.live) {
 				t.Errorf("staged %v should outrank live %v of a lower category", higher.staged, lower.live)
 			}

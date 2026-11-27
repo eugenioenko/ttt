@@ -102,11 +102,32 @@ function expectedInitialize(root) {
             resolveSupport: { properties: ["additionalTextEdits"] },
           },
         },
+        codeAction: {
+          codeActionLiteralSupport: {
+            codeActionKind: {
+              valueSet: [
+                "",
+                "quickfix",
+                "refactor",
+                "refactor.extract",
+                "refactor.inline",
+                "refactor.rewrite",
+                "source",
+                "source.organizeImports",
+                "source.fixAll",
+              ],
+            },
+          },
+        },
         publishDiagnostics: {},
         documentSymbol: { hierarchicalDocumentSymbolSupport: true },
         diagnostic: { dynamicRegistration: false, relatedDocumentSupport: false },
       },
-      workspace: { diagnostics: { refreshSupport: true } },
+      workspace: {
+        applyEdit: true,
+        executeCommand: {},
+        diagnostics: { refreshSupport: true },
+      },
     },
   };
 }

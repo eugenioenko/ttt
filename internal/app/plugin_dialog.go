@@ -15,7 +15,7 @@ type pluginDialogState struct {
 
 func (a *App) wirePluginDialogs(p *plugin.Plugin) {
 	p.OpenDialog = func(dialog *plugin.PluginDialogWidget, onClose func()) bool {
-		if a.Root.HasOverlay() {
+		if a.Root.HasModalOverlay() {
 			return false
 		}
 		dialog.Borders = *a.Borders

@@ -13,11 +13,14 @@ import (
 const pullDiagnosticsDelay = 500 * time.Millisecond
 
 // pullKey identifies the document state a pull answers for. epoch is needed
-// because a server restart resets document versions to 1.
+// because a server restart resets document versions to 1, and root because a
+// document reopened on another root starts over at version 1 on a server that
+// was never asked.
 type pullKey struct {
 	path    string
 	version int
 	epoch   int
+	root    string
 }
 
 type pulledDiagnostics struct {
@@ -25,6 +28,7 @@ type pulledDiagnostics struct {
 	// replace is false when the existing diagnostics stand: an "unchanged"
 	// report, or a server that only pushes.
 	replace bool
+	root    string
 }
 
 func (a *App) ScheduleDiagnosticPull(immediate bool) {
@@ -40,8 +44,8 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 	if !opened {
 		return
 	}
-	key := pullKey{path: path, version: version, epoch: a.lspEpochs[serverKey]}
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
+	key := pullKey{path: path, version: version, epoch: a.lspEpochs[serverKey], root: workDir}
 	a.diagPull.ScheduleKey(key, func(ctx context.Context) (pulledDiagnostics, error) {
 		// The server must have this version before it is asked about it.
 		if sent != nil {
@@ -59,7 +63,7 @@ func (a *App) ScheduleDiagnosticPull(immediate bool) {
 			return pulledDiagnostics{}, nil
 		}
 		diags, replace, err := client.Diagnostic(ctx, FileURI(path))
-		return pulledDiagnostics{diags: diags, replace: replace}, err
+		return pulledDiagnostics{diags: diags, replace: replace, root: workDir}, err
 	}, func(res pulledDiagnostics, err error) {
 		a.applyPulledDiagnostics(serverKey, key, res, err)
 	})
@@ -82,6 +86,7 @@ type pullCandidate struct {
 	key       pullKey
 	sent      <-chan struct{}
 	unchanged bool
+	workDir   string
 }
 
 func (a *App) backgroundPullTask(server string) *asynctask.Task[[]backgroundPull] {
@@ -108,7 +113,7 @@ func (a *App) cancelBackgroundPull(path, lang string) {
 }
 
 func (a *App) handleDiagnosticRefresh(server string) {
-	for _, d := range a.EditorGroup.OpenFiles() {
+	for _, d := range a.openEditorFiles() {
 		if key, _, ok := a.lspResolve(d.Path, d.Language); ok && key == server {
 			delete(a.lastPulled, d.Path)
 		}
@@ -131,11 +136,22 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 	if task == nil {
 		return
 	}
+	files := a.openEditorFiles()
+	// FindRoot reads the filesystem; resolve each document's root before
+	// taking the versions lock the UI thread also uses.
+	workDirs := make(map[string]string, len(files))
+	for _, d := range files {
+		if d.Path == exclude {
+			continue
+		}
+		if key, _, ok := a.lspResolve(d.Path, d.Language); ok && key == server {
+			workDirs[d.Path] = a.lspWorkDirFor(d.Path, d.Language)
+		}
+	}
 	var candidates []pullCandidate
-	workDir := ""
 	a.DocVersionsMu.Lock()
 	epoch := a.lspEpochs[server]
-	for _, d := range a.EditorGroup.OpenFiles() {
+	for _, d := range files {
 		if d.Path == exclude {
 			continue
 		}
@@ -147,15 +163,13 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		if !opened {
 			continue
 		}
-		k := pullKey{path: d.Path, version: version, epoch: epoch}
+		k := pullKey{path: d.Path, version: version, epoch: epoch, root: workDirs[d.Path]}
 		candidates = append(candidates, pullCandidate{
 			key:       k,
 			sent:      a.lspSent[d.Path],
 			unchanged: a.lastPulled[d.Path] == k,
+			workDir:   workDirs[d.Path],
 		})
-		if workDir == "" {
-			workDir = a.lspWorkDir(d.Path)
-		}
 	}
 	a.DocVersionsMu.Unlock()
 	if len(candidates) == 0 {
@@ -170,17 +184,51 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 		if restarted {
 			return nil, nil
 		}
-		client, err := a.LspManager.ClientForLanguage(server, workDir)
-		if err != nil {
-			return nil, err
+		// Each root has its own client; a document must be pulled through the
+		// server process that has its root registered. A root that fails to
+		// initialize must not keep the other roots' documents from being pulled,
+		// so its error is reported per document instead of ending the task.
+		type rootClient struct {
+			client *lsp.Client
+			err    error
 		}
-		if !client.SupportsPullDiagnostics() {
-			return nil, nil
+		clients := make(map[string]rootClient)
+		for _, c := range candidates {
+			if _, ok := clients[c.workDir]; ok {
+				continue
+			}
+			client, err := a.LspManager.ClientForLanguageCurrent(server, c.workDir, func() bool {
+				return ctx.Err() == nil && a.lspEpochIsCurrent(server, epoch)
+			})
+			if errors.Is(err, context.Canceled) {
+				clients[c.workDir] = rootClient{}
+				continue
+			}
+			if err != nil {
+				clients[c.workDir] = rootClient{err: err}
+				continue
+			}
+			if !client.SupportsPullDiagnostics() {
+				clients[c.workDir] = rootClient{}
+				continue
+			}
+			clients[c.workDir] = rootClient{client: client}
 		}
-		interFile := client.InterFileDependencies()
 		var pulls []backgroundPull
 		for _, c := range candidates {
-			if c.unchanged && !interFile {
+			if err := ctx.Err(); err != nil {
+				return pulls, err
+			}
+			root := clients[c.workDir]
+			if root.err != nil {
+				pulls = append(pulls, backgroundPull{key: c.key, err: root.err})
+				continue
+			}
+			client := root.client
+			if client == nil {
+				continue
+			}
+			if c.unchanged && !client.InterFileDependencies() {
 				continue
 			}
 			if c.sent != nil {
@@ -194,7 +242,7 @@ func (a *App) pullOpenDocuments(server, exclude string, immediate bool) {
 			if ctx.Err() != nil {
 				return pulls, ctx.Err()
 			}
-			pulls = append(pulls, backgroundPull{key: c.key, res: pulledDiagnostics{diags: diags, replace: replace}, err: err})
+			pulls = append(pulls, backgroundPull{key: c.key, res: pulledDiagnostics{diags: diags, replace: replace, root: c.workDir}, err: err})
 		}
 		return pulls, nil
 	}, func(pulls []backgroundPull, err error) {
@@ -242,10 +290,14 @@ func (a *App) setPulledDiagnostics(server string, key pullKey, res pulledDiagnos
 	a.DocVersionsMu.Lock()
 	version, open := a.DocVersions[key.path]
 	a.DocVersionsMu.Unlock()
-	if !open || version != key.version || a.lspEpochs[server] != key.epoch {
+	if !open || version != key.version || a.lspEpochs[server] != key.epoch || !a.lspDiagnosticsStillCurrent(key.path, res.root) {
 		return false
 	}
 	a.lastPulled[key.path] = key
-	a.EditorGroup.SetDiagnosticsSource(lspPullDiagnosticsSource(server), key.path, LspToUIDiagnostics(res.diags))
+	source := lspPullDiagnosticsSource(server)
+	a.recordLSPDiagRoot(server, source, key.path, res.root, len(res.diags) > 0)
+	for _, group := range a.editorGroups() {
+		group.SetDiagnosticsSource(source, key.path, LspToUIDiagnostics(res.diags, a.lspLines(key.path)))
+	}
 	return true
 }

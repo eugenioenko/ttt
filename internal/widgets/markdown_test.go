@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -13,6 +14,34 @@ import (
 
 func mkLine(text string) markdown.Line {
 	return markdown.Line{Spans: []markdown.Span{{Text: text, Style: term.StyleDefault}}}
+}
+
+func TestMarkdownShortcutModifierCopy(t *testing.T) {
+	clipboard.DisableSystem()
+	m := NewMarkdownWidget()
+	m.wrapped = []markdown.Line{mkLine("Hello World")}
+	allowed := tcell.ModCtrl
+	m.ControlModifiers = &allowed
+	for _, mask := range []tcell.ModMask{tcell.ModCtrl, tcell.ModCtrl | tcell.ModMeta, tcell.ModMeta} {
+		allowed = mask
+		for _, physical := range []tcell.ModMask{tcell.ModCtrl, tcell.ModMeta} {
+			m.sel.Start(0, 0)
+			m.selEnd = selection.Position{Line: 0, Col: 5}
+			clipboard.Set("unchanged")
+			key := tcell.NewEventKey(tcell.KeyCtrlC, "", physical)
+			if physical == tcell.ModMeta {
+				key = tcell.NewEventKey(tcell.KeyRune, "c", physical)
+			}
+			m.HandleEvent(key)
+			want := "unchanged"
+			if mask&physical != 0 {
+				want = "Hello"
+			}
+			if got := clipboard.Get(); got != want {
+				t.Fatalf("allowed=%v physical=%v: clipboard=%q, want %q", mask, physical, got, want)
+			}
+		}
+	}
 }
 
 func TestMarkdownInSelection(t *testing.T) {

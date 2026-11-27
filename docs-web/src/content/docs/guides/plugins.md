@@ -13,6 +13,10 @@ Because it depends on plugin API additions from ttt 1.1.0 (the key interceptor's
 
 Install it from the **Plugins** sidebar tab by searching for "vim", or run **Plugins: Install from URL** with `https://github.com/eugenioenko/ttt-vim`. Once loaded it starts in Normal mode and shows the current mode in the status bar.
 
+## Language Packs
+
+Language packs translate TTT's menus, commands, settings, and dialogs. Install a pack from the Plugins panel, choose **Change Display Language**, and restart TTT. See [Languages](/guides/languages/) for available packs and update behavior.
+
 ## Installing Plugins
 
 ### From the Plugins Panel
@@ -74,12 +78,39 @@ Run **Plugins: Reload** from the command palette to reload a plugin without rest
 
 ## Plugin Locations
 
-Plugins can live in two locations:
+Plugins can live in three locations:
 
-- **Global:** `~/.config/ttt/plugins/<plugin-name>/` — available in all sessions
+- **User:** `~/.config/ttt/plugins/<plugin-name>/` — available in all sessions for that user
 - **Workspace-local:** `<workspace-root>/plugins/<plugin-name>/` — scoped to a specific project
 
-If a plugin with the same name exists in both locations, the global one takes precedence.
+- **System:** `<plugins.systemDir>/<plugin-name>/` — shared across users, when configured
+
+For duplicate names, the order is user, workspace, then system. The first copy wins, including when that plugin is disabled for the user.
+
+### System-wide Installation and Approval
+
+Set an absolute directory in `settings.json`, then restart TTT:
+
+```json
+{
+  "plugins": {
+    "systemDir": "/usr/share/ttt/plugins"
+  }
+}
+```
+
+The default is empty, so system discovery is opt-in. Missing or unreadable configured directories, invalid manifests, and invalid shared approval files produce a status message and an entry in Output.
+
+Administrators can approve shared plugins once so users do not see permission prompts:
+
+1. Start TTT with a separate staging configuration, for example `TTT_CONFIG_DIR=/path/to/staging ttt`.
+2. Install the intended plugins there and approve their permissions through the normal dialogs.
+3. Deploy the contents of `/path/to/staging/plugins/` to the system plugin directory, and copy `/path/to/staging/plugins.ttt.json` into that same system plugin directory.
+4. Make the deployed plugins and approval file readable by users and writable only by administrators. Include symlink targets in those protections.
+
+TTT reads this shared registry without modifying it. An enabled admin approval covers only a plugin loaded from the system directory; a same-named user or workspace copy must have its own approval. Without a matching approval, or when permissions expand beyond it, the usual user approval dialog appears. Updating the shared registry allows administrators to approve new permissions for everyone. Shared approval changes take effect when TTT restarts; inherited grants are not copied into personal approvals.
+
+Users can disable and re-enable shared plugins independently. Explicit user approvals remain personal, and plugin storage stays in each user's configuration directory. System plugin updates and removal are managed by the administrator; TTT directs users to disable them instead.
 
 ## Permissions
 
@@ -103,6 +134,7 @@ Available permissions include:
 | `system.env` | Read environment variables |
 | `terminal.control` | Spawn terminal tabs, send text to them, close them, and focus them |
 | `terminal.read` | Read terminal output (raw tail), visible screen text, and list open terminals |
+| `terminal.palette` | Request and read the hosting terminal's color palette without access to terminal output |
 | `network.http` | Make HTTP requests (`true` for any destination, local services included, or a list of hosts or IPs with optional ports) |
 | `network.rpc` | Open two-way RPC connections to the listed endpoints, so the process there can drive the editor through the plugin |
 | `events.file` | Listen for file open/close/save events |
@@ -189,3 +221,4 @@ Registry fields:
 | `tags` | no | Array of search tags for discoverability |
 | `path` | no | Subdirectory path within the repo (for monorepos) |
 | `featured` | no | Boolean, default `false`. Maintainer-curated placement in the Featured group of the Plugins tab. Set in the community registry, not the plugin manifest. |
+| `community` | no | Boolean, default `true`. Community plugins show a notice on their detail page and approval dialog asking users to review permissions and source. Repos under `github.com/eugenioenko/` never show it. The maintainer sets `false` only for repos they trust; it is ignored for **Plugins: Install from URL**. |

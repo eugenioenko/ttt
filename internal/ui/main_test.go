@@ -9,5 +9,6 @@ import (
 
 func TestMain(m *testing.M) {
 	gittest.DisableAutoMaintenance()
+	InitText()
 	os.Exit(m.Run())
 }

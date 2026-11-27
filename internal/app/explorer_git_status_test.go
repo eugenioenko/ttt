@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/scm"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,11 +17,11 @@ func TestExplorerGitStylesColorsFilesByStatus(t *testing.T) {
 	groups := []changesGroup{
 		{
 			Dir: dir,
-			Unstaged: []git.FileStatus{
+			Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{
 				{Path: "modified.go", Status: "M"},
 				{Path: "untracked.go", Status: "?"},
 				{Path: "src/deleted.go", Status: "D"},
-			},
+			}),
 		},
 	}
 
@@ -43,12 +44,11 @@ func TestExplorerGitStylesDimsStagedFiles(t *testing.T) {
 	groups := []changesGroup{
 		{
 			Dir: dir,
-			Staged: []git.FileStatus{
+			Changes: append(testSCMChanges(scm.Staged, []git.FileStatus{
 				{Path: "staged.go", Status: "M", Staged: true},
-			},
-			Unstaged: []git.FileStatus{
+			}), testSCMChanges(scm.WorkingTree, []git.FileStatus{
 				{Path: "pending.go", Status: "M"},
-			},
+			})...),
 		},
 	}
 
@@ -67,12 +67,11 @@ func TestExplorerGitStylesFolderPrefersLiveOverStagedInSameCategory(t *testing.T
 	groups := []changesGroup{
 		{
 			Dir: dir,
-			Staged: []git.FileStatus{
+			Changes: append(testSCMChanges(scm.Staged, []git.FileStatus{
 				{Path: "src/staged.go", Status: "M", Staged: true},
-			},
-			Unstaged: []git.FileStatus{
+			}), testSCMChanges(scm.WorkingTree, []git.FileStatus{
 				{Path: "src/pending.go", Status: "M"},
-			},
+			})...),
 		},
 	}
 
@@ -89,9 +88,9 @@ func TestExplorerGitStylesPropagatesToAncestorFolders(t *testing.T) {
 	groups := []changesGroup{
 		{
 			Dir: dir,
-			Unstaged: []git.FileStatus{
+			Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{
 				{Path: "src/pkg/modified.go", Status: "M"},
-			},
+			}),
 		},
 	}
 
@@ -113,11 +112,11 @@ func TestExplorerGitStylesFolderTakesHighestPriorityStatus(t *testing.T) {
 	groups := []changesGroup{
 		{
 			Dir: dir,
-			Unstaged: []git.FileStatus{
+			Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{
 				{Path: "src/added.go", Status: "?"},
 				{Path: "src/conflicted.go", Status: "U"},
 				{Path: "src/modified.go", Status: "M"},
-			},
+			}),
 		},
 	}
 
@@ -208,9 +207,8 @@ func TestExplorerGitStylesRanksStagedDeleteOverUntrackedOnSamePath(t *testing.T)
 	dir := filepath.FromSlash("/repo")
 	groups := []changesGroup{
 		{
-			Dir:      dir,
-			Staged:   []git.FileStatus{{Path: "cached.go", Status: "D", Staged: true}},
-			Unstaged: []git.FileStatus{{Path: "cached.go", Status: "?"}},
+			Dir:     dir,
+			Changes: append(testSCMChanges(scm.Staged, []git.FileStatus{{Path: "cached.go", Status: "D", Staged: true}}), testSCMChanges(scm.WorkingTree, []git.FileStatus{{Path: "cached.go", Status: "?"}})...),
 		},
 	}
 
@@ -225,8 +223,8 @@ func TestExplorerGitStylesColorsFolderOfDeletedFile(t *testing.T) {
 	dir := filepath.FromSlash("/repo")
 	groups := []changesGroup{
 		{
-			Dir:      dir,
-			Unstaged: []git.FileStatus{{Path: "src/gone.go", Status: "D"}},
+			Dir:     dir,
+			Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Path: "src/gone.go", Status: "D"}}),
 		},
 	}
 
@@ -242,8 +240,8 @@ func TestExplorerGitStylesStopsAtRepositoryRoot(t *testing.T) {
 	dir := filepath.FromSlash("/repo/nested")
 	groups := []changesGroup{
 		{
-			Dir:      dir,
-			Unstaged: []git.FileStatus{{Path: "src/modified.go", Status: "M"}},
+			Dir:     dir,
+			Changes: testSCMChanges(scm.WorkingTree, []git.FileStatus{{Path: "src/modified.go", Status: "M"}}),
 		},
 	}
 

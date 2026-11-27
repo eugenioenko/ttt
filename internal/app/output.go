@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/gdamore/tcell/v3"
@@ -14,25 +15,25 @@ func registerOutputCommands(app *App) {
 	reg := app.Reg
 	reg.Register(command.Command{
 		ID:       "output.clear",
-		Title:    "Output: Clear",
+		Title:    i18n.Text("command.outputClear"),
 		Keywords: []string{"output", "clear", "log", "plugin", "lsp"},
 		Handler:  func() { app.Output.Clear() },
 	})
 	reg.Register(command.Command{
 		ID:       "output.show",
-		Title:    "Output: Show Panel",
+		Title:    i18n.Text("command.outputShowPanel"),
 		Keywords: []string{"output", "log", "panel", "show", "lsp"},
 		Handler:  func() { app.ShowOutputPanel() },
 	})
 	reg.Register(command.Command{
 		ID:       "lsp.showServerLog",
-		Title:    "LSP: Show Server Log",
+		Title:    i18n.Text("command.lSPShowServerLog"),
 		Keywords: []string{"lsp", "language server", "log", "output", "status"},
 		Handler:  app.ShowLSPServerLog,
 	})
 	reg.Register(command.Command{
 		ID:       "output.copyLine",
-		Title:    "Output: Copy Selected Line",
+		Title:    i18n.Text("command.outputCopySelectedLine"),
 		Keywords: []string{"output", "copy", "log", "line"},
 		Handler:  func() { app.OutputCopyLine() },
 	})
@@ -50,7 +51,7 @@ func (a *App) OutputCopyLine() {
 	if a.Output == nil || !a.Output.CopySelected() {
 		return
 	}
-	a.StatusNotify("Output line copied to clipboard")
+	a.StatusNotify(i18n.Text("status.outputLineCopiedToClipboard"))
 }
 
 // OutputLineResult carries a log line from a background goroutine to the event
@@ -90,12 +91,24 @@ func (a *App) LogOutputAsync(level, source, message string) {
 	if a.Screen == nil {
 		return
 	}
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&OutputLineResult{
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&OutputLineResult{
 		Source:  source,
 		Level:   level,
 		Message: message,
 	}))
 }
+
+func (a *App) statusMessage(msg string, level view.NotifyLevel) {
+	a.Status.SetNotification(msg, level, 5*time.Second)
+	a.LogOutput(outputLevelForNotify(level), "notice", msg)
+	time.AfterFunc(5*time.Second, func() {
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+	})
+}
+
+func (a *App) StatusNotify(msg string) { a.statusMessage(msg, view.NotifyInfo) }
+func (a *App) StatusWarn(msg string)   { a.statusMessage(msg, view.NotifyWarning) }
+func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) }
 
 func outputLevelForNotify(level view.NotifyLevel) string {
 	switch level {

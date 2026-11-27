@@ -22,16 +22,24 @@ func writeRevealFixture(t *testing.T, root string, files ...string) {
 }
 
 func TestExplorerRevealPathExpandsAncestorsAndSelectsFile(t *testing.T) {
+	forEachCompactMode(t, testRevealPathExpandsAncestors)
+}
+
+func testRevealPathExpandsAncestors(t *testing.T, compact bool) {
 	rootPath := t.TempDir()
 	writeRevealFixture(t, rootPath, "src/app/deep/main.go", "docs/readme.md")
-	explorer := NewNavigationPanel(config.DefaultExplorerSettings(), config.IconsNone, rootPath)
+	explorer := NewNavigationPanel(compactSettings(compact), config.IconsNone, rootPath)
 	root := explorer.Tree.Config.Items[0]
 
 	target := filepath.Join(rootPath, "src", "app", "deep", "main.go")
 	if !explorer.RevealPath(target) {
 		t.Fatal("RevealPath returned false for a file inside the root")
 	}
-	for _, label := range []string{"src", "app", "deep"} {
+	ancestors := []string{"src", "app", "deep"}
+	if compact {
+		ancestors = []string{"src/app/deep"}
+	}
+	for _, label := range ancestors {
 		if node := nodeWithLabel(root.Children, label); node == nil || !node.Expanded {
 			t.Errorf("ancestor %q not expanded: %+v", label, node)
 		}

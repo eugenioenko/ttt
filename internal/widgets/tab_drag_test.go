@@ -22,3 +22,18 @@ func TestTabDragStateRequiresIntentionalMovement(t *testing.T) {
 		t.Fatal("End should reset the gesture")
 	}
 }
+
+func TestTabDragStateRecognizesVerticalMovement(t *testing.T) {
+	var drag TabDragState
+	drag.BeginAt(1, "b", 10, 5)
+	if drag.UpdateAt(10, 6, 1) {
+		t.Fatal("one-row jitter started a drag")
+	}
+	if !drag.UpdateAt(10, 7, 1) {
+		t.Fatal("vertical movement did not start a drag")
+	}
+	from, _, dragged := drag.End()
+	if !dragged || from != 1 || drag.Active() {
+		t.Fatal("vertical drag did not finish cleanly")
+	}
+}

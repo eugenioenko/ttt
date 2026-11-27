@@ -1,6 +1,7 @@
 package textwidth
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/clipperhouse/displaywidth"
@@ -83,6 +84,52 @@ func TestEastAsianOptions(t *testing.T) {
 	for _, env := range []string{"", "0", "false", "no", "maybe"} {
 		if got := eastAsianOptions(env); got != narrow {
 			t.Errorf("eastAsianOptions(%q) = %+v, want narrow", env, got)
+		}
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	exact := "abcdefghijklmnopqrstuvwxyz012345"
+	cases := []struct {
+		name, in, want string
+	}{
+		{"empty", "", ""},
+		{"short", "main.go", "main.go"},
+		{"exactly the width", exact, exact},
+		{"one over", exact + "6", "abcdefghijklmnopqrstuvwxyz01234…"},
+		{"wide rune straddling the cut", "abcdefghijklmnopqrstuvwxyz0123漢字", "abcdefghijklmnopqrstuvwxyz0123…"},
+		{"wide rune fitting before the cut", "abcdefghijklmnopqrstuvwxyz012漢字", "abcdefghijklmnopqrstuvwxyz012漢…"},
+	}
+	for _, c := range cases {
+		got := Truncate(c.in, 32, "…")
+		if got != c.want {
+			t.Errorf("%s: Truncate(%q) = %q, want %q", c.name, c.in, got, c.want)
+		}
+		if String(got) > 32 {
+			t.Errorf("%s: width %d exceeds 32", c.name, String(got))
+		}
+	}
+}
+
+func TestTruncateGraphemes(t *testing.T) {
+	family := "👨‍👩‍👧"
+	flag := "🇯🇵"
+	cases := []struct {
+		name, in, want string
+	}{
+		{"short", "main.go", "main.go"},
+		{"ascii matches Truncate", "abcdefghijklmnopqrstuvwxyz0123456", "abcdefghijklmnopqrstuvwxyz01234…"},
+		{"zwj sequence kept whole", strings.Repeat(family, 20), strings.Repeat(family, 15) + "…"},
+		{"flag kept whole", strings.Repeat(flag, 20), strings.Repeat(flag, 15) + "…"},
+		{"combining mark stays with its base", strings.Repeat("é", 40), strings.Repeat("é", 31) + "…"},
+	}
+	for _, c := range cases {
+		got := TruncateGraphemes(c.in, 32, "…")
+		if got != c.want {
+			t.Errorf("%s: TruncateGraphemes = %q, want %q", c.name, got, c.want)
+		}
+		if GraphemeWidth(got) > 32 {
+			t.Errorf("%s: width %d exceeds 32", c.name, GraphemeWidth(got))
 		}
 	}
 }

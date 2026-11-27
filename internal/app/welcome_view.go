@@ -1,8 +1,8 @@
 package app
 
 import (
-	"fmt"
-
+	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
@@ -11,27 +11,33 @@ import (
 )
 
 // Largest first; the layout takes the biggest one the tab can hold.
-var welcomeTitles = [][]string{
-	{
-		"████████╗████████╗████████╗",
-		"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ██║      ██║      ██║   ",
-		"   ╚═╝      ╚═╝      ╚═╝   ",
-	},
-	{
-		"┏┳┓ ┏┳┓ ┏┳┓",
-		" ┃   ┃   ┃ ",
-		" ╹   ╹   ╹ ",
-	},
-	{"TTT Editor"},
+var (
+	welcomeTitles   [][]string
+	welcomeSubtitle string
+)
+
+func initWelcomeViewText() {
+	welcomeTitles = [][]string{
+		{
+			"████████╗████████╗████████╗",
+			"╚══██╔══╝╚══██╔══╝╚══██╔══╝",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ██║      ██║      ██║   ",
+			"   ╚═╝      ╚═╝      ╚═╝   ",
+		},
+		{
+			"┏┳┓ ┏┳┓ ┏┳┓",
+			" ┃   ┃   ┃ ",
+			" ╹   ╹   ╹ ",
+		},
+		{i18n.Text("welcome.tttEditor")},
+	}
+
+	welcomeSubtitle = i18n.Text("welcome.terminalTextTool")
 }
 
 const (
-	welcomeSubtitle  = "Terminal Text Tool"
-	welcomeHint      = "↑↓ select   enter open"
-	welcomeCopyHint  = "↑↓ select   enter open   c copy path"
 	welcomeCopyIcon  = "⧉"
 	welcomeShortcutW = 6
 	// Long folder paths are cut from the left rather than stretching the list.
@@ -105,6 +111,14 @@ type welcomeView struct {
 func (v *welcomeView) Height() int { return 0 }
 func (v *welcomeView) Width() int  { return 0 }
 
+func welcomeNavigationHint(copyPath bool) string {
+	navigation := string(icons.Rune(icons.ArrowUp)) + string(icons.Rune(icons.ArrowDown))
+	if copyPath {
+		return i18n.Format("welcome.selectEnterOpenCCopyPath", i18n.Args{"navigation": navigation, "openKey": "enter", "copyKey": "c"})
+	}
+	return i18n.Format("welcome.selectEnterOpen", i18n.Args{"navigation": navigation, "openKey": "enter"})
+}
+
 func (v *welcomeView) Render(surface widgets.Surface) {
 	w, h := surface.Size()
 	surface.Fill(term.Cell{Ch: ' ', Style: term.StyleDefault})
@@ -115,7 +129,7 @@ func (v *welcomeView) Render(surface widgets.Surface) {
 	if v.note != "" {
 		sections++
 	}
-	hint := welcomeHint
+	hasCopy := false
 	for _, item := range v.items {
 		if item.section != "" {
 			sections++
@@ -124,9 +138,10 @@ func (v *welcomeView) Render(surface widgets.Surface) {
 			tight++
 		}
 		if item.copy != nil {
-			hint = welcomeCopyHint
+			hasCopy = true
 		}
 	}
+	hint := welcomeNavigationHint(hasCopy)
 	secStart := len(v.items)
 	for i, item := range v.items {
 		if item.section != "" {
@@ -165,7 +180,7 @@ func (v *welcomeView) Render(surface widgets.Surface) {
 		}
 		if l.subtitle {
 			y++
-			surface.DrawText((w-len(welcomeSubtitle))/2, y, welcomeSubtitle, w, term.StyleMuted)
+			surface.DrawText((w-textwidth.String(welcomeSubtitle))/2, y, welcomeSubtitle, w, term.StyleMuted)
 			y++
 		}
 		y += 1 + l.gap
@@ -237,7 +252,7 @@ func (v *welcomeView) sectionHeading(i, top, end int) string {
 	if from == start && to == stop {
 		return v.items[start].section
 	}
-	return fmt.Sprintf("%s  %d–%d of %d", v.items[start].section, from-start+1, to-start, stop-start)
+	return i18n.Format("welcome.sectionRange", i18n.Args{"section": v.items[start].section, "first": from - start + 1, "last": to - start, "total": stop - start})
 }
 
 func (v *welcomeView) renderRow(surface widgets.Surface, y int, item welcomeItem, selected bool) {

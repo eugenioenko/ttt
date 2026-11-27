@@ -17,11 +17,44 @@ func TestDefaultSettings(t *testing.T) {
 	if !s.Editor.InsertSpaces {
 		t.Fatal("expected InsertSpaces true")
 	}
+	if s.Editor.IndentGuides {
+		t.Fatal("expected IndentGuides false")
+	}
+}
+
+func TestKeyboardModifierSettings(t *testing.T) {
+	dir := withTempConfigDir(t)
+	for _, value := range []string{"", "invalid", ModifierControl, ModifierControlSuper, ModifierSuper} {
+		t.Run(value, func(t *testing.T) {
+			s := DefaultSettings()
+			s.Keyboard.ModifierKey = value
+			if err := SaveSettings(s); err != nil {
+				t.Fatal(err)
+			}
+			got := LoadSettings()
+			want := value
+			if !slices.Contains(KeyboardModifiers, want) {
+				want = ModifierControl
+			}
+			if got.Keyboard.ModifierKey != want {
+				t.Fatalf("modifierKey = %q, want %q", got.Keyboard.ModifierKey, want)
+			}
+			if _, ok := got.Extra["keyboard"]; ok {
+				t.Fatal("keyboard was treated as plugin settings")
+			}
+		})
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(`{}`), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Keyboard.ModifierKey; got != ModifierControl {
+		t.Fatalf("missing keyboard settings = %q", got)
+	}
 }
 
 func TestSettingsPartialJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s))
 
 	if s.Editor.TabSize != 2 {
 		t.Fatalf("expected TabSize 2, got %d", s.Editor.TabSize)
@@ -33,10 +66,27 @@ func TestSettingsPartialJSON(t *testing.T) {
 
 func TestSettingsEmptyJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{}`), &s))
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)
+	}
+}
+
+func TestIndentGuidesSettingRoundTrips(t *testing.T) {
+	s := DefaultSettings()
+	s.Editor.IndentGuides = true
+
+	data, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded Settings
+	if err := json.Unmarshal(data, &loaded); err != nil {
+		t.Fatal(err)
+	}
+	if !loaded.Editor.IndentGuides {
+		t.Fatal("IndentGuides did not survive settings serialization")
 	}
 }
 
@@ -191,6 +241,25 @@ func TestWelcomeSettingsRecentFoldersEnabled(t *testing.T) {
 	}
 }
 
+func TestAppearanceSettingsPointerShapesEnabled(t *testing.T) {
+	s := AppearanceSettings{}
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should default to enabled when nil")
+	}
+
+	enabled := true
+	s.PointerShapes = &enabled
+	if !s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be enabled when explicitly true")
+	}
+
+	disabled := false
+	s.PointerShapes = &disabled
+	if s.PointerShapesEnabled() {
+		t.Error("pointer shapes should be disabled when explicitly false")
+	}
+}
+
 func TestLSPSettingsShouldNotifyAvailability(t *testing.T) {
 	// nil means default (true)
 	s := LSPSettings{}
@@ -304,6 +373,9 @@ func TestDiffPresentationSettingsRoundTrip(t *testing.T) {
 
 func TestDefaultTerminalSettings(t *testing.T) {
 	ts := DefaultTerminalSettings()
+	if ts.PaddingX != 1 {
+		t.Errorf("expected PaddingX 1, got %d", ts.PaddingX)
+	}
 	if !ts.CtrlVPastes {
 		t.Error("expected CtrlVPastes true by default")
 	}
@@ -322,6 +394,12 @@ func TestDefaultAutocompleteSettings(t *testing.T) {
 	}
 	if !ac.AutoSuggest {
 		t.Error("expected AutoSuggest true")
+	}
+	if !ac.PathCompletion {
+		t.Error("expected PathCompletion true")
+	}
+	if ac.AbsolutePathCompletion {
+		t.Error("expected AbsolutePathCompletion false")
 	}
 	if ac.Debounce != 150 {
 		t.Errorf("expected Debounce 150, got %d", ac.Debounce)
@@ -370,13 +448,12 @@ func TestReferenceSettingsMatchesDefaults(t *testing.T) {
 	}
 
 	s := DefaultSettings()
-	s.Theme = "default-dark"
 	generated, _ := json.MarshalIndent(s, "", "  ")
 	generated = append(generated, '\n')
 
 	if string(generated) != string(refData) {
 		t.Errorf("config/settings.json is out of date with DefaultSettings().\n"+
-			"Regenerate it by running DefaultSettings() with theme='default-dark' and saving the output.\n"+
+			"Regenerate it by running DefaultSettings() and saving the output.\n"+
 			"Got %d bytes, want %d bytes", len(refData), len(generated))
 	}
 }
@@ -565,6 +642,18 @@ func TestWordWrapMaxBytes(t *testing.T) {
 	}
 }
 
+func TestSidebarTabStyleInvalidFallsBackToLabel(t *testing.T) {
+	s := DefaultSettings()
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Fatalf("default = %q", s.Sidebar.TabStyle)
+	}
+	s.Sidebar.TabStyle = "bogus"
+	normalizeSettings(&s)
+	if s.Sidebar.TabStyle != SidebarTabStyleLabel {
+		t.Errorf("normalized = %q", s.Sidebar.TabStyle)
+	}
+}
+
 func TestSettingsReuseWindowRoundTrip(t *testing.T) {
 	original := DefaultSettings()
 	original.ReuseWindow = true
@@ -581,5 +670,51 @@ func TestSettingsReuseWindowRoundTrip(t *testing.T) {
 	}
 	if _, ok := restored.Extra["reuseWindow"]; ok {
 		t.Fatal("reuseWindow was treated as an unknown setting")
+	}
+}
+
+func TestSystemPluginDirectorySetting(t *testing.T) {
+	withTempConfigDir(t)
+	s := DefaultSettings()
+	if s.Plugins.SystemDir != "" {
+		t.Fatal("system plugins must be opt-in")
+	}
+	s.Plugins.SystemDir = filepath.Join(t.TempDir(), "shared-plugins")
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if got := LoadSettings().Plugins.SystemDir; got != s.Plugins.SystemDir {
+		t.Fatalf("systemDir = %q, want %q", got, s.Plugins.SystemDir)
+	}
+}
+
+func TestFullLineSelectionSetting(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if DefaultSettings().Editor.FullLineSelection {
+		t.Fatal("expected FullLineSelection false by default")
+	}
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{"editor":{}}`, false},
+		{`{"editor":{"fullLineSelection":false}}`, false},
+		{`{"editor":{"fullLineSelection":true}}`, true},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Editor.FullLineSelection; got != tc.want {
+			t.Errorf("%s: FullLineSelection = %v, want %v", tc.json, got, tc.want)
+		}
+	}
+
+	s := DefaultSettings()
+	s.Editor.FullLineSelection = true
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if !LoadSettings().Editor.FullLineSelection {
+		t.Fatal("FullLineSelection did not survive save and load")
 	}
 }

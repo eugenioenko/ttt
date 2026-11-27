@@ -48,9 +48,9 @@ func TestWordWrapRendersLongLine(t *testing.T) {
 
 	longLine := strings.Repeat("abcde", 20)
 	path := filepath.Join(h.dir, "wrap.txt")
-	os.WriteFile(path, []byte(longLine), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(longLine), 0644))
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	screenBefore := h.screenText()
@@ -75,9 +75,9 @@ func TestWordWrapLineNumbersOnlyOnFirstRow(t *testing.T) {
 
 	longLine := strings.Repeat("x", 200)
 	path := filepath.Join(h.dir, "wrapnum.txt")
-	os.WriteFile(path, []byte(longLine+"\nsecondline"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(longLine+"\nsecondline"), 0644))
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	h.exec("options.toggleWordWrap")
@@ -119,9 +119,9 @@ func TestWordWrapCursorPosition(t *testing.T) {
 
 	longLine := strings.Repeat("abcde", 20)
 	path := filepath.Join(h.dir, "wrapcur.txt")
-	os.WriteFile(path, []byte(longLine), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(longLine), 0644))
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	h.exec("options.toggleWordWrap")
@@ -155,9 +155,9 @@ func TestWordWrapDisablesHorizontalScroll(t *testing.T) {
 
 	longLine := strings.Repeat("x", 200)
 	path := filepath.Join(h.dir, "nohscroll.txt")
-	os.WriteFile(path, []byte(longLine), 0644)
+	requireNoError(t, os.WriteFile(path, []byte(longLine), 0644))
 
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	h.exec("options.toggleWordWrap")
@@ -172,8 +172,8 @@ func TestWordWrapDisablesHorizontalScroll(t *testing.T) {
 func openWrapped(t *testing.T, h *testHarness, name, content string) {
 	t.Helper()
 	path := filepath.Join(h.dir, name)
-	os.WriteFile(path, []byte(content), 0644)
-	h.app.EditorGroup.OpenFile(path)
+	requireNoError(t, os.WriteFile(path, []byte(content), 0644))
+	h.openFile(path)
 	if !h.app.Settings.Editor.WordWrap {
 		h.exec("options.toggleWordWrap")
 	}

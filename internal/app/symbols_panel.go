@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -35,8 +36,9 @@ func NewSymbolsPanel() *SymbolsPanel {
 	// Indent 3 keeps leaf labels visually nested past their parent's label
 	// (leaves render no chevron, so indent 2 would align them with it).
 	sp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
-		Indent:    3,
-		EmptyText: "No symbols",
+		Indent:             3,
+		EmptyText:          i18n.Text("lsp.noSymbols"),
+		ActivateExpandable: true,
 		OnSelect: func(node *widgets.TreeNode) {
 			sp.notify(node, sp.OnReveal)
 		},
@@ -51,7 +53,7 @@ func NewSymbolsPanel() *SymbolsPanel {
 }
 
 func (sp *SymbolsPanel) SetSymbols(symbols []lsp.DocumentSymbol) {
-	sp.Tree.Config.EmptyText = "No symbols"
+	sp.Tree.Config.EmptyText = i18n.Text("lsp.noSymbols")
 	sp.kinds = make(map[string]lsp.SymbolKind)
 	sp.Tree.SetItems(symbolNodes(sp.icons, symbols, sp.kinds))
 }
@@ -81,7 +83,7 @@ func (sp *SymbolsPanel) SetStatus(msg string) {
 }
 
 func (sp *SymbolsPanel) Clear() {
-	sp.SetStatus("No symbols")
+	sp.SetStatus(i18n.Text("status.noSymbols"))
 }
 
 func (sp *SymbolsPanel) notify(node *widgets.TreeNode, cb func(line, col int)) {

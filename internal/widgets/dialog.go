@@ -123,6 +123,7 @@ func (d *DialogWidget) Render(surface Surface) {
 	d.boxY = 2
 
 	if d.boxY+d.boxH > sh {
+		contentH = max(0, contentH-(d.boxY+d.boxH-sh))
 		d.boxH = sh - d.boxY
 	}
 

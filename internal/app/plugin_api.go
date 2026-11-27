@@ -239,6 +239,7 @@ func (e *PluginEditorAPI) SetCursor(line, col int) {
 	if ed == nil || ed.Cursor == nil {
 		return
 	}
+	ed.ResetCursorGoal()
 	ed.Cursor.Line = line
 	ed.Cursor.Col = col
 	ed.EnsureCursorVisible()
@@ -249,6 +250,7 @@ func (e *PluginEditorAPI) SetSelection(startLine, startCol, endLine, endCol int)
 	if ed == nil || ed.Selection == nil || ed.Cursor == nil {
 		return
 	}
+	ed.ResetCursorGoal()
 	ed.Selection.Start(startLine, startCol)
 	ed.Cursor.Line = endLine
 	ed.Cursor.Col = endCol
@@ -309,7 +311,7 @@ func (e *PluginEditorAPI) SetSearch(pattern string, useRegex bool) {
 	}
 	opts := ui.SearchOptions{UseRegex: useRegex, CaseSensitive: true}
 	matches, _ := ui.FindInLines(buf.Lines, pattern, opts)
-	e.eg.SetSearch(pattern, matches)
+	e.eg.SetSearch(pattern, opts, matches)
 }
 
 func (e *PluginEditorAPI) ClearSearch() {
@@ -404,7 +406,15 @@ func newFsRoots(dirs []string, all bool) fsRoots {
 		resolved = append(resolved, abs)
 		// check resolves symlinks in the requested path, so a root under a symlink (macOS /tmp and
 		// /var) must also be allowed in resolved form, or the workspace denies its own files.
-		if real, err := filepath.EvalSymlinks(abs); err == nil && real != abs {
+		real, err := filepath.EvalSymlinks(abs)
+		if os.IsNotExist(err) {
+			if _, absent := os.Lstat(abs); os.IsNotExist(absent) {
+				if parent, parentErr := filepath.EvalSymlinks(filepath.Dir(abs)); parentErr == nil {
+					real, err = filepath.Join(parent, filepath.Base(abs)), nil
+				}
+			}
+		}
+		if err == nil && real != abs {
 			resolved = append(resolved, real)
 		}
 	}
@@ -430,12 +440,23 @@ func (r fsRoots) check(path string) error {
 		clean = filepath.Join(resolved, filepath.Base(clean))
 	}
 
-	for _, root := range r.dirs {
-		if clean == root || strings.HasPrefix(clean, root+string(filepath.Separator)) {
-			return nil
-		}
+	if r.contains(clean) {
+		return nil
 	}
 	return fmt.Errorf("access denied: path %q is outside allowed directories", path)
+}
+
+func (r fsRoots) contains(path string) bool {
+	if r.all {
+		return true
+	}
+	for _, root := range r.dirs {
+		rel, err := filepath.Rel(root, path)
+		if err == nil && filepath.IsLocal(rel) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
@@ -452,16 +473,141 @@ func (f *PluginFilesystemAPI) ReadFile(path string) (string, error) {
 
 func (f *PluginFilesystemAPI) WriteFile(path, content string) error {
 	path = f.vars.Expand(path)
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
 	if err := f.write.check(path); err != nil {
 		return err
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	data := []byte(content)
+	if err := os.WriteFile(abs, data, 0644); os.IsNotExist(err) {
+		if err := f.write.writeWithParents(abs, data, err); err != nil {
+			return err
+		}
+	} else if err != nil {
 		return err
 	}
 	if f.onWrite != nil {
 		f.onWrite(path)
 	}
 	return nil
+}
+
+func (r fsRoots) writeWithParents(path string, data []byte, writeErr error) error {
+	dir, name := filepath.Split(path)
+	dir = filepath.Clean(dir)
+	missing := ""
+	for {
+		if _, err := os.Lstat(dir); err == nil {
+			break
+		} else if !os.IsNotExist(err) {
+			return err
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return writeErr
+		}
+		missing = filepath.Join(filepath.Base(dir), missing)
+		dir = parent
+	}
+	if missing == "" {
+		return writeErr
+	}
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return err
+	}
+	first, rest, _ := strings.Cut(missing, string(filepath.Separator))
+	if !r.contains(filepath.Join(real, first)) {
+		return fmt.Errorf("access denied: missing parents of %q are outside allowed directories", path)
+	}
+
+	anchor := real
+	if !r.all {
+		for _, grant := range r.dirs {
+			rel, err := filepath.Rel(grant, real)
+			if err == nil && filepath.IsLocal(rel) {
+				anchor = grant
+				missing = filepath.Join(rel, missing)
+				break
+			}
+		}
+	}
+	root, err := openPluginWriteAnchor(anchor)
+	if err != nil {
+		return err
+	}
+	defer root.Close()
+	if !r.contains(real) {
+		// The first missing component is the grant itself, not its parent.
+		if err := root.Mkdir(first, 0755); err != nil {
+			return err
+		}
+		granted, err := openPluginWriteDir(root, first)
+		if err != nil {
+			return err
+		}
+		defer granted.Close()
+		root, missing = granted, rest
+	}
+	if missing != "" {
+		if err := root.MkdirAll(missing, 0755); err != nil {
+			return err
+		}
+	}
+	return root.WriteFile(filepath.Join(missing, name), data, 0644)
+}
+
+func openPluginWriteAnchor(path string) (*os.Root, error) {
+	volume := filepath.VolumeName(path) + string(filepath.Separator)
+	root, err := os.OpenRoot(volume)
+	if err != nil {
+		return nil, err
+	}
+	rel, err := filepath.Rel(volume, path)
+	if err != nil {
+		root.Close()
+		return nil, err
+	}
+	if rel == "." {
+		return root, nil
+	}
+	// The anchor is already canonical. Reject any component that has become
+	// a symlink instead of following it from a broader directory handle.
+	for _, name := range strings.Split(rel, string(filepath.Separator)) {
+		next, err := openPluginWriteDir(root, name)
+		root.Close()
+		if err != nil {
+			return nil, err
+		}
+		root = next
+	}
+	return root, nil
+}
+
+func openPluginWriteDir(root *os.Root, name string) (*os.Root, error) {
+	before, err := root.Lstat(name)
+	if err != nil {
+		return nil, err
+	}
+	if !before.IsDir() {
+		return nil, fmt.Errorf("access denied: %q is not a regular directory", name)
+	}
+	dir, err := root.OpenRoot(name)
+	if err != nil {
+		return nil, err
+	}
+	after, err := dir.Stat(".")
+	if err != nil {
+		dir.Close()
+		return nil, err
+	}
+	if !os.SameFile(before, after) {
+		dir.Close()
+		return nil, fmt.Errorf("access denied: directory %q changed", name)
+	}
+	return dir, nil
 }
 
 func (f *PluginFilesystemAPI) FileExists(path string) bool {
@@ -504,8 +650,28 @@ func NewPluginTerminalAPI(a *App) *PluginTerminalAPI {
 	return &PluginTerminalAPI{app: a}
 }
 
-func (t *PluginTerminalAPI) TerminalSpawn(shell string, args, env []string, cwd, label string) (string, error) {
-	return t.app.SpawnTerminalSpec(TerminalSpec{Shell: shell, Args: args, Env: env, Cwd: cwd, Label: label})
+func (t *PluginTerminalAPI) TerminalPalette() (string, map[string]string) {
+	if t.app.TerminalPalette == nil {
+		return "unavailable", map[string]string{}
+	}
+	return t.app.TerminalPalette.Snapshot()
+}
+
+func (t *PluginTerminalAPI) RequestTerminalPalette() {
+	if t.app.TerminalPalette != nil {
+		t.app.TerminalPalette.Request()
+	}
+}
+
+func (t *PluginTerminalAPI) TerminalSpawn(spec plugin.TerminalSpawnSpec) (string, error) {
+	return t.app.SpawnTerminalSpec(TerminalSpec{
+		Shell:    spec.Shell,
+		Args:     spec.Args,
+		Env:      spec.Env,
+		Cwd:      spec.Cwd,
+		Label:    spec.Label,
+		InEditor: spec.Location == plugin.TerminalLocationEditor,
+	})
 }
 
 func (t *PluginTerminalAPI) TerminalSend(id, text string) error {
@@ -658,19 +824,19 @@ func (s *PluginSystemAPI) Spawn(binary string, args []string, opts plugin.SpawnO
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		stdin.Close()
+		_ = stdin.Close()
 		return nil, err
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		stdin.Close()
-		stdout.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
 		return nil, err
 	}
 	if err := cmd.Start(); err != nil {
-		stdin.Close()
-		stdout.Close()
-		stderr.Close()
+		_ = stdin.Close()
+		_ = stdout.Close()
+		_ = stderr.Close()
 		return nil, err
 	}
 	return &pluginSpawnedProcess{cmd: cmd, stdin: stdin, stdout: stdout, stderr: stderr}, nil
@@ -740,7 +906,7 @@ func (n *PluginNetworkAPI) Get(url string, headers map[string]string) (int, stri
 	if err != nil {
 		return 0, "", nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return resp.StatusCode, "", nil, err
@@ -767,7 +933,7 @@ func (n *PluginNetworkAPI) Post(url string, headers map[string]string, body stri
 	if err != nil {
 		return 0, "", nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	respBody, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBody))
 	if err != nil {
 		return resp.StatusCode, "", nil, err
@@ -780,11 +946,21 @@ func (n *PluginNetworkAPI) Post(url string, headers map[string]string, body stri
 }
 
 type PluginSettingsAPI struct {
-	app *App
+	app   *App
+	saved map[string]any
 }
 
 func NewPluginSettingsAPI(app *App) *PluginSettingsAPI {
 	return &PluginSettingsAPI{app: app}
+}
+
+// Ownership checks must see edits made on disk since the plugin was installed.
+func (s *PluginSettingsAPI) SavedSettings() (plugin.SettingsAPI, error) {
+	settings, err := config.ReadSettingsObject(s.app.settingsFilePath())
+	if err != nil {
+		return nil, err
+	}
+	return &PluginSettingsAPI{app: s.app, saved: settings}, nil
 }
 
 func (s *PluginSettingsAPI) Get(key string) (any, bool) {
@@ -800,19 +976,36 @@ func (s *PluginSettingsAPI) Set(key string, value any) error {
 	if m == nil {
 		m = make(map[string]any)
 	}
-	setPath(m, strings.Split(key, "."), value)
+	parts := strings.Split(key, ".")
+	if s.saved != nil {
+		setPath(m, parts, value)
+		updated, err := config.SaveSettingsObject(s.app.settingsFilePath(), m)
+		if err == nil {
+			*s.app.Settings = updated
+		}
+		return err
+	}
+	setPath(m, parts, value)
 
 	data, err := json.Marshal(m)
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(data, s.app.Settings); err != nil {
+	var updated config.Settings
+	if err := json.Unmarshal(data, &updated); err != nil {
 		return err
 	}
-	return config.SaveSettings(*s.app.Settings)
+	if err := s.app.saveSettings(updated); err != nil {
+		return err
+	}
+	*s.app.Settings = updated
+	return nil
 }
 
 func (s *PluginSettingsAPI) settingsMap() map[string]any {
+	if s.saved != nil {
+		return s.saved
+	}
 	data, err := json.Marshal(s.app.Settings)
 	if err != nil {
 		return nil

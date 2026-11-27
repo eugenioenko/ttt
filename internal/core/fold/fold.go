@@ -142,10 +142,30 @@ func (s *State) ExpandAll() {
 func (s *State) RemapCollapsed(fn func(line int) int) {
 	remapped := make(map[int]bool, len(s.collapsed))
 	for line := range s.collapsed {
-		remapped[fn(line)] = true
+		if moved := fn(line); moved >= 0 {
+			remapped[moved] = true
+		}
 	}
 	s.collapsed = remapped
 	s.dirty = true
+}
+
+// ShiftCollapsed maps headers through a line-count change before SetRanges.
+// A splice cannot identify which replacement line came from a removed header.
+func (s *State) ShiftCollapsed(start, removed, added int) {
+	if removed == added || !s.HasCollapsedFolds() {
+		return
+	}
+	s.RemapCollapsed(func(line int) int {
+		switch {
+		case line < start:
+			return line
+		case line < start+removed:
+			return -1
+		default:
+			return line + added - removed
+		}
+	})
 }
 
 func (s *State) IsCollapsed(startLine int) bool {

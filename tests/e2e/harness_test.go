@@ -35,24 +35,24 @@ func displayColumnOf(row, label string) int {
 	if byteOffset < 0 {
 		return -1
 	}
-	return textwidth.String(row[:byteOffset])
+	return textwidth.GraphemeWidth(row[:byteOffset])
 }
 
 func newTestHarness(t testing.TB, w, h int) *testHarness {
 	t.Helper()
 
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "alpha.txt"), []byte("a"), 0644)
-	os.WriteFile(filepath.Join(dir, "beta.txt"), []byte("b"), 0644)
-	os.WriteFile(filepath.Join(dir, "gamma.txt"), []byte("c"), 0644)
-	os.WriteFile(filepath.Join(dir, "delta.txt"), []byte("d"), 0644)
-	os.WriteFile(filepath.Join(dir, "epsilon.txt"), []byte("e"), 0644)
-	os.WriteFile(filepath.Join(dir, "zeta.txt"), []byte("f"), 0644)
-	os.MkdirAll(filepath.Join(dir, "subdir"), 0755)
-	os.WriteFile(filepath.Join(dir, "subdir", "nested.txt"), []byte("nested"), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "alpha.txt"), []byte("a"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "beta.txt"), []byte("b"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "gamma.txt"), []byte("c"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "delta.txt"), []byte("d"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "epsilon.txt"), []byte("e"), 0644))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "zeta.txt"), []byte("f"), 0644))
+	requireNoError(t, os.MkdirAll(filepath.Join(dir, "subdir"), 0755))
+	requireNoError(t, os.WriteFile(filepath.Join(dir, "subdir", "nested.txt"), []byte("nested"), 0644))
 
 	configDir := filepath.Join(dir, "config")
-	os.MkdirAll(configDir, 0755)
+	requireNoError(t, os.MkdirAll(configDir, 0755))
 	config.OverrideConfigDir = configDir
 	t.Cleanup(func() { config.OverrideConfigDir = "" })
 
@@ -70,10 +70,12 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	// Tests check highlighting results, not the time budget: under the race
 	// detector on a loaded runner the default limit stops lines mid-construct.
 	cfg.Settings.Editor.HighlightTimeLimit = 60_000
-	config.ParseKeyBindings(cfg.Keybindings)
+	requireNoError(t, config.ParseKeyBindings(cfg.Keybindings))
 
 	screen := term.NewTcellScreenFrom(sim)
-	screen.SetStyleMap(app.BuildStyleMap(cfg.Theme))
+	previousTokenTheme := highlight.CurrentTokenTheme()
+	app.ApplyThemeStyles(screen, cfg.Theme)
+	t.Cleanup(func() { highlight.SetTokenTheme(previousTokenTheme) })
 
 	borders := app.BuildBorderSet(cfg.Theme.Borders)
 
@@ -103,7 +105,10 @@ func newTestHarness(t testing.TB, w, h int) *testHarness {
 	highlight.SetStepScheduler(func() {})
 	t.Cleanup(func() {
 		editor.CloseTasks()
-		editor.EditorGroup.CloseAllTabs()
+		for _, group := range editor.EditorSplit.Groups() {
+			group.OnEmpty = nil
+			group.CloseAllTabs()
+		}
 		highlight.SetStepScheduler(nil)
 	})
 	h2.redraw()
@@ -134,9 +139,7 @@ func (h *testHarness) redraw() {
 }
 
 func (h *testHarness) flushOnChange() {
-	if h.app.EditorGroup.Editor != nil {
-		h.app.EditorGroup.Editor.FlushOnChange()
-	}
+	h.app.FlushEditorOnChange()
 }
 
 func (h *testHarness) pressKey(key tcell.Key, mod tcell.ModMask) {
@@ -213,7 +216,7 @@ func rowString(cells []term.SimCell) string {
 			continue
 		}
 		line.WriteString(sc.Str)
-		if textwidth.String(sc.Str) > 1 {
+		if textwidth.GraphemeWidth(sc.Str) > 1 {
 			x++
 		}
 	}

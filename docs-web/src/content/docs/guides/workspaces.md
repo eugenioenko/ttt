@@ -9,12 +9,22 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
-- Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
+- Right-click context menu: **New File**, **New Folder**, **Rename**, **Duplicate**, **Delete**
+- **Duplicate** works on files and folders. It does not open the copy; names follow Zed's scheme — `file copy.txt`, `file copy 2.txt`, or `folder copy`. Folder duplication is recursive and recreates symlinks as symlinks rather than following them.
+- **Open in Terminal** (`explorer.openInTerminal`, right-click menu or palette) opens a new integrated terminal in that folder, or in the file's folder
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** (`explorer.revealActiveFile`) expands the folders above the active file, selects it, and scrolls it into view without moving focus from the editor. Set `explorer.autoReveal` to `true` to do this every time the active file changes
-- File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Font Icons**, or **Icons** in the settings editor
+- A folder whose only entry is another folder is shown as one row, such as `src/main/java`, once you expand it, and that one expansion opens the whole chain. Right-click a segment of the row to act on that folder; keyboard actions on the row apply to its deepest folder. Set `explorer.compactFolders` to `false` to show each folder on its own row
+- File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Appearance → Font Icons**, or **Icons** in the settings editor
+
+**Options > Explorer** exposes **Show Hidden Files**, **Show Git-Ignored Files**, **Compact Folders**, **Auto-Reveal Active File**, **Git Status Colors**, and **Dim Staged Git Colors** as checked toggles. Changes apply immediately and are saved. Auto-reveal is off by default. The submenu also offers **Expand All** and **Collapse All**.
 
 When multiple folders are open, each root is shown as a collapsible group.
+
+**Delete** moves files and folders to the system Trash by default, where you can recover them using your file manager. macOS uses Foundation's native Trash API; Windows uses the Recycle Bin. Linux and FreeBSD require the `gio` command from GLib. Android has no supported system Trash for arbitrary files. If Trash is unavailable or the operation fails, ttt reports an error without falling back to permanent deletion.
+
+To delete permanently, turn off **Move deleted files to Trash** in **Settings > Explorer > Files**, or set `explorer.useTrash` to `false`. The confirmation then explicitly says the deletion is permanent and cannot be undone.
 
 ## Quick Navigation
 
@@ -43,6 +53,8 @@ ttt . https://github.com/owner/repo/pull/123
 ## Multi-Folder Workspaces
 
 Open multiple project directories in a single session. Each root appears as a collapsible group in the explorer, search, and changes panels.
+
+With `"reuseWindow": true`, `ttt another-folder` adds that folder to a running editor's workspace without closing existing tabs. Mixed arguments such as `ttt another-folder file.go` also open the file, and `ttt .` adds the current directory. Adding folders uses the same rules as **Add Folder to Workspace**: duplicate folder paths are ignored, and explicitly added nested folders remain separate roots. Bare `ttt` and `ttt --workspace project.ttt` still start a new editor.
 
 ### Workspace Files
 

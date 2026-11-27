@@ -8,6 +8,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/gdamore/tcell/v3"
 )
@@ -97,7 +98,7 @@ func TestCompactDiffShowsQuietCollapsedDistance(t *testing.T) {
 	fd := diff.Parse("--- a/test.go\n+++ b/test.go\n@@ -22,3 +22,3 @@\n line 22\n line 23\n line 24\n@@ -356,2 +356,2 @@\n line 356\n line 357\n")
 	h.app.EditorGroup.OpenDiff("distance.go", fd, nil, nil, false)
 	h.redraw()
-	if !strings.Contains(h.screenText(), "▸ ⋯ 331 lines ⋯") {
+	if !strings.Contains(h.screenText(), string(icons.PlainChevronRight)+" ⋯ 331 lines ⋯") {
 		t.Fatalf("compact diff should show a gutter disclosure and collapsed distance:\n%s", h.screenText())
 	}
 }
@@ -154,9 +155,11 @@ func TestOpenFileReadOnly(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "readonly.txt")
-	os.WriteFile(f, []byte("original content\n"), 0644)
+	requireNoError(t, os.WriteFile(f, []byte("original content\n"), 0644))
 
-	h.app.EditorGroup.OpenFileReadOnly(f, "readonly.txt (v1)")
+	if err := h.app.EditorGroup.OpenFileReadOnly(f, "readonly.txt (v1)"); err != nil {
+		t.Fatal(err)
+	}
 	h.redraw()
 
 	h.assertContains("readonly.txt (v1)")

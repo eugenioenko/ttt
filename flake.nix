@@ -18,7 +18,7 @@
             pname = "ttt";
             inherit version;
             src = self;
-            vendorHash = "sha256-Rlv/akRDQwbbpGblCaVoWRPQnspg0Ijt7bpm3jYmDeE=";
+            vendorHash = "sha256-orFRORMZ46xHomy0R/98/ENAFNc6J8WbAVo4tFmD5Vo=";
                           
             ldflags = [
               "-s"

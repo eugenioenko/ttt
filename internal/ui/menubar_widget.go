@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -59,16 +60,7 @@ func (m *MenuBarWidget) Render(surface Surface) {
 			style = term.StyleMenuBarActive
 		}
 
-		x := m.itemSpans[i].Start
-		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
-		x++
-		for _, ch := range item.Name {
-			if x < w {
-				surface.SetCell(x, 0, term.Cell{Ch: ch, Style: style})
-				x++
-			}
-		}
-		surface.SetCell(x, 0, term.Cell{Ch: ' ', Style: style})
+		surface.DrawText(m.itemSpans[i].Start, 0, " "+item.Name+" ", w, style)
 	}
 }
 
@@ -79,7 +71,7 @@ func (m *MenuBarWidget) computeSpans() []MenuItemSpan {
 	x := 1
 	for i, item := range m.Items {
 		start := x
-		x += len([]rune(item.Name)) + 2
+		x += textwidth.String(item.Name) + 2
 		spans[i] = MenuItemSpan{start, x}
 		x++
 	}

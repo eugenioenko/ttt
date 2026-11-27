@@ -1,10 +1,14 @@
 package term
 
 import (
+	"bytes"
+	"io"
 	"testing"
+	"time"
 
 	"github.com/gdamore/tcell/v3"
 	"github.com/gdamore/tcell/v3/color"
+	"github.com/gdamore/tcell/v3/tty"
 )
 
 func TestTcellScreen_SetCellWritesRune(t *testing.T) {
@@ -16,6 +20,22 @@ func TestTcellScreen_SetCellWritesRune(t *testing.T) {
 		if got, _, _ := sim.Get(0, 0); got != string(r) {
 			t.Errorf("SetCell(%q): screen has %q", r, got)
 		}
+	}
+}
+
+func TestTcellScreen_SetCellWritesCompleteGrapheme(t *testing.T) {
+	sim := NewSimScreen()
+	sim.SetSize(4, 1)
+	screen := NewTcellScreenFrom(sim)
+	for _, text := range []string{"e\u0301", "q\u0301", "e\u0300", "e"} {
+		screen.SetCell(0, 0, Cell{Ch: rune(text[0]), Text: text})
+		if got, _, width := sim.Get(0, 0); got != text || width != 1 {
+			t.Fatalf("SetCell(%q) = %q, width %d", text, got, width)
+		}
+	}
+	screen.SetCell(0, 0, Cell{Ch: 'e'})
+	if got, _, _ := sim.Get(0, 0); got != "e" {
+		t.Fatalf("plain cell retained combining mark: %q", got)
 	}
 }
 
@@ -152,5 +172,247 @@ func TestTcellScreen_HideReversedDefaultForegroundKeepsBackground(t *testing.T) 
 				}
 			}
 		})
+	}
+}
+
+type mockTty struct {
+	buf bytes.Buffer
+}
+
+func (m *mockTty) Start() error             { return nil }
+func (m *mockTty) Stop() error              { return nil }
+func (m *mockTty) Drain() error             { return nil }
+func (m *mockTty) NotifyResize(chan<- bool) {}
+func (m *mockTty) WindowSize() (tty.WindowSize, error) {
+	return tty.WindowSize{Width: 80, Height: 24}, nil
+}
+func (m *mockTty) Read(p []byte) (int, error)  { return 0, io.EOF }
+func (m *mockTty) Write(p []byte) (int, error) { return m.buf.Write(p) }
+func (m *mockTty) Close() error                { return nil }
+
+func TestSetPointerShapeEmitsOSC22AndCaches(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	if !ts.PointerShapesEnabled() {
+		t.Fatal("expected pointerShapesEnabled to default to true")
+	}
+
+	ts.SetPointerShape("text")
+	if got := mtty.buf.String(); got != "\x1b]22;text\x1b\\" {
+		t.Fatalf("first SetPointerShape: got %q, want %q", got, "\x1b]22;text\x1b\\")
+	}
+
+	// Repeated identical shape should be suppressed by cache
+	mtty.buf.Reset()
+	ts.SetPointerShape("text")
+	if got := mtty.buf.String(); got != "" {
+		t.Fatalf("cached SetPointerShape emitted: %q", got)
+	}
+
+	// Different shape writes new OSC 22
+	ts.SetPointerShape("col-resize")
+	if got := mtty.buf.String(); got != "\x1b]22;col-resize\x1b\\" {
+		t.Fatalf("new SetPointerShape: got %q, want %q", got, "\x1b]22;col-resize\x1b\\")
+	}
+
+	// Fini restores default
+	mtty.buf.Reset()
+	ts.Fini()
+	if got := mtty.buf.String(); got != "\x1b]22;default\x1b\\" {
+		t.Fatalf("Fini did not restore default pointer: got %q, want %q", got, "\x1b]22;default\x1b\\")
+	}
+}
+
+func TestTcellScreenFiniBeginsOSCShutdown(t *testing.T) {
+	sim := NewSimScreen()
+	if err := sim.Init(); err != nil {
+		t.Fatal(err)
+	}
+	reader := NewOSCReader(&mockTty{})
+	screen := NewTcellScreenFrom(sim)
+	screen.osc = reader
+	screen.Fini()
+	if !reader.shuttingDown.Load() {
+		t.Fatal("Fini did not enable shutdown writes")
+	}
+}
+
+func TestSetPointerShapesDisabledFromStartupEmitsNoOSC22(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	ts.SetPointerShapesEnabled(false)
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("SetPointerShapesEnabled(false) at startup emitted: %q", mtty.buf.String())
+	}
+	if ts.PointerShapesEnabled() {
+		t.Fatal("expected PointerShapesEnabled() to be false")
+	}
+
+	ts.SetPointerShape("text")
+	ts.SetPointerShape("col-resize")
+	ts.Fini()
+
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("disabled session emitted OSC 22 sequences: %q", mtty.buf.String())
+	}
+}
+
+func TestSetPointerShapesLiveDisableResetsOnce(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	ts.SetPointerShape("text")
+	if got := mtty.buf.String(); got != "\x1b]22;text\x1b\\" {
+		t.Fatalf("initial SetPointerShape: got %q", got)
+	}
+
+	mtty.buf.Reset()
+	ts.SetPointerShapesEnabled(false)
+	if got := mtty.buf.String(); got != "\x1b]22;default\x1b\\" {
+		t.Fatalf("live disable did not restore default: got %q, want %q", got, "\x1b]22;default\x1b\\")
+	}
+
+	mtty.buf.Reset()
+	ts.SetPointerShape("hand")
+	ts.SetPointerShapesEnabled(false)
+	ts.Fini()
+
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("subsequent operations after live disable emitted: %q", mtty.buf.String())
+	}
+}
+
+func TestSetPointerShapesLiveDisableWhenUnchangedEmitsNothing(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	ts.SetPointerShapesEnabled(false)
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("live disable when pointer was never changed emitted: %q", mtty.buf.String())
+	}
+}
+
+func TestSetPointerShapesLiveDisableWhenAlreadyDefaultEmitsNothing(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	ts.SetPointerShape("default")
+	mtty.buf.Reset()
+
+	ts.SetPointerShapesEnabled(false)
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("live disable when pointer is already default emitted: %q", mtty.buf.String())
+	}
+}
+
+func TestSetPointerShapesReenableResumesWithoutStaleCache(t *testing.T) {
+	sim := NewSimScreen()
+	mtty := &mockTty{}
+	sim.SetTty(mtty)
+	ts := NewTcellScreenFrom(sim)
+
+	ts.SetPointerShape("text")
+	ts.SetPointerShapesEnabled(false)
+	mtty.buf.Reset()
+
+	ts.SetPointerShapesEnabled(true)
+	if !ts.PointerShapesEnabled() {
+		t.Fatal("expected PointerShapesEnabled() to be true")
+	}
+
+	// Resuming with the same shape ("text") must NOT be suppressed by stale cache
+	ts.SetPointerShape("text")
+	if got := mtty.buf.String(); got != "\x1b]22;text\x1b\\" {
+		t.Fatalf("re-enabled SetPointerShape: got %q, want %q", got, "\x1b]22;text\x1b\\")
+	}
+
+	// Now cache should suppress repeated shape
+	mtty.buf.Reset()
+	ts.SetPointerShape("text")
+	if mtty.buf.Len() > 0 {
+		t.Fatalf("re-enabled cache failed to suppress repeated shape: %q", mtty.buf.String())
+	}
+}
+
+type winMockTty struct {
+	mockTty
+	stopQ chan struct{}
+}
+
+func (w *winMockTty) Drain() error {
+	select {
+	case <-w.stopQ:
+	default:
+		close(w.stopQ)
+	}
+	return nil
+}
+
+func (w *winMockTty) Read(p []byte) (int, error) {
+	<-w.stopQ
+	return 0, nil
+}
+
+func TestTerminfoScreenFiniWithWindowsDrainedTty(t *testing.T) {
+	tty := &winMockTty{stopQ: make(chan struct{})}
+	screen, _, err := NewTerminfoScreenFromTty(tty, tcell.OptNegotiation(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		screen.Fini()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("screen.Fini hung when Tty.Drain yields 0-byte reads (Windows console shutdown)")
+	}
+}
+
+func TestTcellScreenHyperlinkStyle(t *testing.T) {
+	for _, direct := range []bool{false, true} {
+		sim := NewSimScreen()
+		sim.SetSize(4, 1)
+		screen := NewTcellScreenFrom(sim)
+		for _, uri := range []string{"https://example.com/one", "https://example.com/two", ""} {
+			cell := Cell{Ch: 'x', Direct: direct, Link: NewHyperlink(uri, "link")}
+			screen.SetCell(0, 0, cell)
+			_, style, _ := sim.Get(0, 0)
+			id, got := style.GetUrl()
+			if got != uri || id != cell.Link.ID() {
+				t.Fatalf("direct=%t: link=(%q,%q), want=(%q,%q)", direct, id, got, cell.Link.ID(), uri)
+			}
+		}
+	}
+}
+
+func TestTcellScreenEmitsOSC8(t *testing.T) {
+	tty := &winMockTty{stopQ: make(chan struct{})}
+	screen, _, err := NewTerminfoScreenFromTty(tty, tcell.OptTerm("xterm-256color"), tcell.OptNegotiation(false))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer screen.Fini()
+	tty.buf.Reset()
+	screen.SetCell(0, 0, Cell{Ch: 'L', Direct: true, Link: NewHyperlink("https://example.com", "test")})
+	screen.SetCell(1, 0, Cell{Ch: 'x'})
+	screen.Show()
+	output := tty.buf.String()
+	if !bytes.Contains([]byte(output), []byte("\x1b]8;id=test;https://example.com\x1b\\")) || !bytes.Contains([]byte(output), []byte("\x1b]8;;\x1b\\")) {
+		t.Fatalf("missing OSC 8 open/close in terminal output: %q", output)
 	}
 }

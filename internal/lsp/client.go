@@ -22,6 +22,7 @@ import (
 type Client struct {
 	cmd      *exec.Cmd
 	conn     *jsonrpc.Conn
+	stdin    io.Closer
 	closing  atomic.Bool
 	waitOnce sync.Once
 
@@ -34,6 +35,7 @@ type Client struct {
 
 	OnDiagnostics       func(params PublishDiagnosticsParams)
 	OnDiagnosticRefresh func()
+	OnApplyEdit         func(edit WorkspaceEdit) ApplyWorkspaceEditResult
 }
 
 // ClientHooks are passed to NewClient rather than assigned afterwards: the
@@ -81,6 +83,11 @@ func NewClient(command []string, workDir string, hooks ClientHooks) (*Client, er
 
 func newClient(r io.Reader, w io.Writer, hooks ClientHooks) *Client {
 	c := &Client{hooks: hooks}
+	// Closing stdin is the only way to release a write blocked on a server
+	// that stopped reading, so keep it when the transport supports it.
+	if closer, ok := w.(io.Closer); ok {
+		c.stdin = closer
+	}
 	c.conn = jsonrpc.NewConn(r, w, jsonrpc.Options{
 		OnNotification: c.handleNotification,
 		OnRequest:      c.answer,
@@ -139,6 +146,15 @@ func (c *Client) answer(method string, params json.RawMessage) (any, error) {
 		var p ConfigurationParams
 		_ = json.Unmarshal(params, &p)
 		return make([]any, len(p.Items)), nil
+	case "workspace/applyEdit":
+		var p ApplyWorkspaceEditParams
+		if err := json.Unmarshal(params, &p); err != nil {
+			return nil, fmt.Errorf("parse workspace/applyEdit params: %w", err)
+		}
+		if c.OnApplyEdit == nil {
+			return ApplyWorkspaceEditResult{FailureReason: "workspace edits are not supported"}, nil
+		}
+		return c.OnApplyEdit(p.Edit), nil
 	case "client/registerCapability", "client/unregisterCapability":
 		return nil, nil
 	case "workspace/diagnostic/refresh":
@@ -181,12 +197,35 @@ func (c *Client) notify(method string, params any) error {
 	return c.conn.Notify(method, params)
 }
 
+// notifyContext sends a notification unless ctx ends first. A server that stops
+// reading stdin leaves the write blocked on a full pipe, which no context can
+// interrupt, so cancellation closes the client to release it.
+func (c *Client) notifyContext(ctx context.Context, method string, params any) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	sent := make(chan error, 1)
+	go func() { sent <- c.notify(method, params) }()
+	select {
+	case err := <-sent:
+		return err
+	case <-ctx.Done():
+		c.Close()
+		<-sent
+		return ctx.Err()
+	}
+}
+
 func isNullResult(result json.RawMessage) bool {
 	return len(result) == 0 || string(result) == "null"
 }
 
 func (c *Client) Initialize(rootURI string) error {
-	result, err := c.call("initialize", InitializeParams{
+	return c.initialize(context.Background(), rootURI)
+}
+
+func (c *Client) initialize(ctx context.Context, rootURI string) error {
+	result, err := c.callContext(ctx, "initialize", InitializeParams{
 		ProcessID: os.Getpid(),
 		RootURI:   rootURI,
 		Capabilities: ClientCapabilities{
@@ -203,9 +242,21 @@ func (c *Client) Initialize(rootURI string) error {
 				DocumentSymbol: &DocumentSymbolClientCapabilities{
 					HierarchicalDocumentSymbolSupport: true,
 				},
+				CodeAction: &CodeActionClientCapabilities{
+					CodeActionLiteralSupport: &CodeActionLiteralSupport{
+						CodeActionKind: CodeActionKindCapabilities{ValueSet: []string{
+							"", "quickfix", "refactor", "refactor.extract", "refactor.inline",
+							"refactor.rewrite", "source", "source.organizeImports", "source.fixAll",
+						}},
+					},
+				},
 				Diagnostic: &DiagnosticClientCapabilities{},
 			},
 			Workspace: &WorkspaceClientCapabilities{
+				ApplyEdit: true,
+				ExecuteCommand: &ExecuteCommandClientCapabilities{
+					DynamicRegistration: false,
+				},
 				Diagnostics: &DiagnosticWorkspaceClientCapabilities{RefreshSupport: true},
 			},
 		},
@@ -432,10 +483,21 @@ func (c *Client) locationRequest(method, uri string, line, col int) ([]Location,
 }
 
 func (c *Client) CodeAction(uri string, r Range, kinds []string) ([]CodeAction, error) {
+	return c.CodeActionWithDiagnostics(uri, r, kinds, nil)
+}
+
+func (c *Client) CodeActionWithDiagnostics(uri string, r Range, kinds []string, diagnostics []Diagnostic) ([]CodeAction, error) {
+	if diagnostics == nil {
+		diagnostics = []Diagnostic{}
+	}
 	result, err := c.call("textDocument/codeAction", CodeActionParams{
 		TextDocument: TextDocumentIdentifier{URI: uri},
 		Range:        r,
-		Context:      CodeActionContext{Diagnostics: []Diagnostic{}, Only: kinds},
+		Context: CodeActionContext{
+			Diagnostics: diagnostics,
+			Only:        kinds,
+			TriggerKind: CodeActionInvoked,
+		},
 	})
 	if err != nil {
 		return nil, err
@@ -448,6 +510,13 @@ func (c *Client) CodeAction(uri string, r Range, kinds []string) ([]CodeAction, 
 		return nil, fmt.Errorf("parse codeAction result: %w", err)
 	}
 	return actions, nil
+}
+
+func (c *Client) ExecuteCommand(command string, arguments []json.RawMessage) error {
+	_, err := c.call("workspace/executeCommand", ExecuteCommandParams{
+		Command: command, Arguments: arguments,
+	})
+	return err
 }
 
 func (c *Client) Rename(uri string, line, col int, newName string) (*WorkspaceEdit, error) {
@@ -594,10 +663,15 @@ func (c *Client) Shutdown() error {
 
 func (c *Client) Close() {
 	c.closing.Store(true)
-	c.cmd.Process.Kill()
-	c.wait()
+	if c.stdin != nil {
+		_ = c.stdin.Close()
+	}
+	if c.cmd != nil {
+		_ = c.cmd.Process.Kill()
+		c.wait()
+	}
 }
 
 func (c *Client) wait() {
-	c.waitOnce.Do(func() { c.cmd.Wait() })
+	c.waitOnce.Do(func() { _ = c.cmd.Wait() })
 }

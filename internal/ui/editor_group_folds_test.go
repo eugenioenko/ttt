@@ -15,7 +15,7 @@ func TestOpenFileComputesFoldsAfterFirstFrame(t *testing.T) {
 	g := newRenameGroup(t, filepath.Join(t.TempDir(), "a.go"), "func a() {\n\tx := 1\n}\n")
 	g.FoldTask = asynctask.New[[]fold.Range](asynctask.TaskOptions{Run: func(fn func()) { runs = append(runs, fn) }},
 		func(fn func()) error { deliveries = append(deliveries, fn); return nil })
-	g.OpenFile(g.ActiveFilePath())
+	requireNoError(t, g.OpenFile(g.ActiveFilePath()))
 	finish := func() {
 		t.Helper()
 		if len(runs) != 1 {
@@ -45,7 +45,7 @@ func TestBackgroundFoldsYieldToLineCountEdit(t *testing.T) {
 	g := newRenameGroup(t, filepath.Join(t.TempDir(), "a.go"), "func a() {\n\tx := 1\n}\n")
 	g.FoldTask = asynctask.New[[]fold.Range](asynctask.TaskOptions{Run: func(fn func()) { runs = append(runs, fn) }},
 		func(fn func()) error { deliveries = append(deliveries, fn); return nil })
-	g.OpenFile(g.ActiveFilePath())
+	requireNoError(t, g.OpenFile(g.ActiveFilePath()))
 
 	g.scheduleFolds()
 	g.Editor.ExecCommand(&undo.InsertLineCommand{Idx: 0, Text: "// header"})

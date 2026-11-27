@@ -25,6 +25,18 @@ func surfaceRows(s *testSurface) []string {
 	return rows
 }
 
+func TestWrappingInputLegacyAltEnterWithSuperShortcuts(t *testing.T) {
+	mask := tcell.ModMeta
+	input := NewInputWidget(InputConfig{Wrap: true})
+	input.ControlModifiers = &mask
+	input.SetFocused(true)
+	input.SetText("alpha")
+	input.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "m", tcell.ModAlt|tcell.ModCtrl))
+	if input.Text() != "alpha\n" {
+		t.Fatalf("legacy Alt+Enter changed with Super shortcuts: %q", input.Text())
+	}
+}
+
 func TestWrapInputRowsBreaksAtSpacesAndNewlines(t *testing.T) {
 	for _, tc := range []struct {
 		text  string
@@ -173,6 +185,17 @@ func TestWrapInputRowsNeverExceedTheWidth(t *testing.T) {
 		if w := textwidth.Runes(runes[r.start:r.end]); w > 4 {
 			t.Fatalf("row %q is %d columns, over 4", string(runes[r.start:r.end]), w)
 		}
+	}
+}
+
+func TestEmptyInputPasteKeepsSelection(t *testing.T) {
+	input := NewInputWidget(InputConfig{})
+	input.SetText("keep selected text")
+	input.SelectAll()
+	input.PasteText("")
+	start, end := input.selRange()
+	if input.Text() != "keep selected text" || start != 0 || end != len("keep selected text") {
+		t.Fatalf("empty paste left text %q with selection %d..%d", input.Text(), start, end)
 	}
 }
 

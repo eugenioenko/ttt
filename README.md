@@ -8,10 +8,12 @@ Full documentation lives in [`docs-web/src/content/docs/`](docs-web/src/content/
 
 ## Installation
 
-### Prerequisites
+### Optional dependencies
 
-- [Git](https://git-scm.com/) — required for source control features
-- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — required for workspace search
+Neither tool is required to install or use ttt for basic editing. They enable additional functionality:
+
+- [Git](https://git-scm.com/) — enables source control features
+- [ripgrep](https://github.com/BurntSushi/ripgrep) (`rg`) — enables workspace search
 
 ### Quick Install MacOS (brew)
 ```sh
@@ -33,7 +35,15 @@ curl -sSfL https://raw.githubusercontent.com/eugenioenko/ttt/main/install.sh | I
 
 Set `INSTALL_DIR` on `sh` so the installer receives it.
 
-### [Arch Linux (AUR)](https://aur.archlinux.org/packages/ttt)
+### Arch Linux (AUR)
+
+[`ttt-bin`](https://aur.archlinux.org/packages/ttt-bin) installs the prebuilt release binary:
+
+```sh
+yay -S ttt-bin
+```
+
+Or build from source with [`ttt`](https://aur.archlinux.org/packages/ttt):
 
 ```sh
 yay -S ttt
@@ -58,7 +68,7 @@ scoop install ttt
 
 ### Go Install
 
-Requires [Go](https://go.dev/) 1.18 or newer:
+Requires [Go](https://go.dev/) 1.25 or newer:
 
 ```sh
 go install github.com/eugenioenko/ttt/cmd/ttt@latest
@@ -108,7 +118,7 @@ Once installed, bind it to a key (e.g. `Ctrl+b e`) to launch TTT in the active w
 - **Undo/redo** (Ctrl+Z/Y) via a command-pattern undo stack
 - **Code folding** — toggle folds (Ctrl+K [), fold/unfold all, fold-aware search and navigation
 - **Line operations** — toggle line comment, move/duplicate/delete line, join lines, sort lines, split selection into lines
-- **Multi-cursor editing** — Ctrl+D to select next occurrence, Ctrl+K L to select all occurrences, Alt+Click to add cursors; typing, backspace, delete, and enter work at all positions simultaneously
+- **Multi-cursor editing** — Alt+Shift+Up/Down to add a cursor above/below, Ctrl+D to select next occurrence, Ctrl+K L to select all occurrences, Alt+Click to add cursors; typing, backspace, delete, and enter work at all positions simultaneously
 - **`.editorconfig` support** and **indent detection** — indentation is picked up automatically per file; manual override via the status bar indent picker
 - **Mouse support** — click to position cursor, click tabs, drag sidebar/panel dividers, right-click context menus
 - **Auto-completion** — LSP-powered completions with live filtering, debounce, and auto-import support
@@ -137,7 +147,9 @@ ttt https://github.com/owner/repo/pull/123 # opens pull request review
 git diff | ttt                  # opens piped output in an unsaved tab (or: ttt -)
 ```
 
-Set `"reuseWindow": true` in settings.json (off by default; restart required) to open command-line files in the newest reachable editor using the same config directory. If none answers, ttt starts normally. Use `ttt --new-window file` to start a separate editor. With reuse enabled, `EDITOR=ttt` returns immediately; use `EDITOR="ttt --new-window"` for commands that wait for editing.
+Set `"reuseWindow": true` in settings.json (off by default; restart required) to open command-line files and add folders in a running editor using the same config directory. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, the newest reachable editor receives the files and folders. If none is reachable, ttt starts normally. Once connected, open errors or timeouts exit with status 1 without trying another editor. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Use `ttt --new-window file` to start a separate editor. With reuse enabled, `EDITOR=ttt` returns immediately; use `EDITOR="ttt --new-window"` for commands that wait for editing.
+
+Folder arguments add workspace roots without closing existing tabs; folders already in the workspace are ignored using the same rules as **Add Folder to Workspace**. For example, `ttt .` adds the current directory, and `ttt dirA file.go` adds the folder and opens the file. Bare `ttt` and `ttt --workspace project.ttt` still start a new editor. To forward folders after upgrading, restart the running editor with the updated binary, or use `--new-window` to start a separate editor.
 
 Workspace files use the `.ttt` extension and store a list of folders as relative paths:
 
@@ -162,10 +174,12 @@ Multi-root file tree in the sidebar (Ctrl+K E). When multiple folders are open, 
 
 - Directories sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
+- Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
 - Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Deleted files and folders go to system Trash by default. Turn off `explorer.useTrash` in **Settings > Explorer > Files** for permanent deletion
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** expands the tree to the active file and selects it; set `explorer.autoReveal` to do it on every tab switch
-- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Font Icons**
+- File-type icons, colored by the theme (glyph mappings from [nvim-web-devicons](https://github.com/nvim-tree/nvim-web-devicons)). They need a [Nerd Font](https://www.nerdfonts.com) in your terminal, so they default off; turn them on with `"appearance": { "icons": "nerd-font" }` or **Options > Appearance > Font Icons**
 
 ### Search
 
@@ -183,7 +197,7 @@ See [Search](docs-web/src/content/docs/guides/search.md).
 
 Changes panel in the sidebar (Ctrl+K C) with full staging workflow.
 
-Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
+Working-tree files and files under expanded commits can be shown as a compact directory **Tree** or a full-path **List** (the default). The choice persists in `git.fileView`. File-type icons sit between the status letter and the file name; like the Explorer's, they follow the shared `appearance.icons` setting, need a Nerd Font, and default off — **Options > Appearance > Font Icons** toggles them. Changes, commit details, and Explorer expose safe **Expand All** and **Collapse All** actions in their relevant menus.
 
 **Staging:**
 - **Spacebar** — toggle stage/unstage on the selected file
@@ -225,6 +239,7 @@ See [Git Integration](docs-web/src/content/docs/guides/git.md).
 ### Command Palette
 
 - **Ctrl+P** — opens the command palette with all available commands
+- The last 10 commands run from the palette are listed first, most recent first
 - **Ctrl+K P** — opens quick file open (searches all files across workspace folders)
 - Type `>` in quick-open mode to switch to command mode; delete the `>` to switch back
 - Type `?` to browse searchable help for panels, navigation, and key chords
@@ -237,7 +252,11 @@ Built-in terminal emulator. Press Ctrl+T to toggle the terminal panel, or Alt+T 
 - **Ctrl+K T** to spawn a new terminal tab; multiple tabs with a vertical inner tab bar on the left edge
 - Full VT escape sequence support via [`eugenioenko/xterm-go`](https://github.com/eugenioenko/xterm-go) (a maintained fork of [`gitpod-io/xterm-go`](https://github.com/gitpod-io/xterm-go)) and PTY management via [`aymanbagabas/go-pty`](https://github.com/aymanbagabas/go-pty)
 - True color (24-bit) and 256-color rendering
-- When the terminal is focused, all keys go to the PTY except force keys (Ctrl+T, Alt+T, Ctrl+Q, Ctrl+P, Ctrl+K P, Ctrl+B, F6)
+- Reserved TTT shortcuts and chords work while the terminal is focused. **Ctrl+K P** opens Quick Open; **Ctrl+K Ctrl+P** sends Ctrl+P to the terminal. **Ctrl+K Ctrl+K** sends Ctrl+K for shell kill-line.
+- **Terminal: Send Next Key** is bound to **Ctrl+K** and can be rebound in **Settings → General → Keyboard**, beside the modifier preference. Plain or Shift-only continuations complete TTT chords; a Ctrl/Alt/Super combination goes directly to the terminal, bypassing TTT shortcuts and local clipboard handling. Clicking, changing focus, or closing the terminal cancels forwarding.
+- Enable **Forward shortcuts to terminal** in that same Keyboard section (`terminal.forwardShortcuts`, default `false`) to pass reserved shortcuts and chord prefixes directly to terminal programs. Terminal-local copy/paste behavior keeps its existing settings.
+- **Ctrl+F6** (**Terminal: Toggle Shortcut Forwarding**) changes the mode for the current TTT session without saving a new default and shows a short status notification. It is also available from the command palette.
+- Web URLs in editors and terminals, and OSC 8 hyperlinks (including labels such as **Click here**), use ttt’s Ctrl+click handling by default (browser opens on the machine running ttt). Set `"links": { "native": true }` to let the outer terminal handle hover and opening locally, including over SSH. This setting is also available under **General → Links**.
 - Terminal shell and scrollback are configurable in `settings.json`; ANSI colors are theme-configurable via the `terminal` field in `theme.json`
 
 See [Integrated Terminal](docs-web/src/content/docs/guides/terminal.md).
@@ -261,7 +280,7 @@ TTT supports fully customizable themes via JSON files. Every color is themeable 
 
 Built-in themes ship with the binary, and [extra themes](docs-web/src/content/docs/guides/extra-themes.md) are available for download from the repo.
 
-Switch themes via **View > Switch Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
+Switch themes via **Options > Theme** (or the command palette) for a live preview. To create a custom theme, copy a built-in file to `~/.config/ttt/themes/` and set `"theme"` in `settings.json`. To use your terminal's native colors, set foreground/background to empty strings in your theme file.
 
 See [Themes](docs-web/src/content/docs/guides/themes.md).
 
@@ -276,6 +295,8 @@ TTT supports Lua plugins that add sidebar panels, bottom panel tabs, commands, a
 **Managing** — click an installed plugin to enable/disable it; **↑** to update, **×** to uninstall, **Plugins: Reload** for live reload during development. To disable the plugin system entirely: `"plugins": { "enabled": false }`.
 
 **Creating** — plugins are Lua scripts with a `plugin.ttt.json` manifest. See the [Plugin Authoring Guide](docs-web/src/content/docs/guides/plugin-authoring.md).
+
+The optional `terminal.palette` plugin permission exposes `ttt.terminal.request_palette()` to start an asynchronous terminal-color query and `ttt.terminal.palette()` to read its snapshot. TTT does not poll the terminal at startup or periodically. Since the TTY API cannot cancel a blocked write, shutdown does not wait for an in-flight palette query; in the rare case that the operating system leaves that write blocked, its goroutine may remain until the write returns.
 
 See [Plugins](docs-web/src/content/docs/guides/plugins.md).
 
@@ -296,6 +317,12 @@ See [Settings reference](docs-web/src/content/docs/reference/settings.md) for ev
 ## Keybindings
 
 All keybindings are customizable via [`keybindings.json`](config/keybindings.json). Chord sequences (e.g. `ctrl+k e`) are supported. Open your keybindings file with **Ctrl+K Y**, or press **Ctrl+P** and type `?` to browse shortcuts in-app.
+
+Set [`keyboard.modifierKey`](docs-web/src/content/docs/reference/settings.md#keyboard) to `"control+super"` to also accept Super/Cmd for Ctrl shortcuts, or `"super"` to use Super/Cmd instead. The default is `"control"`. Binding definitions stay unchanged, and the terminal must forward the shortcuts.
+
+Use the editor tab bar’s **More** menu to split right or down (up to 16 groups), or close a split. Each new group starts with an independent, numbered untitled document; opening a file replaces the untouched placeholder. The command palette groups split actions under **Split:**, including **Split: Equalize Sizes**. Views of the same document share text and undo history, with independent cursors and scrolling. **Ctrl+K Left/Right/Up/Down** focuses the group in that direction; **F6** and **Shift+F6** cycle groups, the sidebar, and the panel. Drag tabs between groups, or use **Open to the Side** in a text-tab or Explorer context menu. **Split: Move to Other Group** is available in the command palette. Closing the last tab removes its group; **Close Split** merges its remaining tabs into a neighbor.
+
+Choose **Extended**, **Hidden**, or **Auto-hide** tab bars in **Settings > Appearance > Window** or **Options > Appearance > Tab Bar Style**. Hidden keeps a one-row divider; tab commands remain available. Auto-hide reveals the strip when the pointer reaches the editor’s top edge.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 
@@ -529,6 +556,64 @@ TTT is better because of the people who took the time to try it, report bugs, re
   <a href="https://github.com/samarthyadavv"><img src="https://avatars.githubusercontent.com/u/62054465?v=4&amp;s=96" width="48" height="48" alt="@samarthyadavv" title="@samarthyadavv" /></a>
   <a href="https://github.com/sduensin"><img src="https://avatars.githubusercontent.com/u/98645?v=4&amp;s=96" width="48" height="48" alt="@sduensin" title="@sduensin" /></a>
   <a href="https://github.com/Catalyze4"><img src="https://avatars.githubusercontent.com/u/194232798?v=4&amp;s=96" width="48" height="48" alt="@Catalyze4" title="@Catalyze4" /></a>
+  <a href="https://github.com/Lzcwbcgs"><img src="https://avatars.githubusercontent.com/u/188435156?v=4&amp;s=96" width="48" height="48" alt="@Lzcwbcgs" title="@Lzcwbcgs" /></a>
+  <a href="https://github.com/lab1207"><img src="https://avatars.githubusercontent.com/u/166456890?v=4&amp;s=96" width="48" height="48" alt="@lab1207" title="@lab1207" /></a>
+  <a href="https://github.com/Nandaleio"><img src="https://avatars.githubusercontent.com/u/35730439?v=4&amp;s=96" width="48" height="48" alt="@Nandaleio" title="@Nandaleio" /></a>
+  <a href="https://github.com/shu-chen-dot-ca"><img src="https://avatars.githubusercontent.com/u/338845574?v=4&amp;s=96" width="48" height="48" alt="@shu-chen-dot-ca" title="@shu-chen-dot-ca" /></a>
+  <a href="https://github.com/costajohnt"><img src="https://avatars.githubusercontent.com/u/14304404?v=4&amp;s=96" width="48" height="48" alt="@costajohnt" title="@costajohnt" /></a>
+  <a href="https://github.com/BrettKinny"><img src="https://avatars.githubusercontent.com/u/14231653?v=4&amp;s=96" width="48" height="48" alt="@BrettKinny" title="@BrettKinny" /></a>
+  <a href="https://github.com/Araxeus"><img src="https://avatars.githubusercontent.com/u/78568641?v=4&amp;s=96" width="48" height="48" alt="@Araxeus" title="@Araxeus" /></a>
+  <a href="https://github.com/Aaqibhafeezkhan"><img src="https://avatars.githubusercontent.com/u/292322256?v=4&amp;s=96" width="48" height="48" alt="@Aaqibhafeezkhan" title="@Aaqibhafeezkhan" /></a>
+  <a href="https://github.com/Goldloli"><img src="https://avatars.githubusercontent.com/u/39011904?v=4&amp;s=96" width="48" height="48" alt="@Goldloli" title="@Goldloli" /></a>
+  <a href="https://github.com/sunburst89757"><img src="https://avatars.githubusercontent.com/u/82217593?v=4&amp;s=96" width="48" height="48" alt="@sunburst89757" title="@sunburst89757" /></a>
+  <a href="https://github.com/mahilsaily306-max"><img src="https://avatars.githubusercontent.com/u/223992708?v=4&amp;s=96" width="48" height="48" alt="@mahilsaily306-max" title="@mahilsaily306-max" /></a>
+  <a href="https://github.com/Tyler-widd"><img src="https://avatars.githubusercontent.com/u/187319305?v=4&amp;s=96" width="48" height="48" alt="@Tyler-widd" title="@Tyler-widd" /></a>
+  <a href="https://github.com/Seyamalam"><img src="https://avatars.githubusercontent.com/u/126227356?v=4&amp;s=96" width="48" height="48" alt="@Seyamalam" title="@Seyamalam" /></a>
+  <a href="https://github.com/SteveGreenley"><img src="https://avatars.githubusercontent.com/u/46902?v=4&amp;s=96" width="48" height="48" alt="@SteveGreenley" title="@SteveGreenley" /></a>
+  <a href="https://github.com/salmonumbrella"><img src="https://avatars.githubusercontent.com/u/182032677?v=4&amp;s=96" width="48" height="48" alt="@salmonumbrella" title="@salmonumbrella" /></a>
+  <a href="https://github.com/starwish9527"><img src="https://avatars.githubusercontent.com/u/123040835?v=4&amp;s=96" width="48" height="48" alt="@starwish9527" title="@starwish9527" /></a>
+  <a href="https://github.com/tridev-tej"><img src="https://avatars.githubusercontent.com/u/188414140?v=4&amp;s=96" width="48" height="48" alt="@tridev-tej" title="@tridev-tej" /></a>
+  <a href="https://github.com/byterotom"><img src="https://avatars.githubusercontent.com/u/157611049?v=4&amp;s=96" width="48" height="48" alt="@byterotom" title="@byterotom" /></a>
+  <a href="https://github.com/IG-ABHINAV"><img src="https://avatars.githubusercontent.com/u/127868165?v=4&amp;s=96" width="48" height="48" alt="@IG-ABHINAV" title="@IG-ABHINAV" /></a>
+  <a href="https://github.com/Yasas-Sri"><img src="https://avatars.githubusercontent.com/u/164534752?v=4&amp;s=96" width="48" height="48" alt="@Yasas-Sri" title="@Yasas-Sri" /></a>
+  <a href="https://github.com/bangbangsheshotmedown"><img src="https://avatars.githubusercontent.com/u/186377859?v=4&amp;s=96" width="48" height="48" alt="@bangbangsheshotmedown" title="@bangbangsheshotmedown" /></a>
+  <a href="https://github.com/bardrop"><img src="https://avatars.githubusercontent.com/u/100354790?v=4&amp;s=96" width="48" height="48" alt="@bardrop" title="@bardrop" /></a>
+  <a href="https://github.com/painbaba"><img src="https://avatars.githubusercontent.com/u/183747876?v=4&amp;s=96" width="48" height="48" alt="@painbaba" title="@painbaba" /></a>
+  <a href="https://github.com/prime120"><img src="https://avatars.githubusercontent.com/u/194905345?v=4&amp;s=96" width="48" height="48" alt="@prime120" title="@prime120" /></a>
+  <a href="https://github.com/qwist1233-cpu"><img src="https://avatars.githubusercontent.com/u/267938209?v=4&amp;s=96" width="48" height="48" alt="@qwist1233-cpu" title="@qwist1233-cpu" /></a>
+  <a href="https://github.com/somaz94"><img src="https://avatars.githubusercontent.com/u/112675579?v=4&amp;s=96" width="48" height="48" alt="@somaz94" title="@somaz94" /></a>
+  <a href="https://github.com/laozhej"><img src="https://avatars.githubusercontent.com/u/104217479?v=4&amp;s=96" width="48" height="48" alt="@laozhej" title="@laozhej" /></a>
+  <a href="https://github.com/4fthawaiian"><img src="https://avatars.githubusercontent.com/u/1187264?v=4&amp;s=96" width="48" height="48" alt="@4fthawaiian" title="@4fthawaiian" /></a>
+  <a href="https://github.com/SatriaBagusNurhadianto"><img src="https://avatars.githubusercontent.com/u/237350863?v=4&amp;s=96" width="48" height="48" alt="@SatriaBagusNurhadianto" title="@SatriaBagusNurhadianto" /></a>
+  <a href="https://github.com/chiragjangiir"><img src="https://avatars.githubusercontent.com/u/184008125?v=4&amp;s=96" width="48" height="48" alt="@chiragjangiir" title="@chiragjangiir" /></a>
+  <a href="https://github.com/iamcipherdev"><img src="https://avatars.githubusercontent.com/u/268238676?v=4&amp;s=96" width="48" height="48" alt="@iamcipherdev" title="@iamcipherdev" /></a>
+  <a href="https://github.com/dchaudhari7177"><img src="https://avatars.githubusercontent.com/u/111210939?v=4&amp;s=96" width="48" height="48" alt="@dchaudhari7177" title="@dchaudhari7177" /></a>
+  <a href="https://github.com/eduplessis"><img src="https://avatars.githubusercontent.com/u/398245?v=4&amp;s=96" width="48" height="48" alt="@eduplessis" title="@eduplessis" /></a>
+  <a href="https://github.com/Fishason"><img src="https://avatars.githubusercontent.com/u/147747767?v=4&amp;s=96" width="48" height="48" alt="@Fishason" title="@Fishason" /></a>
+  <a href="https://github.com/jilsnshah"><img src="https://avatars.githubusercontent.com/u/69414503?v=4&amp;s=96" width="48" height="48" alt="@jilsnshah" title="@jilsnshah" /></a>
+  <a href="https://github.com/ManManavadaria"><img src="https://avatars.githubusercontent.com/u/110382576?v=4&amp;s=96" width="48" height="48" alt="@ManManavadaria" title="@ManManavadaria" /></a>
+  <a href="https://github.com/mvanhorn"><img src="https://avatars.githubusercontent.com/u/455140?v=4&amp;s=96" width="48" height="48" alt="@mvanhorn" title="@mvanhorn" /></a>
+  <a href="https://github.com/imeraj"><img src="https://avatars.githubusercontent.com/u/10063412?v=4&amp;s=96" width="48" height="48" alt="@imeraj" title="@imeraj" /></a>
+  <a href="https://github.com/BiswasNehaa"><img src="https://avatars.githubusercontent.com/u/149717720?v=4&amp;s=96" width="48" height="48" alt="@BiswasNehaa" title="@BiswasNehaa" /></a>
+  <a href="https://github.com/nikolas-sapa"><img src="https://avatars.githubusercontent.com/u/245706417?v=4&amp;s=96" width="48" height="48" alt="@nikolas-sapa" title="@nikolas-sapa" /></a>
+  <a href="https://github.com/OBOneProtocol"><img src="https://avatars.githubusercontent.com/u/319176320?v=4&amp;s=96" width="48" height="48" alt="@OBOneProtocol" title="@OBOneProtocol" /></a>
+  <a href="https://github.com/lewisl"><img src="https://avatars.githubusercontent.com/u/1149741?v=4&amp;s=96" width="48" height="48" alt="@lewisl" title="@lewisl" /></a>
+  <a href="https://github.com/bedge"><img src="https://avatars.githubusercontent.com/u/499317?v=4&amp;s=96" width="48" height="48" alt="@bedge" title="@bedge" /></a>
+  <a href="https://github.com/crycode-de"><img src="https://avatars.githubusercontent.com/u/24603271?v=4&amp;s=96" width="48" height="48" alt="@crycode-de" title="@crycode-de" /></a>
+  <a href="https://github.com/zaaack"><img src="https://avatars.githubusercontent.com/u/5233940?v=4&amp;s=96" width="48" height="48" alt="@zaaack" title="@zaaack" /></a>
+  <a href="https://github.com/KIC"><img src="https://avatars.githubusercontent.com/u/10957396?v=4&amp;s=96" width="48" height="48" alt="@KIC" title="@KIC" /></a>
+  <a href="https://github.com/Omar-eng-sys"><img src="https://avatars.githubusercontent.com/u/138100611?v=4&amp;s=96" width="48" height="48" alt="@Omar-eng-sys" title="@Omar-eng-sys" /></a>
+  <a href="https://github.com/RodBarnes"><img src="https://avatars.githubusercontent.com/u/3944607?v=4&amp;s=96" width="48" height="48" alt="@RodBarnes" title="@RodBarnes" /></a>
+  <a href="https://github.com/dvhh"><img src="https://avatars.githubusercontent.com/u/573842?v=4&amp;s=96" width="48" height="48" alt="@dvhh" title="@dvhh" /></a>
+  <a href="https://github.com/egorse-tel"><img src="https://avatars.githubusercontent.com/u/249927879?v=4&amp;s=96" width="48" height="48" alt="@egorse-tel" title="@egorse-tel" /></a>
+  <a href="https://github.com/elkemper"><img src="https://avatars.githubusercontent.com/u/21986537?v=4&amp;s=96" width="48" height="48" alt="@elkemper" title="@elkemper" /></a>
+  <a href="https://github.com/flavour"><img src="https://avatars.githubusercontent.com/u/389592?v=4&amp;s=96" width="48" height="48" alt="@flavour" title="@flavour" /></a>
+  <a href="https://github.com/flowersauce"><img src="https://avatars.githubusercontent.com/u/79635639?v=4&amp;s=96" width="48" height="48" alt="@flowersauce" title="@flowersauce" /></a>
+  <a href="https://github.com/hjelev"><img src="https://avatars.githubusercontent.com/u/12294475?v=4&amp;s=96" width="48" height="48" alt="@hjelev" title="@hjelev" /></a>
+  <a href="https://github.com/jonah-butler"><img src="https://avatars.githubusercontent.com/u/18040568?v=4&amp;s=96" width="48" height="48" alt="@jonah-butler" title="@jonah-butler" /></a>
+  <a href="https://github.com/prawel"><img src="https://avatars.githubusercontent.com/u/26386354?v=4&amp;s=96" width="48" height="48" alt="@prawel" title="@prawel" /></a>
+  <a href="https://github.com/raphaelchinchilla"><img src="https://avatars.githubusercontent.com/u/43302296?v=4&amp;s=96" width="48" height="48" alt="@raphaelchinchilla" title="@raphaelchinchilla" /></a>
+  <a href="https://github.com/soderluk"><img src="https://avatars.githubusercontent.com/u/6086071?v=4&amp;s=96" width="48" height="48" alt="@soderluk" title="@soderluk" /></a>
 </p>
 
 Want to help? Bug reports, feature requests, and pull requests are all welcome — open an [issue](https://github.com/eugenioenko/ttt/issues) or a PR.

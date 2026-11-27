@@ -4,9 +4,6 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
-    paths:
-      - 'go.mod'
-      - 'go.sum'
 
 jobs:
   update-hash:
@@ -20,24 +17,16 @@ jobs:
 
       - uses: cachix/install-nix-action@v25
 
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Test vendorHash updater
+        run: go test ./scripts -run TestUpdateFlakeHash -count=1
+
       - name: Update vendorHash
         id: update_hash
-        run: |
-          # Inject the fake hash
-          sed -i 's/vendorHash = ".*";/vendorHash = "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";/g' flake.nix
-          
-          # Trigger the build and capture the error output
-          ERROR_OUTPUT=$(nix build .#default --no-link 2>&1) || true
-          
-          # Reliable regex to extract the hash regardless of whitespace formatting
-          NEW_HASH=$(echo "$ERROR_OUTPUT" | grep -oP 'got:\s*\Ksha256-[A-Za-z0-9+/=]+' || true)
-          
-          if [ -n "$NEW_HASH" ] && [ "$NEW_HASH" != "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=" ]; then
-            sed -i "s|vendorHash = \".*\";|vendorHash = \"$NEW_HASH\";|g" flake.nix
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: bash scripts/update-flake-hash.sh
 
       - name: Create Pull Request
         if: steps.update_hash.outputs.changed == 'true'

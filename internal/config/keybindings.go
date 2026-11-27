@@ -28,14 +28,18 @@ func (kb *KeyBinding) IsChord() bool {
 
 // ForceKeyCommands are checked even when a raw key consumer (e.g. terminal) has focus.
 var ForceKeyCommands = map[string]bool{
-	"terminal.toggle":     true,
-	"terminal.fullscreen": true,
-	"editor.quit":         true,
-	"command.palette":     true,
-	"file.quickOpen":      true,
-	"sidebar.toggle":      true,
-	"focus.nextGroup":     true,
-	"focus.prevGroup":     true,
+	"terminal.sendNextKey":              true,
+	"terminal.toggleShortcutForwarding": true,
+	"terminal.toggle":                   true,
+	"terminal.next":                     true,
+	"terminal.prev":                     true,
+	"terminal.fullscreen":               true,
+	"editor.quit":                       true,
+	"command.palette":                   true,
+	"file.quickOpen":                    true,
+	"sidebar.toggle":                    true,
+	"focus.nextGroup":                   true,
+	"focus.prevGroup":                   true,
 }
 
 func ParseKeyBindings(bindings []KeyBinding) error {
@@ -43,6 +47,7 @@ func ParseKeyBindings(bindings []KeyBinding) error {
 	for i := range bindings {
 		steps, err := ParseKeyString(bindings[i].Key)
 		if err != nil {
+			bindings[i].Steps = nil
 			if firstErr == nil {
 				firstErr = fmt.Errorf("keybinding %q: %w", bindings[i].Key, err)
 			}
@@ -221,7 +226,9 @@ func SaveKeybindings(bindings []KeyBinding) error {
 
 	if len(out) == 0 {
 		path := ConfigFilePath("keybindings.json")
-		os.Remove(path)
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			return err
+		}
 		return nil
 	}
 
@@ -232,7 +239,7 @@ func SaveKeybindings(bindings []KeyBinding) error {
 	}
 	data = append(data, '\n')
 	path := ConfigFilePath("keybindings.json")
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0644)
 }
 
 func stringSliceEqual(a, b []string) bool {
@@ -279,7 +286,10 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+f", Command: "search.find"},
 		{Key: "ctrl+r", Command: "search.replace"},
 		{Key: "ctrl+g", Command: "editor.goToLine"},
+		{Key: "ctrl+up", Command: "view.scrollLineUp"},
+		{Key: "ctrl+down", Command: "view.scrollLineDown"},
 		{Key: "ctrl+p", Command: "command.palette"},
+		{Key: "ctrl+k", Command: "terminal.sendNextKey"},
 		{Key: "ctrl+k p", Command: "file.quickOpen"},
 		{Key: "ctrl+o", Command: "workspace.openFolder"},
 		{Key: "ctrl+n", Command: "file.new"},
@@ -305,6 +315,7 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+k t", Command: "terminal.new"},
 		{Key: "ctrl+k s", Command: "file.saveAs"},
 		{Key: "ctrl+u", Command: "editor.autocomplete"},
+		{Key: "ctrl+.", Command: "editor.codeActions"},
 		{Key: "ctrl+k i", Command: "editor.hover"},
 		{Key: "f2", Command: "editor.rename"},
 		{Key: "f12", Command: "editor.goToDefinition"},
@@ -320,10 +331,10 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+d", Command: "multicursor.selectNext"},
 		{Key: "ctrl+k l", Command: "multicursor.selectAll"},
 		{Key: "ctrl+k u", Command: "multicursor.undoCursor"},
+		{Key: "alt+shift+up", Command: "multicursor.addCursorAbove"},
+		{Key: "alt+shift+down", Command: "multicursor.addCursorBelow"},
 		{Key: "alt+up", Command: "editor.moveLineUp"},
 		{Key: "alt+down", Command: "editor.moveLineDown"},
-		{Key: "alt+shift+up", Command: "panel.taller"},
-		{Key: "alt+shift+down", Command: "panel.shorter"},
 		{Key: "alt+shift+left", Command: "sidebar.narrower"},
 		{Key: "alt+shift+right", Command: "sidebar.wider"},
 		{Key: "ctrl+k k", Command: "editor.deleteLine"},
@@ -333,6 +344,10 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "ctrl+end", Command: "editor.goToFileEnd"},
 		{Key: "ctrl+shift+home", Command: "editor.selectToFileStart"},
 		{Key: "ctrl+shift+end", Command: "editor.selectToFileEnd"},
+		{Key: "home", Command: "editor.goToLineStart"},
+		{Key: "end", Command: "editor.goToLineEnd"},
+		{Key: "shift+home", Command: "editor.selectToLineStart"},
+		{Key: "shift+end", Command: "editor.selectToLineEnd"},
 		{Key: "ctrl+left", Command: "editor.moveWordLeft"},
 		{Key: "ctrl+right", Command: "editor.moveWordRight"},
 		{Key: "ctrl+shift+left", Command: "editor.selectWordLeft"},
@@ -353,6 +368,11 @@ func DefaultKeybindings() []KeyBinding {
 		{Key: "alt+t", Command: "terminal.fullscreen"},
 		{Key: "f6", Command: "focus.nextGroup"},
 		{Key: "shift+f6", Command: "focus.prevGroup"},
+		{Key: "ctrl+f6", Command: "terminal.toggleShortcutForwarding"},
+		{Key: "ctrl+k left", Command: "focus.editorLeft"},
+		{Key: "ctrl+k right", Command: "focus.editorRight"},
+		{Key: "ctrl+k up", Command: "focus.editorUp"},
+		{Key: "ctrl+k down", Command: "focus.editorDown"},
 		{Key: "f10", Command: "menu.file"},
 		{Key: "alt+f", Command: "menu.file"},
 		{Key: "alt+e", Command: "menu.edit"},

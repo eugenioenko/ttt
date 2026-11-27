@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 )
@@ -22,7 +23,7 @@ func writeTestPNG(t *testing.T, path string, w, h int) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { requireNoError(t, f.Close()) }()
 	if err := png.Encode(f, img); err != nil {
 		t.Fatal(err)
 	}
@@ -58,7 +59,7 @@ func TestOpenImageFileProducesContentTab(t *testing.T) {
 	writeTestPNG(t, path, 8, 6)
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	tab := g.activeTab()
 	if tab == nil || tab.Content == nil {
@@ -115,7 +116,7 @@ func TestOpenBinaryFileProducesBinaryTab(t *testing.T) {
 	}
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	tab := g.activeTab()
 	if tab == nil || tab.Content == nil {
@@ -141,7 +142,7 @@ func TestOpenTextFileStillProducesTextBuffer(t *testing.T) {
 	}
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 
 	tab := g.activeTab()
 	if tab == nil || tab.Content != nil {
@@ -284,7 +285,7 @@ func TestSetImageProtocolPropagatesToTabs(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
 	g.SetImageProtocol("kitty")
 	g.SetImageCellSize(10, 20)
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	iv := activeImage(g)
 	if iv == nil {
 		t.Fatal("expected an image tab")
@@ -308,12 +309,12 @@ func TestTextOpenReplacesImagePreview(t *testing.T) {
 	}
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(imgPath)
+	requireNoError(t, g.OpenFile(imgPath))
 	if activeImage(g) == nil {
 		t.Fatal("expected an image tab")
 	}
 	tabsBefore := g.TabCount()
-	g.OpenFile(txtPath)
+	requireNoError(t, g.OpenFile(txtPath))
 	if activeImage(g) != nil {
 		t.Error("opening a text file should replace the image preview tab")
 	}
@@ -331,10 +332,10 @@ func TestReopenImageTabAppliesCurrentPrefs(t *testing.T) {
 	writeTestPNG(t, path, 8, 6)
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	g.SetImageProtocol("none")
 	g.SetImageCellSize(11, 22)
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	iv := activeImage(g)
 	if iv == nil {
 		t.Fatal("expected an image tab")
@@ -438,7 +439,7 @@ func TestImageWidgetShowsCardWhileDecoding(t *testing.T) {
 	if out := commitFrame(t, layer, w, surface); strings.Contains(out, "a=p") {
 		t.Fatalf("first frame placed the image before the decode finished: %q", out)
 	}
-	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, imageLoadingHint) || strings.Contains(text, imageCardHint) {
+	if text := gridText(grid); !strings.Contains(text, "PNG image 16x12") || !strings.Contains(text, i18n.Text("imageView.loadingPreview")) || strings.Contains(text, i18n.Text("imageView.unsupportedTerminal")) {
 		t.Errorf("card should show the loading hint while decoding, got:\n%s", text)
 	}
 

@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -61,7 +63,7 @@ func TestQuitSaveAllVisibility(t *testing.T) {
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = tc.enabled
 			h.app.Settings.Editor.SaveAllOnQuitExceptUnnamed = tc.exception
-			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+			h.openFile(filepath.Join(h.dir, "alpha.txt"))
 			h.typeText("edited")
 			if tc.unnamed {
 				h.exec("file.new")
@@ -88,7 +90,7 @@ func TestQuitSaveAllNamedBuffers(t *testing.T) {
 	h.app.Settings.Editor.SaveAllOnQuit = true
 	h.app.EditorGroup.TrimTrailingWhitespace = true
 	for _, name := range []string{"alpha.txt", "beta.txt"} {
-		h.app.EditorGroup.OpenFile(filepath.Join(h.dir, name))
+		h.openFile(filepath.Join(h.dir, name))
 		h.pressKey(tcell.KeyEnd, tcell.ModNone)
 		h.typeText("edited   ")
 	}
@@ -112,7 +114,7 @@ func TestQuitSaveAllUnnamedBuffers(t *testing.T) {
 	h.exec("file.new")
 	firstName := h.app.EditorGroup.ActiveFileName()
 	h.typeText("first scratch")
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.typeText("named edit")
 	h.exec("file.new")
 	secondName := h.app.EditorGroup.ActiveFileName()
@@ -154,7 +156,7 @@ func TestQuitSaveAllCancellation(t *testing.T) {
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = true
 			named := filepath.Join(h.dir, "alpha.txt")
-			h.app.EditorGroup.OpenFile(named)
+			h.openFile(named)
 			h.typeText("named edit")
 			h.exec("file.new")
 			h.typeText("scratch")
@@ -187,13 +189,13 @@ func TestQuitSaveAllCancellation(t *testing.T) {
 }
 
 func TestQuitSaveAllSaveGuards(t *testing.T) {
-	for _, guard := range []string{"disk change", "read only", "named failure", "unnamed failure", "replace"} {
+	for _, guard := range []string{"disk change", "read only", "named failure", "unnamed failure", "unnamed failure long path", "replace"} {
 		t.Run(guard, func(t *testing.T) {
 			h := newTestHarness(t, 100, 28)
 			defer h.stop()
 			h.app.Settings.Editor.SaveAllOnQuit = true
 			path := filepath.Join(h.dir, "alpha.txt")
-			h.app.EditorGroup.OpenFile(path)
+			h.openFile(path)
 			h.typeText("edited")
 			switch guard {
 			case "disk change":
@@ -207,7 +209,7 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 				if err := os.Mkdir(path, 0755); err != nil {
 					t.Fatal(err)
 				}
-			case "unnamed failure", "replace":
+			case "unnamed failure", "unnamed failure long path", "replace":
 				h.exec("file.new")
 				h.typeText("scratch")
 			}
@@ -225,9 +227,38 @@ func TestQuitSaveAllSaveGuards(t *testing.T) {
 				h.pressRune('c')
 			case "named failure":
 				h.pressRune('o')
-			case "unnamed failure":
-				h.typeText(filepath.Join(h.dir, "missing", "scratch.txt"))
+			case "unnamed failure", "unnamed failure long path":
+				dir := filepath.Join(h.dir, "missing")
+				if guard == "unnamed failure long path" {
+					// The space before the suffix forces "does not exist" across rows.
+					dir = filepath.Join(h.dir, "long temporary directory "+strings.Repeat("x", 40))
+				}
+				buf := h.app.EditorGroup.ActiveBuffer()
+				h.typeText(filepath.Join(dir, "scratch.txt"))
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)
+				adapter, ok := h.app.Root.TopOverlayWidget().(*ui.WidgetAdapter)
+				if !ok {
+					t.Fatalf("expected a missing-directory dialog, got %T", h.app.Root.TopOverlayWidget())
+				}
+				dialog, ok := adapter.Inner().(*widgets.DialogWidget)
+				if !ok {
+					t.Fatalf("expected DialogWidget, got %T", adapter.Inner())
+				}
+				message, ok := dialog.Content.(*widgets.ParagraphWidget)
+				if !ok {
+					t.Fatalf("expected a dialog message, got %T", dialog.Content)
+				}
+				want := "The folder " + dir + " does not exist. Create it and save the file?"
+				if message.Text != want {
+					t.Fatalf("missing-directory message = %q, want %q", message.Text, want)
+				}
+				if guard == "unnamed failure long path" && strings.Contains(h.screenText(), "does not exist") {
+					t.Fatal("long-path fixture must split the missing-directory phrase across rows")
+				}
+				clickRowControl(t, h, "Cancel", "Cancel")
+				if h.app.EditorGroup.ActiveBuffer() != buf || !h.app.EditorGroup.IsDirty() || strings.Join(buf.Lines, "\n") != "scratch" {
+					t.Fatal("cancelling the missing-directory prompt must preserve the dirty buffer and its contents")
+				}
 			case "replace":
 				h.typeText(path)
 				h.pressKey(tcell.KeyEnter, tcell.ModNone)
@@ -274,7 +305,7 @@ func TestQuitWithOpenOverlay(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			h := newTestHarness(t, 100, 28)
 			defer h.stop()
-			h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+			h.openFile(filepath.Join(h.dir, "alpha.txt"))
 			if tc.dirty {
 				h.typeText("edited")
 			}
@@ -287,9 +318,68 @@ func TestQuitWithOpenOverlay(t *testing.T) {
 			if *h.app.Running != tc.dirty {
 				t.Fatalf("running = %v, want %v", *h.app.Running, tc.dirty)
 			}
-			if tc.dirty && (len(h.app.Root.Overlays) != 1 || h.app.Root.Overlays[0].Widget != overlay) {
-				t.Fatal("dirty sessions must keep the current overlay without stacking quit confirmation")
+			if tc.dirty {
+				h.assertContains("Unsaved changes")
+				if len(h.app.Root.Overlays) != 2 || h.app.Root.Overlays[0].Widget != overlay {
+					t.Fatal("quit confirmation must appear above the existing overlay")
+				}
+				h.pressKey(tcell.KeyEscape, tcell.ModNone)
+				if h.app.Root.TopOverlayWidget() != overlay || h.app.Root.Focused != overlay {
+					t.Fatal("canceling quit must restore the existing overlay and focus")
+				}
 			}
 		})
+	}
+}
+
+func TestQuitWithSearchOverlayOpen(t *testing.T) {
+	for _, key := range []tcell.Key{tcell.KeyCtrlF, tcell.KeyCtrlR, tcell.KeyCtrlP} {
+		for _, action := range []string{"force", "save"} {
+			t.Run(tcell.KeyNames[key]+"/"+action, func(t *testing.T) {
+				h := newTestHarness(t, 120, 30)
+				defer h.stop()
+				h.app.Settings.Editor.SaveAllOnQuit = true
+				h.exec("file.new")
+				if key == tcell.KeyCtrlP {
+					h.typeText("unsaved scratch")
+				}
+				h.pressCtrl(key)
+				bar := h.app.Root.TopOverlayWidget()
+				input := bar.(ui.InputHolder).FocusedInput()
+				h.typeText("needle")
+				query := input.Text()
+				if key != tcell.KeyCtrlP {
+					r := h.app.EditorGroup.Editor.GetRect()
+					h.click(r.X+6, r.Y+2)
+					h.typeText("unsaved scratch")
+				}
+				h.pressCtrl(tcell.KeyCtrlQ)
+				h.assertContains("Unsaved changes")
+				if !*h.app.Running || !h.app.Root.HasModalOverlay() {
+					t.Fatal("Ctrl+Q must ask before discarding the dirty buffer")
+				}
+				h.pressKey(tcell.KeyEscape, tcell.ModNone)
+				if !*h.app.Running || h.app.Root.TopOverlayWidget() != bar || input.Text() != query || editorText(h) != "unsaved scratch" {
+					t.Fatal("canceling quit must preserve the buffer and search overlay")
+				}
+				h.pressCtrl(tcell.KeyCtrlQ)
+				h.assertContains("Unsaved changes")
+				if action == "force" {
+					h.pressCtrl(tcell.KeyCtrlQ)
+				} else {
+					h.pressRune('s')
+					h.assertContains("Save As")
+					path := filepath.Join(h.dir, "saved-scratch.txt")
+					h.typeText(path)
+					h.pressKey(tcell.KeyEnter, tcell.ModNone)
+					if got := readFile(t, path); strings.TrimSpace(got) != "unsaved scratch" {
+						t.Fatalf("saved text = %q", got)
+					}
+				}
+				if *h.app.Running {
+					t.Fatal("confirmed quit did not exit")
+				}
+			})
+		}
 	}
 }

@@ -42,3 +42,45 @@ func TestLuaTreeAndListBadgeRightAndInset(t *testing.T) {
 		}
 	}
 }
+
+func TestLuaTreeAndListActive(t *testing.T) {
+	p, done := newTestPluginBase(PermissionSet{PanelSidebar: true})
+	defer done()
+	err := p.State.DoString(`
+		local ttt = require("ttt")
+		active = "b"
+		ttt.register({ sidebar = { title = "T", render = function(panel)
+			local items = {{ id = "a", label = "First" }, { id = "b", label = "Second" }}
+			panel:tree({ items = items, active = active })
+			panel:list({ items = items, active = active })
+		end } })
+	`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ws := NewWidgetState()
+	render := func() []widgets.Widget {
+		proxy := NewPanelProxy(newMockSurface(80, 20), p)
+		if err := p.CallRenderWith(p.RenderFunc, proxy); err != nil {
+			t.Fatal(err)
+		}
+		return ws.Reconcile(proxy.Descriptors(), p).Children
+	}
+	for i, w := range render() {
+		if id := w.(*widgets.TreeWidget).Config.ActiveID; id != "b" {
+			t.Errorf("widget %d: active %q, want b", i, id)
+		}
+	}
+	p.State.SetGlobal("active", lua.LString("a"))
+	for i, w := range render() {
+		if id := w.(*widgets.TreeWidget).Config.ActiveID; id != "a" {
+			t.Errorf("widget %d: reconciled active %q, want a", i, id)
+		}
+	}
+	p.State.SetGlobal("active", lua.LNil)
+	for i, w := range render() {
+		if id := w.(*widgets.TreeWidget).Config.ActiveID; id != "" {
+			t.Errorf("widget %d: active %q after clearing, want none", i, id)
+		}
+	}
+}

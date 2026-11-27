@@ -188,8 +188,10 @@ func ownsDragAt(w widgets.Widget, x, y int) bool {
 	return false
 }
 
-func isCopyKey(ev *tcell.EventKey) bool {
-	r := term.KeyRune(ev)
-	return ev.Key() == tcell.KeyCtrlC ||
-		(ev.Key() == tcell.KeyRune && (r == 'c' || r == 'C') && ev.Modifiers()&tcell.ModCtrl != 0)
+func isCopyKey(ev *tcell.EventKey, p *Plugin) bool {
+	var modifiers *tcell.ModMask
+	if p != nil {
+		modifiers = p.ControlModifiers
+	}
+	return term.ControlKeyMatches(ev, tcell.KeyCtrlC, modifiers)
 }

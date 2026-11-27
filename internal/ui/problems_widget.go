@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -27,7 +28,7 @@ type ProblemsWidget struct {
 func NewProblemsWidget() *ProblemsWidget {
 	p := &ProblemsWidget{}
 	p.tree = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No problems detected",
+		EmptyText: i18n.Text("problems.noProblemsDetected"),
 		RenderItem: func(surface widgets.Surface, node *widgets.TreeNode, idx, y, w int, selected bool) {
 			p.renderLine(surface, idx, y, w, selected)
 		},
@@ -51,6 +52,13 @@ func (p *ProblemsWidget) SetBoxModel(bm widgets.BoxModel) { p.tree.SetBoxModel(b
 func (p *ProblemsWidget) Render(surface Surface)          { p.tree.Render(surface) }
 func (p *ProblemsWidget) HandleEvent(ev tcell.Event) EventResult {
 	return EventResult(p.tree.HandleEvent(ev))
+}
+
+func (p *ProblemsWidget) PointerShapeAt(mx, my int) string {
+	if p.tree == nil {
+		return ""
+	}
+	return p.tree.PointerShapeAt(mx, my)
 }
 
 func (p *ProblemsWidget) SetItems(items []ProblemItem) {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/app"
+	"github.com/gdamore/tcell/v3"
 )
 
 func TestUndoToClearsDirty(t *testing.T) {
@@ -14,8 +15,8 @@ func TestUndoToClearsDirty(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "dirty.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('X')
@@ -38,8 +39,8 @@ func TestUndoToSavePoint(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "savepoint.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('A')
@@ -67,13 +68,98 @@ func TestUndoToSavePoint(t *testing.T) {
 	}
 }
 
+func TestUndoAfterBranchingKeepsUnsavedChanges(t *testing.T) {
+	h := newTestHarness(t, 80, 24)
+	defer h.stop()
+
+	f := filepath.Join(h.dir, "branch.txt")
+	if err := os.WriteFile(f, []byte("hello\n"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.app.EditorGroup.OpenFile(f); err != nil {
+		t.Fatal(err)
+	}
+	h.redraw()
+	h.pressRune('A')
+	h.exec("file.save")
+	h.exec("editor.undo")
+	h.pressRune('B')
+	h.pressKey(tcell.KeyRight, tcell.ModNone)
+	h.pressRune('C')
+	h.exec("editor.undo")
+
+	if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "Bhello" {
+		t.Fatalf("buffer = %q, want Bhello", got)
+	}
+	if got := readFile(t, f); got != "Ahello\n" {
+		t.Fatalf("disk = %q, want Ahello\\n", got)
+	}
+	if !h.app.EditorGroup.IsDirty() {
+		t.Error("unsaved branch lost its dirty flag")
+	}
+	h.exec("editor.quit")
+	h.assertContains("Unsaved changes")
+	if !*h.app.Running {
+		t.Fatal("quit discarded unsaved changes")
+	}
+}
+
+func TestPluginUndoGroupSavePoint(t *testing.T) {
+	for _, saveAtEnd := range []bool{false, true} {
+		t.Run(map[bool]string{false: "save inside group", true: "save at group end"}[saveAtEnd], func(t *testing.T) {
+			h := newTestHarness(t, 80, 24)
+			defer h.stop()
+			f := filepath.Join(h.dir, "transaction.txt")
+			if err := os.WriteFile(f, []byte("hello\n"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			if err := h.app.EditorGroup.OpenFile(f); err != nil {
+				t.Fatal(err)
+			}
+			api := app.NewPluginEditorAPI(h.app)
+			api.BeginUndoGroup()
+			api.Insert(0, 0, "A")
+			if !saveAtEnd {
+				h.exec("file.save")
+			}
+			api.Insert(0, 1, "B")
+			if saveAtEnd {
+				h.exec("file.save")
+			}
+			api.EndUndoGroup()
+			h.exec("editor.undo")
+			h.exec("editor.redo")
+			if got := h.app.EditorGroup.ActiveBuffer().Lines[0]; got != "ABhello" {
+				t.Fatalf("buffer = %q, want ABhello", got)
+			}
+			wantDisk := "Ahello\n"
+			if saveAtEnd {
+				wantDisk = "ABhello\n"
+			}
+			if got := readFile(t, f); got != wantDisk {
+				t.Fatalf("disk = %q, want %q", got, wantDisk)
+			}
+			if got := h.app.EditorGroup.IsDirty(); got != !saveAtEnd {
+				t.Fatalf("dirty = %v, want %v", got, !saveAtEnd)
+			}
+			if !saveAtEnd {
+				h.exec("editor.quit")
+				h.assertContains("Unsaved changes")
+				if !*h.app.Running {
+					t.Fatal("quit discarded unsaved transaction edits")
+				}
+			}
+		})
+	}
+}
+
 func TestPluginSetLineIdenticalTextIsUndoNoop(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "noop.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.pressRune('X')
@@ -97,8 +183,8 @@ func TestPluginSetLineDifferentTextPushesUndo(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "change.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -119,8 +205,8 @@ func TestPluginReplaceInvalidRangeIsNoop(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "invalid.txt")
-	os.WriteFile(f, []byte("alpha\nbeta\ngamma\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("alpha\nbeta\ngamma\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -146,8 +232,8 @@ func TestPluginEditPastLineEndUndoes(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "pastend.txt")
-	os.WriteFile(f, []byte("hello\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("hello\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	api := app.NewPluginEditorAPI(h.app)
@@ -177,8 +263,8 @@ func TestDeleteLineOnEmptyBufferStaysClean(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "empty.txt")
-	os.WriteFile(f, []byte(""), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(""), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.deleteLine")

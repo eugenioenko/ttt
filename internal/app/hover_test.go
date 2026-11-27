@@ -12,7 +12,9 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/markdown"
+	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/gdamore/tcell/v3"
 )
 
 func hoverTestHarness(t *testing.T, delay, wantDelay int) *gitGutterTestHarness {
@@ -85,6 +87,61 @@ func TestExplicitHoverFlushesAndRefreshesCompletedKey(t *testing.T) {
 	}
 }
 
+func TestInactiveSplitTabHoverUsesItsOwnGroup(t *testing.T) {
+	h := hoverTestHarness(t, 123, 123)
+	a := h.a
+	left := a.EditorGroup
+	a.SplitEditor()
+	right := a.EditorGroup
+	// Only hover delivery belongs in this test's fake task queue.
+	left.FoldTask, right.FoldTask = nil, nil
+	right.NewFileFromText("right editor")
+	path := filepath.Join(t.TempDir(), strings.Repeat("long-name-", 12)+"file.txt")
+	requireNoError(t, right.OpenFile(path))
+	a.activateEditorGroup(left)
+	a.Root.SetFocus(left)
+	a.Root.SetSize(120, 30)
+	var renderer render.Renderer
+	a.Root.Render(renderer.NextFrame(120, 30))
+
+	r := right.TabBar.GetRect()
+	for x := r.X; x < r.X+r.W; x++ {
+		if _, _, _, _, ok := right.TabBar.CutTabAt(x, r.Y+1); !ok {
+			continue
+		}
+		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, tcell.ModNone))
+		h.clock.advance(a.hover.delay)
+		h.run(t)()
+		if right.Hover == nil || !right.Hover.HasContent() || left.Hover != nil || a.Root.Focused != left {
+			t.Fatal("hover did not appear in the inactive group without stealing focus")
+		}
+
+		editor := left.Editor.GetRect()
+		a.TrackMouseHover(tcell.NewEventMouse(editor.X+left.Editor.GutterWidth()+1, editor.Y, tcell.ButtonNone, a.Root.ControlModifiers))
+		h.clock.advance(a.hover.delay)
+		if right.Hover != nil || len(h.work) != 0 {
+			t.Fatal("moving into the active editor with Control held scheduled or retained a hover")
+		}
+
+		a.ShowHover("active editor", editor.X+left.Editor.GutterWidth()+1, editor.Y)
+		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, a.Root.ControlModifiers))
+		h.clock.advance(a.hover.delay)
+		if left.Hover != nil || right.Hover != nil || len(h.work) != 0 {
+			t.Fatal("moving onto the inactive tab with Control held scheduled or retained a hover")
+		}
+
+		a.TrackMouseHover(tcell.NewEventMouse(x, r.Y+1, tcell.ButtonNone, tcell.ModNone))
+		h.clock.advance(a.hover.delay)
+		h.run(t)()
+		a.TrackMouseHover(tcell.NewEventMouse(0, 0, tcell.ButtonNone, tcell.ModNone))
+		if right.Hover != nil {
+			t.Fatal("leaving the tab bar kept the inactive group's tooltip")
+		}
+		return
+	}
+	t.Fatal("expected a visibly truncated tab in the inactive group")
+}
+
 func TestHoverQueuedReplyCannotReopenAfterInvalidation(t *testing.T) {
 	for _, action := range []string{"dismiss", "move", "edit", "file", "disable", "shutdown"} {
 		t.Run(action, func(t *testing.T) {
@@ -102,7 +159,7 @@ func TestHoverQueuedReplyCannotReopenAfterInvalidation(t *testing.T) {
 			case "edit":
 				a.EditorGroup.Editor.ExecCommand(&undo.InsertRuneCommand{Line: 0, Col: 0, Rune: 'X'})
 			case "file":
-				a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(a.EditorGroup.ActiveFilePath()), "other.txt"))
+				requireNoError(t, a.EditorGroup.OpenFile(filepath.Join(filepath.Dir(a.EditorGroup.ActiveFilePath()), "other.txt")))
 			case "disable":
 				enabled := false
 				a.Settings.LSP.Hover = &enabled

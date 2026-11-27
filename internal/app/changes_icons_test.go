@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/eugenioenko/ttt/internal/scm"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
@@ -14,10 +15,9 @@ import (
 func changesIconFixture(view string) *ChangesPanel {
 	cp := NewChangesPanel("/repo")
 	cp.groups = []changesGroup{{
-		Dir:      "/repo",
-		Name:     "repo",
-		Staged:   []git.FileStatus{{Status: "A", Path: "web/app.ts"}},
-		Unstaged: []git.FileStatus{{Status: "M", Path: "cmd/main.go"}},
+		Dir:     "/repo",
+		Name:    "repo",
+		Changes: append(testSCMChanges(scm.Staged, []git.FileStatus{{Status: "A", Path: "web/app.ts"}}), testSCMChanges(scm.WorkingTree, []git.FileStatus{{Status: "M", Path: "cmd/main.go"}})...),
 	}}
 	cp.SetFileView(view)
 	return cp
@@ -79,7 +79,7 @@ func TestChangesIconSwitchPreservesSelection(t *testing.T) {
 func TestCommitFileNodesCarryFileIcons(t *testing.T) {
 	cp := NewChangesPanel("/repo")
 	cp.SetIcons(config.IconsNerdFont)
-	nodes := cp.commitFileNodes("/repo", "abc", "abc", "commit:abc", []git.FileStatus{{Status: "D", Path: "docs/guide.md"}})
+	nodes := cp.commitFileNodes("/repo", "abc", "abc", "commit:abc", []scm.Change{{Kind: scm.Deleted, Path: "docs/guide.md"}})
 	if len(nodes) != 1 || nodes[0].Icon != "D" || nodes[0].LabelIcon != fileicons.ForFile("guide.md").Glyph {
 		t.Fatalf("commit file row = %+v, want status D with the markdown icon", nodes)
 	}
@@ -90,15 +90,15 @@ func TestCommitHistoryIconsFollowIconMode(t *testing.T) {
 	cp.logCommits = make(map[string]commitFileRef)
 	cp.CommitLog.SetItems([]*widgets.TreeNode{
 		{ID: "branch", Icon: icons.Get(cp.icons, icons.Branch)},
-		cp.commitLogNode("/repo", git.LogEntry{Ref: "abc", Hash: "abc", Message: "msg"}),
+		cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "abc", Label: "abc", Message: "msg"}),
 	})
 
 	cp.SetIcons(config.IconsNerdFont)
 	items := cp.CommitLog.Config.Items
-	if items[0].Icon != "" || items[1].Icon != "" {
+	if items[0].Icon != "\ue702" || items[1].Icon != "\ueafc" {
 		t.Errorf("nerd font icons = %q, %q", items[0].Icon, items[1].Icon)
 	}
-	if got := cp.commitLogNode("/repo", git.LogEntry{Ref: "def", Hash: "def"}).Icon; got != "" {
+	if got := cp.commitLogNode("/repo", scm.HistoryEntry{Ref: "def", Label: "def"}).Icon; got != "\ueafc" {
 		t.Errorf("new commit row icon = %q, want nerd font glyph", got)
 	}
 

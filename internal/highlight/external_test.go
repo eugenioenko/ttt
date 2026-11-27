@@ -155,3 +155,83 @@ func TestClearingExternalGrammarsRestoresEmbedded(t *testing.T) {
 		t.Error("a.foo still highlighted after clearing")
 	}
 }
+
+func TestExternalGrammarScopeSuffixKeepsEmbeddedLanguageNames(t *testing.T) {
+	elisp := `{"scopeName": "source.emacs.lisp", "name": "Emacs Lisp", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "emacs-lisp.json", elisp),
+		Language:  "Emacs Lisp",
+		FileTypes: []string{"el", "elisp", "emacs-lisp"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	for lang, want := range map[string]string{
+		"lisp":       "Common Lisp",
+		"elisp":      "Emacs Lisp",
+		"emacs-lisp": "Emacs Lisp",
+		"Emacs Lisp": "Emacs Lisp",
+	} {
+		h := NewForLanguage(lang)
+		if h == nil {
+			t.Errorf("NewForLanguage(%q) = nil, want %s", lang, want)
+		} else if h.Language() != want {
+			t.Errorf("NewForLanguage(%q) language = %q, want %q", lang, h.Language(), want)
+		}
+	}
+	if h := New("init.el"); h == nil || h.Language() != "Emacs Lisp" {
+		t.Errorf("init.el did not use the external grammar")
+	}
+}
+
+func TestCanonicalLanguageIDResolvesAliasesAndScopes(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"shellscript", "shellscript"},
+		{"Shell", "shellscript"},
+		{"sh", "shellscript"},
+		{"source.shell", "shellscript"},
+		{"  Bash ", "shellscript"},
+		{"no-such-language", "no-such-language"},
+	} {
+		if got := CanonicalLanguageID(tc.in); got != tc.want {
+			t.Errorf("CanonicalLanguageID(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCanonicalLanguageIDResolvesExternalLanguageName(t *testing.T) {
+	custom := `{"scopeName": "source.custom-shell", "name": "Custom Shell", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "custom-shell.json", custom),
+		Language:  "Shell",
+		FileTypes: []string{"csh"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	h := New("a.csh")
+	if h == nil || h.Language() != "Shell" {
+		t.Fatalf("a.csh highlighter = %v, want the configured display name Shell", h)
+	}
+	if got := CanonicalLanguageID(h.LanguageID()); got != "shellscript" {
+		t.Errorf("canonical ID of language %q = %q, want shellscript", h.LanguageID(), got)
+	}
+}
+
+func TestNamelessExternalGrammarKeepsEmbeddedLanguageNames(t *testing.T) {
+	nameless := `{"scopeName": "source.emacs.lisp", "patterns": []}`
+	if errs := setExternal(t, ExternalGrammar{
+		Path:      writeGrammar(t, "emacs-lisp.json", nameless),
+		FileTypes: []string{"el"},
+	}); len(errs) > 0 {
+		t.Fatal(errs)
+	}
+	if h := NewForLanguage("lisp"); h == nil || h.Language() != "Common Lisp" {
+		t.Errorf("NewForLanguage(lisp) did not keep Common Lisp")
+	}
+	h := New("init.el")
+	if h == nil {
+		t.Fatal("init.el did not use the external grammar")
+	}
+	if h.Language() != "lisp" {
+		t.Errorf("language = %q, want the scope suffix as its display name", h.Language())
+	}
+}

@@ -62,6 +62,8 @@ describe("explorer rename", () => {
 
     renameSelectedTo("alpha.txt", "renamed.txt");
 
+    // The rename was started from the explorer, so focus returns there.
+    tui.exec("View: Focus Editor");
     tui.type("EDITED ");
     tui.exec("Save File");
     tui.run();

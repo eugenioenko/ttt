@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"fmt"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"path/filepath"
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -16,6 +18,7 @@ import (
 )
 
 type ChangesPanel struct {
+	provider  scm.Provider
 	Tree      *widgets.TreeWidget
 	Input     *widgets.InputWidget
 	CommitLog *widgets.TreeWidget
@@ -23,7 +26,7 @@ type ChangesPanel struct {
 	Split     *ui.ContentSplitWidget
 	Dirs      []string
 	// Screen is how a finished background read gets back onto the event loop.
-	// With no screen the panel reads git inline instead — see changes_async.go.
+	// With no screen the panel reads history inline instead — see changes_async.go.
 	Screen eventPoster
 
 	groups     []changesGroup
@@ -40,13 +43,13 @@ type ChangesPanel struct {
 	// Refresh clears the guard while the rendered log stays put.
 	logDir string
 	// Every appended page is tied to one immutable full HEAD snapshot.
-	logAnchor      git.ObjectID
+	logAnchor      string
 	logOffset      int
 	logHasMore     bool
 	logPagePending bool
 	// commitFiles caches a commit's file list. A commit's contents never
 	// change, so an entry can never go stale — only numerous, hence the bound.
-	commitFiles      map[string][]git.FileStatus
+	commitFiles      map[string][]scm.Change
 	commitFilesOrder []string
 	// commitFilesPending marks reads already in flight, so repeated expands of
 	// one commit do not each start their own git process.
@@ -72,24 +75,25 @@ type ChangesPanel struct {
 	fileView           string
 	icons              string
 
-	OnOpenDiff       func(dir string, status git.FileStatus, staged, extended bool)
-	OnOpenCommitDiff func(dir, ref, short string, status git.FileStatus, extended bool)
-	OnOpenCommit     func(dir, ref, short string)
-	OnOpenPRDiff     func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
-	OnOpenPRDetail   func(group *ui.ChangesGroup)
-	OnOpenFile       func(path string)
-	OnRightClick     func(dir string, status git.FileStatus, screenX, screenY int)
-	OnPanelMenu      func(screenX, screenY int)
-	OnCommit         func(dir string, message string)
-	OnGroupMenu      func(dir string, screenX, screenY int)
-	OnPRGroupMenu    func(group *ui.ChangesGroup, screenX, screenY int)
-	OnRefreshPR      func(url string)
-	OnConfirmDiscard func(message string, onConfirm func())
-	OnError          func(message string)
-	OnRefreshed      func()
-	OnRefresh        func()
-	OnStatusChanged  func()
-	OnHistoryResult  func(error)
+	OnOpenDiff         func(dir string, change scm.Change, extended bool)
+	OnOpenCommitDiff   func(dir, ref, short string, status scm.Change, extended bool)
+	OnOpenCommit       func(dir, ref, short string)
+	OnOpenPRDiff       func(group *ui.ChangesGroup, status git.FileStatus, extended bool)
+	OnOpenPRDetail     func(group *ui.ChangesGroup)
+	OnOpenFile         func(path string)
+	OnRightClick       func(dir string, status scm.Change, screenX, screenY int)
+	OnRightClickFolder func(dir, path string, staged bool, screenX, screenY int)
+	OnPanelMenu        func(screenX, screenY int)
+	OnCommit           func(dir string, message string)
+	OnGroupMenu        func(dir string, screenX, screenY int)
+	OnPRGroupMenu      func(group *ui.ChangesGroup, screenX, screenY int)
+	OnRefreshPR        func(url string)
+	OnConfirmDiscard   func(message string, onConfirm func())
+	OnError            func(message string)
+	OnRefreshed        func()
+	OnRefresh          func()
+	OnStatusChanged    func()
+	OnHistoryResult    func(error)
 
 	PRGroups []prGroup
 }
@@ -107,15 +111,15 @@ const (
 )
 
 type changesGroup struct {
-	Dir      string
-	Name     string
-	Staged   []git.FileStatus
-	Unstaged []git.FileStatus
+	Repository scm.Repository
+	Dir        string
+	Name       string
+	Changes    []scm.Change
 }
 
 type workFileRef struct {
 	Dir    string
-	Status git.FileStatus
+	Status scm.Change
 	Staged bool
 	Kind   workNodeKind
 }
@@ -139,11 +143,10 @@ type workFolderStateKey struct {
 // to without parsing path content out of the node ID.
 type commitFileRef struct {
 	Dir string
-	// Ref is the full hash, which is what git is asked with and what the tab
-	// key is built from. Short is only ever shown to the reader.
+	// Ref is opaque revision identity. Short is presentation-only.
 	Ref    string
 	Short  string
-	Status git.FileStatus
+	Status scm.Change
 }
 
 type prGroup struct {
@@ -166,16 +169,21 @@ func (a *App) persistCommitHistoryHeight() {
 	}
 	a.State.CommitHistoryHeight = height
 	if err := config.SaveState(a.State); err != nil {
-		a.StatusError("Failed to save commit history height: " + err.Error())
+		a.StatusError(i18n.Format("status.failedToSaveCommitHistoryHeight", i18n.Args{"error": err.Error()}))
 	}
 }
 
 func NewChangesPanel(dirs ...string) *ChangesPanel {
+	return NewChangesPanelWithProvider(defaultSCMProvider(), dirs...)
+}
+
+func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *ChangesPanel {
 	cp := &ChangesPanel{
+		provider:           provider,
 		Dirs:               dirs,
 		multiRoot:          len(dirs) > 1,
 		expanded:           make(map[string]bool),
-		commitFiles:        make(map[string][]git.FileStatus),
+		commitFiles:        make(map[string][]scm.Change),
 		logCommits:         make(map[string]commitFileRef),
 		logFiles:           make(map[string]commitFileRef),
 		logExpanded:        make(map[string]bool),
@@ -190,7 +198,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 	}
 
 	cp.Input = widgets.NewInputWidget(widgets.InputConfig{
-		Placeholder: "Message",
+		Placeholder: i18n.Text("changes.message"),
 		Bordered:    false,
 		OnSubmit: func(text string) {
 			cp.commitFocusedGroup()
@@ -199,7 +207,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 
 	cp.Tree = widgets.NewTreeWidget(widgets.TreeConfig{
 		Indent:             1,
-		EmptyText:          "No changes",
+		EmptyText:          i18n.Text("changes.noChanges"),
 		TruncateLeft:       true,
 		ActivateExpandable: true,
 		OnCommand: func(cmd string, node *widgets.TreeNode) {
@@ -221,7 +229,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 
 	cp.CommitLog = widgets.NewTreeWidget(widgets.TreeConfig{
 		Indent:             1,
-		EmptyText:          "No commits",
+		EmptyText:          i18n.Text("changes.noCommits"),
 		ActivateExpandable: true,
 		OnSelect: func(_ *widgets.TreeNode) {
 			// A deferred restore belongs to the selection that existed before the
@@ -252,7 +260,7 @@ func NewChangesPanel(dirs ...string) *ChangesPanel {
 		},
 	})
 
-	logTitle := widgets.NewTitleWidget(widgets.TitleConfig{Title: "Commit History"})
+	logTitle := widgets.NewTitleWidget(widgets.TitleConfig{Title: i18n.Text("changes.commitHistory")})
 
 	logBox := &widgets.BoxWidget{}
 	logBox.Child = cp.CommitLog
@@ -302,9 +310,9 @@ func (cp *ChangesPanel) applied(err error) {
 
 // paths splits a file list into the untracked ones, which are deleted outright,
 // and the rest, which are checked out from HEAD.
-func discardPaths(files []git.FileStatus) (untracked, tracked []string) {
+func discardPaths(files []scm.Change) (untracked, tracked []string) {
 	for _, f := range files {
-		if f.Status == "?" {
+		if f.Kind == scm.Untracked {
 			untracked = append(untracked, f.Path)
 		} else {
 			tracked = append(tracked, f.Path)
@@ -313,7 +321,7 @@ func discardPaths(files []git.FileStatus) (untracked, tracked []string) {
 	return untracked, tracked
 }
 
-func filePaths(files []git.FileStatus) []string {
+func filePaths(files []scm.Change) []string {
 	paths := make([]string, len(files))
 	for i, f := range files {
 		paths[i] = f.Path
@@ -321,10 +329,23 @@ func filePaths(files []git.FileStatus) []string {
 	return paths
 }
 
+// unstagePaths includes a rename's old path: resetting only the new path
+// leaves the old path's deletion staged.
+func unstagePaths(files ...scm.Change) []string {
+	var paths []string
+	for _, f := range files {
+		if f.Kind == scm.Renamed && f.OldPath != "" {
+			paths = append(paths, f.OldPath)
+		}
+		paths = append(paths, f.Path)
+	}
+	return paths
+}
+
 func (cp *ChangesPanel) Refresh() {
 	cp.cancelHistoryReads()
 	dirs := append([]string(nil), cp.Dirs...)
-	cp.applyWorkingTree(readChangesGroups(dirs))
+	cp.applyWorkingTree(readChangesGroups(cp.provider, dirs))
 	cp.lastLogDir = ""
 	cp.refreshCommitLog()
 }
@@ -367,23 +388,24 @@ func (cp *ChangesPanel) refreshCommitLog() {
 		cp.resetHistoryPaging()
 		cp.logCommits = make(map[string]commitFileRef)
 		cp.logFiles = make(map[string]commitFileRef)
-		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: "Loading…", Muted: true}})
+		cp.CommitLog.SetItems([]*widgets.TreeNode{{ID: "history:loading", Label: i18n.Text("general.loading"), Muted: true}})
 	}
 	cp.lastLogDir = dir
 	cp.logGen++
 	gen := cp.logGen
 	cp.cancelLogRead()
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLog(ctx, dir, gen)
+		result := readCommitLog(ctx, source, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -437,17 +459,18 @@ func (cp *ChangesPanel) loadOlderHistory() {
 	cp.logPagePending = true
 	cp.replaceHistoryLoadNode(true, false)
 	dir, anchor, offset, gen := cp.logDir, cp.logAnchor, cp.logOffset, cp.logGen
+	source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
 	ctx, cancel := context.WithTimeout(context.Background(), commitHistoryTimeout)
 	cp.logCancel = cancel
 	if cp.Screen == nil {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		cp.ApplyCommitLog(result)
 		return
 	}
 	screen := cp.Screen
 	go func() {
-		result := readCommitLogPage(ctx, dir, anchor, offset, gen)
+		result := readCommitLogPage(ctx, source, anchor, offset, gen)
 		cancel()
 		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
@@ -501,7 +524,7 @@ func commitLogStateKey(dir, nodeID string) string {
 // would otherwise grow one entry per commit ever opened, without limit.
 const commitFilesCacheMax = 256
 
-func (cp *ChangesPanel) cacheCommitFiles(key string, files []git.FileStatus) {
+func (cp *ChangesPanel) cacheCommitFiles(key string, files []scm.Change) {
 	if _, exists := cp.commitFiles[key]; !exists {
 		cp.commitFilesOrder = append(cp.commitFilesOrder, key)
 	}
@@ -544,14 +567,15 @@ func (cp *ChangesPanel) commitChildren(dir, ref, short, parentID string) []*widg
 	if cp.Screen == nil {
 		ctx, cancel := context.WithTimeout(context.Background(), commitFilesTimeout)
 		defer cancel()
-		r := readCommitFiles(ctx, 0, dir, ref, short, parentID)
+		source := repositorySource{root: dir, repository: cp.repository(dir), provider: cp.provider}
+		r := readCommitFiles(ctx, 0, source, ref, short, parentID)
 		cp.recordCommitFiles(r)
 		return cp.childrenFor(r)
 	}
 	cp.fetchCommitFiles(dir, ref, short, parentID)
 	return []*widgets.TreeNode{{
 		ID:    parentID + loadingSuffix,
-		Label: "Loading…",
+		Label: i18n.Text("general.loading"),
 		Muted: true,
 	}}
 }
@@ -563,23 +587,24 @@ const (
 )
 
 func errorNode(parentID string) *widgets.TreeNode {
-	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: "Could not read commit", Muted: true}
+	return &widgets.TreeNode{ID: parentID + errorSuffix, Label: i18n.Text("changes.readCommitFailedLabel"), Muted: true}
 }
 
-func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []git.FileStatus) []*widgets.TreeNode {
+func (cp *ChangesPanel) commitFileNodes(dir, ref, short, parentID string, files []scm.Change) []*widgets.TreeNode {
 	if len(files) == 0 {
 		// An expandable node that opens onto nothing reads as broken. A merge
 		// that changed nothing against its first parent is the usual cause.
-		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: "No files", Muted: true}}
+		return []*widgets.TreeNode{{ID: parentID + emptySuffix, Label: i18n.Text("general.noFiles"), Muted: true}}
 	}
-	makeLeaf := func(f git.FileStatus) *widgets.TreeNode {
+	makeLeaf := func(change scm.Change) *widgets.TreeNode {
+		f := change
 		id := fmt.Sprintf("cfile:%s:%s", parentID, f.Path)
 		cp.logFiles[id] = commitFileRef{Dir: dir, Ref: ref, Short: short, Status: f}
 		node := &widgets.TreeNode{
 			ID:           id,
 			Label:        f.Path,
-			Icon:         ui.StatusBadge(f.Status),
-			IconStyle:    ui.StatusStyle(f.Status),
+			Icon:         ui.ChangeBadge(f),
+			IconStyle:    ui.ChangeStyle(f.Kind, false),
 			TruncateLeft: true,
 		}
 		cp.decorateFileNode(node, f.Path)
@@ -725,13 +750,14 @@ func (cp *ChangesPanel) buildTree() {
 
 	for gi, g := range cp.groups {
 		var sectionNodes []*widgets.TreeNode
+		stagedFiles, workingFiles := g.filesIn(scm.Staged), g.filesIn(scm.WorkingTree)
 
-		if len(g.Staged) > 0 {
+		if len(stagedFiles) > 0 {
 			id := workingNodeID(workNodeSection, g.Dir, "", true)
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Staged: true, Kind: workNodeSection, Group: gi}
 			stagedNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      fmt.Sprintf("Staged (%d)", len(g.Staged)),
+				Label:      i18n.Format("changes.stagedHeading", i18n.Args{"stagedCount": len(stagedFiles)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -739,16 +765,19 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: string(icons.Rune(icons.Remove)), Command: "unstageAll"},
 				},
 			}
-			stagedNode.Children = cp.fileNodes(g.Dir, g.Staged, true, gi, false)
+			if !cp.supportsStaging(g.Dir) {
+				stagedNode.Actions = nil
+			}
+			stagedNode.Children = cp.fileNodes(g.Dir, stagedFiles, true, gi, false)
 			sectionNodes = append(sectionNodes, stagedNode)
 		}
 
-		if len(g.Unstaged) > 0 {
+		if len(workingFiles) > 0 {
 			id := workingNodeID(workNodeSection, g.Dir, "", false)
 			cp.workNodes[id] = workNodeRef{Dir: g.Dir, Kind: workNodeSection, Group: gi}
 			changesNode := &widgets.TreeNode{
 				ID:         id,
-				Label:      fmt.Sprintf("Changes (%d)", len(g.Unstaged)),
+				Label:      i18n.Format("changes.changes", i18n.Args{"unstagedCount": len(workingFiles)}),
 				Expandable: true,
 				Expanded:   true,
 				Muted:      true,
@@ -757,7 +786,10 @@ func (cp *ChangesPanel) buildTree() {
 					{Icon: string(icons.Rune(icons.Add)), Command: "stageAll"},
 				},
 			}
-			changesNode.Children = cp.fileNodes(g.Dir, g.Unstaged, false, gi, false)
+			if !cp.supportsStaging(g.Dir) {
+				changesNode.Actions = changesNode.Actions[:1]
+			}
+			changesNode.Children = cp.fileNodes(g.Dir, workingFiles, false, gi, false)
 			sectionNodes = append(sectionNodes, changesNode)
 		}
 
@@ -792,7 +824,7 @@ func (cp *ChangesPanel) buildTree() {
 				{Icon: string(icons.Rune(icons.More)), Command: "prGroupMenu"},
 			},
 		}
-		prRoot.Children = cp.fileNodes(pg.Dir, pg.Files, false, pi, true)
+		prRoot.Children = cp.fileNodes(pg.Dir, git.ToChanges(pg.Files), false, pi, true)
 		clearTreeActions(prRoot.Children)
 		roots = append(roots, prRoot)
 	}
@@ -803,6 +835,9 @@ func (cp *ChangesPanel) buildTree() {
 
 	cp.Tree.SetItems(roots)
 	if revealTreeSelection(cp.Tree, selected) || !selectedWasFile {
+		return
+	}
+	if group := selectedFile.Status.Group; group != "" && group != scm.WorkingTree && group != scm.Staged {
 		return
 	}
 	fallbackID := workingNodeID(selectedFile.Kind, selectedFile.Dir, selectedFile.Status.Path, !selectedFile.Staged)
@@ -816,9 +851,9 @@ func clearTreeActions(nodes []*widgets.TreeNode) {
 	}
 }
 
-func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
-	icon := ui.StatusBadge(f.Status)
-	iconStyle := ui.StatusStyle(f.Status)
+func (cp *ChangesPanel) fileNode(dir string, f scm.Change, staged bool, kind workNodeKind, group int, pr bool) *widgets.TreeNode {
+	icon := ui.ChangeBadge(f)
+	iconStyle := ui.ChangeStyle(f.Kind, false)
 	actionIcon := string(icons.Rune(icons.Add))
 	actionCmd := "stage"
 	if staged {
@@ -826,6 +861,9 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 		actionCmd = "unstage"
 	}
 	id := workingNodeID(kind, dir, f.Path, staged)
+	if !pr {
+		id = workingChangeNodeID(kind, dir, f.Path, f.Group)
+	}
 	cp.workFiles[id] = workFileRef{Dir: dir, Status: f, Staged: staged, Kind: kind}
 	cp.workNodes[id] = workNodeRef{Dir: dir, Path: f.Path, Staged: staged, Kind: kind, Group: group, PR: pr}
 	node := &widgets.TreeNode{
@@ -837,6 +875,9 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 			{Icon: actionIcon, Command: actionCmd},
 		},
 	}
+	if !pr && !cp.supportsStaging(dir) {
+		node.Actions = nil
+	}
 	cp.decorateFileNode(node, f.Path)
 	return node
 }
@@ -844,7 +885,7 @@ func (cp *ChangesPanel) fileNode(dir string, f git.FileStatus, staged bool, kind
 func (cp *ChangesPanel) TotalChanges() int {
 	n := 0
 	for _, g := range cp.groups {
-		n += len(g.Staged) + len(g.Unstaged)
+		n += len(g.Changes)
 	}
 	return n
 }
@@ -857,7 +898,7 @@ func (cp *ChangesPanel) commitFocusedGroup() {
 	dir := cp.selectedGroupDir()
 	if dir == "" {
 		for _, g := range cp.groups {
-			if len(g.Staged) > 0 || len(g.Unstaged) > 0 {
+			if len(g.Changes) > 0 {
 				dir = g.Dir
 				break
 			}
@@ -898,7 +939,7 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 	switch cmd {
 	case "activate":
 		if ok {
-			cp.openDiff(dir, status, staged, false)
+			cp.openDiff(dir, status, false)
 			return
 		}
 		ref, found := cp.workNodes[node.ID]
@@ -910,12 +951,18 @@ func (cp *ChangesPanel) handleCommand(cmd string, node *widgets.TreeNode) {
 		cp.Tree.SetItems(cp.Tree.Config.Items)
 	case "stage":
 		if ok && !staged {
-			cp.applied(git.Stage(dir, status.Path))
+			cp.applied(cp.stagePaths(dir, false, status.Path))
 		}
 	case "unstage":
 		if ok && staged {
-			cp.applied(git.Unstage(dir, status.Path))
+			cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 		}
+	case "stageFolder":
+		cp.stageFolder(node)
+	case "unstageFolder":
+		cp.unstageFolder(node)
+	case "discardFolder":
+		cp.confirmDiscardFolder(node)
 	case "stageAll":
 		gi := cp.groupIndexFromNode(node)
 		if gi >= 0 {
@@ -1033,6 +1080,12 @@ func (cp *ChangesPanel) handleMenu(node *widgets.TreeNode, sx, sy int) {
 		cp.OnRightClick(dir, status, sx, sy)
 		return
 	}
+	if ref, isFolder := cp.folderRef(node); isFolder {
+		if cp.OnRightClickFolder != nil {
+			cp.OnRightClickFolder(ref.Dir, ref.Path, ref.Staged, sx, sy)
+		}
+		return
+	}
 	if ref, found := cp.workNodes[node.ID]; found && ref.Kind == workNodePRRoot && ref.Group >= 0 && ref.Group < len(cp.PRGroups) {
 		if cp.OnPRGroupMenu != nil {
 			uiGroup := cp.toUIChangesGroup(&cp.PRGroups[ref.Group])
@@ -1055,28 +1108,28 @@ func (cp *ChangesPanel) showPanelMenu(sx, sy int) {
 	}
 }
 
-func (cp *ChangesPanel) openDiff(dir string, status git.FileStatus, staged bool, extended bool) {
+func (cp *ChangesPanel) openDiff(dir string, status scm.Change, extended bool) {
 	for _, pg := range cp.PRGroups {
 		if pg.Dir == dir {
 			if cp.OnOpenPRDiff != nil {
 				uiGroup := cp.toUIChangesGroup(&pg)
-				cp.OnOpenPRDiff(uiGroup, status, extended)
+				cp.OnOpenPRDiff(uiGroup, git.FromChange(status), extended)
 			}
 			return
 		}
 	}
 	if cp.OnOpenDiff != nil {
-		cp.OnOpenDiff(dir, status, staged, extended)
+		cp.OnOpenDiff(dir, status, extended)
 	}
 }
 
-func (cp *ChangesPanel) parseFileNode(node *widgets.TreeNode) (dir string, status git.FileStatus, staged bool, ok bool) {
+func (cp *ChangesPanel) parseFileNode(node *widgets.TreeNode) (dir string, status scm.Change, staged bool, ok bool) {
 	if node == nil {
 		return
 	}
 	ref, found := cp.workFiles[node.ID]
 	if !found {
-		return "", git.FileStatus{}, false, false
+		return "", scm.Change{}, false, false
 	}
 	return ref.Dir, ref.Status, ref.Staged, true
 }
@@ -1090,10 +1143,94 @@ func (cp *ChangesPanel) groupIndexFromNode(node *widgets.TreeNode) int {
 	return -1
 }
 
+// folderRef reports the working-tree folder row a node names, so folder actions
+// can never run against a file row or a pull-request row.
+func (cp *ChangesPanel) folderRef(node *widgets.TreeNode) (workNodeRef, bool) {
+	if node == nil {
+		return workNodeRef{}, false
+	}
+	ref, ok := cp.workNodes[node.ID]
+	return ref, ok && !ref.PR && ref.Kind == workNodeFolder
+}
+
+// folderFiles collects every file below a folder row. The tree builds all
+// children eagerly, so a collapsed folder stages and discards the same set as
+// an expanded one.
+func (cp *ChangesPanel) folderFiles(node *widgets.TreeNode) []scm.Change {
+	var files []scm.Change
+	var visit func(nodes []*widgets.TreeNode)
+	visit = func(nodes []*widgets.TreeNode) {
+		for _, n := range nodes {
+			if file, ok := cp.workFiles[n.ID]; ok {
+				files = append(files, file.Status)
+				continue
+			}
+			visit(n.Children)
+		}
+	}
+	visit(node.Children)
+	return files
+}
+
+func (cp *ChangesPanel) stageFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || ref.Staged {
+		return
+	}
+	if files := cp.folderFiles(node); len(files) > 0 {
+		cp.applied(cp.stagePaths(ref.Dir, false, filePaths(files)...))
+	}
+}
+
+func (cp *ChangesPanel) unstageFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || !ref.Staged {
+		return
+	}
+	if files := cp.folderFiles(node); len(files) > 0 {
+		cp.applied(cp.stagePaths(ref.Dir, true, unstagePaths(files...)...))
+	}
+}
+
+func (cp *ChangesPanel) confirmDiscardFolder(node *widgets.TreeNode) {
+	ref, ok := cp.folderRef(node)
+	if !ok || ref.Staged || cp.OnConfirmDiscard == nil {
+		return
+	}
+	files := cp.folderFiles(node)
+	if len(files) == 0 {
+		return
+	}
+	var msg string
+	if cp.isJujutsu(ref.Dir) {
+		msg = i18n.Format("changes.jjDiscardFolder", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	} else {
+		msg = i18n.Format("changes.discardFolderChangesThisIsIrreversible", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	}
+	cp.OnConfirmDiscard(msg, func() {
+		cp.applied(cp.discardChanges(ref.Dir, files))
+	})
+}
+
+// SelectedFolder reports the working-tree folder row that is selected, if any.
+func (cp *ChangesPanel) SelectedFolder() (dir, path string, staged, ok bool) {
+	if cp.commandContext != changesWorkingTree {
+		return
+	}
+	ref, ok := cp.folderRef(cp.Tree.Selected())
+	if !ok {
+		return
+	}
+	return ref.Dir, ref.Path, ref.Staged, true
+}
+
 func (cp *ChangesPanel) stageAll() {
 	var err error
 	for _, g := range cp.groups {
-		if e := git.Stage(g.Dir, filePaths(g.Unstaged)...); e != nil && err == nil {
+		if !cp.supportsStaging(g.Dir) {
+			continue
+		}
+		if e := cp.stagePaths(g.Dir, false, filePaths(g.filesIn(scm.WorkingTree))...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1103,7 +1240,10 @@ func (cp *ChangesPanel) stageAll() {
 func (cp *ChangesPanel) unstageAll() {
 	var err error
 	for _, g := range cp.groups {
-		if e := git.Unstage(g.Dir, filePaths(g.Staged)...); e != nil && err == nil {
+		if !cp.supportsStaging(g.Dir) {
+			continue
+		}
+		if e := cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...); e != nil && err == nil {
 			err = e
 		}
 	}
@@ -1115,7 +1255,7 @@ func (cp *ChangesPanel) stageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(git.Stage(g.Dir, filePaths(g.Unstaged)...))
+	cp.applied(cp.stagePaths(g.Dir, false, filePaths(g.filesIn(scm.WorkingTree))...))
 }
 
 func (cp *ChangesPanel) unstageAllInGroup(gi int) {
@@ -1123,23 +1263,24 @@ func (cp *ChangesPanel) unstageAllInGroup(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	cp.applied(git.Unstage(g.Dir, filePaths(g.Staged)...))
+	cp.applied(cp.stagePaths(g.Dir, true, unstagePaths(g.filesIn(scm.Staged)...)...))
 }
 
-func (cp *ChangesPanel) confirmDiscard(dir string, f git.FileStatus) {
+func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
 	if cp.OnConfirmDiscard == nil {
 		return
 	}
-	msg := fmt.Sprintf("Discard changes to %s? This is irreversible.", f.Path)
-	if f.Status == "?" {
-		msg = fmt.Sprintf("Delete untracked file %s? This is irreversible.", f.Path)
+	var msg string
+	switch {
+	case cp.isJujutsu(dir):
+		msg = i18n.Format("changes.jjDiscardFile", i18n.Args{"path": f.Path})
+	case f.Kind == scm.Untracked:
+		msg = i18n.Format("changes.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": f.Path})
+	default:
+		msg = i18n.Format("changes.discardChangesToThisIsIrreversible", i18n.Args{"path": f.Path})
 	}
 	cp.OnConfirmDiscard(msg, func() {
-		if f.Status == "?" {
-			cp.applied(git.DiscardUntracked(dir, f.Path))
-		} else {
-			cp.applied(git.Discard(dir, f.Path))
-		}
+		cp.applied(cp.discardChanges(dir, []scm.Change{f}))
 	})
 }
 
@@ -1148,18 +1289,19 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	msg := fmt.Sprintf("Discard all %d changes? This is irreversible.", len(g.Unstaged))
+	files := g.filesIn(scm.WorkingTree)
+	var msg string
+	if cp.isJujutsu(g.Dir) {
+		msg = i18n.Format("changes.jjDiscardAll", i18n.Args{"unstagedCount": len(files)})
+	} else {
+		msg = i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(files)})
+	}
 	cp.OnConfirmDiscard(msg, func() {
-		untracked, tracked := discardPaths(g.Unstaged)
-		err := git.DiscardUntracked(g.Dir, untracked...)
-		if e := git.Discard(g.Dir, tracked...); e != nil && err == nil {
-			err = e
-		}
-		cp.applied(err)
+		cp.applied(cp.discardChanges(g.Dir, files))
 	})
 }
 
-func (cp *ChangesPanel) SelectedFile() (dir string, status git.FileStatus, ok bool) {
+func (cp *ChangesPanel) SelectedFile() (dir string, status scm.Change, ok bool) {
 	if cp.commandContext != changesWorkingTree {
 		return
 	}
@@ -1197,8 +1339,8 @@ func (cp *ChangesPanel) SelectedGroup() *ui.ChangesGroup {
 				return &ui.ChangesGroup{
 					Dir:      g.Dir,
 					Name:     g.Name,
-					Staged:   g.Staged,
-					Unstaged: g.Unstaged,
+					Staged:   git.FromChanges(g.filesIn(scm.Staged)),
+					Unstaged: git.FromChanges(g.filesIn(scm.WorkingTree)),
 				}
 			}
 		}
@@ -1266,8 +1408,13 @@ func (cp *ChangesPanel) DiscardSelected() {
 	if cp.commandContext != changesWorkingTree {
 		return
 	}
-	dir, status, _, ok := cp.parseFileNode(cp.Tree.Selected())
-	if !ok || status.Staged {
+	node := cp.Tree.Selected()
+	if _, ok := cp.folderRef(node); ok {
+		cp.confirmDiscardFolder(node)
+		return
+	}
+	dir, status, _, ok := cp.parseFileNode(node)
+	if !ok || status.Group == scm.Staged {
 		return
 	}
 	cp.confirmDiscard(dir, status)
@@ -1281,14 +1428,22 @@ func (cp *ChangesPanel) ToggleStageSelected() {
 	if node == nil {
 		return
 	}
+	if ref, isFolder := cp.folderRef(node); isFolder {
+		if ref.Staged {
+			cp.unstageFolder(node)
+		} else {
+			cp.stageFolder(node)
+		}
+		return
+	}
 	dir, status, staged, ok := cp.parseFileNode(node)
 	if !ok {
 		return
 	}
 	if staged {
-		cp.applied(git.Unstage(dir, status.Path))
+		cp.applied(cp.stagePaths(dir, true, unstagePaths(status)...))
 	} else {
-		cp.applied(git.Stage(dir, status.Path))
+		cp.applied(cp.stagePaths(dir, false, status.Path))
 	}
 }
 
@@ -1301,11 +1456,11 @@ func (cp *ChangesPanel) OpenSelectedDiff(extended bool) {
 	if node == nil {
 		return
 	}
-	dir, status, staged, ok := cp.parseFileNode(node)
+	dir, status, _, ok := cp.parseFileNode(node)
 	if !ok {
 		return
 	}
-	cp.openDiff(dir, status, staged, extended)
+	cp.openDiff(dir, status, extended)
 }
 
 func (cp *ChangesPanel) ActivateSelected() {
@@ -1334,8 +1489,8 @@ func (cp *ChangesPanel) Groups() []ui.ChangesGroup {
 		result = append(result, ui.ChangesGroup{
 			Dir:      g.Dir,
 			Name:     g.Name,
-			Staged:   g.Staged,
-			Unstaged: g.Unstaged,
+			Staged:   git.FromChanges(g.filesIn(scm.Staged)),
+			Unstaged: git.FromChanges(g.filesIn(scm.WorkingTree)),
 		})
 	}
 	for _, pg := range cp.PRGroups {

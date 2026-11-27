@@ -6,22 +6,26 @@ import (
 	"strings"
 
 	"github.com/eugenioenko/ttt/internal/command"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
 type KeybindingsWidget struct {
 	BaseWidget
-	Borders     *term.BorderSet
-	OnDismiss   func()
-	GetShortcut func(cmdID string) string
-	GetDefault  func(cmdID string) string
-	OnEdit      func(cmdID string, newKey string)
-	OnReset     func(cmdID string)
-	OnClear     func(cmdID string)
-	OnHelp      func()
+	Borders          *term.BorderSet
+	OnDismiss        func()
+	GetShortcut      func(cmdID string) string
+	GetDefault       func(cmdID string) string
+	OnEdit           func(cmdID string, newKey string)
+	OnReset          func(cmdID string)
+	OnClear          func(cmdID string)
+	OnHelp           func()
+	ControlModifiers *tcell.ModMask
 
-	input        *InputWidget
+	input        *widgets.InputWidget
 	allItems     []keybindingEntry
 	items        []keybindingEntry
 	selected     int
@@ -63,9 +67,9 @@ func NewKeybindingsWidget(commands []command.Command) *KeybindingsWidget {
 	sort.Slice(w.allItems, func(i, j int) bool {
 		return w.allItems[i].Title < w.allItems[j].Title
 	})
-	w.input = NewInputWidget()
-	w.input.Placeholder = "Search shortcuts or commands..."
-	w.input.OnChange = func(text string) {
+	w.input = newPanelInput()
+	w.input.Config.Placeholder = i18n.Text("keybindings.searchShortcutsOrCommands")
+	w.input.Config.OnChange = func(text string) {
 		w.filter()
 	}
 	w.filter()
@@ -74,11 +78,16 @@ func NewKeybindingsWidget(commands []command.Command) *KeybindingsWidget {
 
 func (w *KeybindingsWidget) Focusable() bool { return true }
 
+func (w *KeybindingsWidget) SetFilter(text string) {
+	w.input.SetText(text)
+	w.filter()
+}
+
 func (w *KeybindingsWidget) CursorPosition() (int, int, bool) {
 	if w.recording || w.focusedAction >= 0 {
 		return 0, 0, false
 	}
-	return w.input.CursorX(w.inputX), w.inputY, true
+	return w.input.CursorPosition()
 }
 
 func (w *KeybindingsWidget) Render(surface Surface) {
@@ -125,7 +134,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 
 	w.inputX = boxX + 1
 	w.inputY = boxY + 1
-	w.input.Render(surface, w.inputX, w.inputY, boxW-2)
+	renderPanelInput(surface, w.input, w.inputX, w.inputY, boxW-2)
 
 	for x := boxX + 1; x < boxX+boxW-1; x++ {
 		surface.SetCell(x, boxY+2, term.Cell{Ch: b.Horizontal, Style: term.StyleBorder})
@@ -169,7 +178,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 		surface.DrawText(boxX+2, y, item.Title, contentRight-1, style)
 
 		if isSelected && w.recording {
-			label := "Press key..."
+			label := i18n.Text("keybindings.pressKey")
 			if w.recordCombo != "" {
 				label = w.recordCombo + " ..."
 			}
@@ -196,7 +205,7 @@ func (w *KeybindingsWidget) Render(surface Surface) {
 	surface.ClearRect(boxX+1, footerY, boxW-2, 1, term.StyleDefault)
 	ox, oy := surface.Origin()
 	if w.recording {
-		hint := "Press key combination, Enter to confirm"
+		hint := i18n.Text("keybindings.pressKeyCombinationEnterToConfirm")
 		surface.DrawText(boxX+2, footerY, hint, boxX+boxW-2, term.StyleMuted)
 	} else {
 		w.renderFooterActions(surface, footerY, ox, oy)
@@ -223,8 +232,7 @@ func (w *KeybindingsWidget) renderShortcut(surface Surface, y, contentRight int,
 		display = "* " + shortcut
 	}
 
-	detailRunes := []rune(display)
-	sx := contentRight - 1 - len(detailRunes)
+	sx := contentRight - 1 - textwidth.String(display)
 	if sx > w.boxX+1 {
 		detailStyle := term.StyleMuted
 		if style == term.StylePaletteSelected {
@@ -241,26 +249,24 @@ func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) 
 	}
 
 	allBtns := []footerBtn{
-		{"Cancel", &w.btnClose},
-		{"Edit", &w.btnEdit},
-		{"Reset", &w.btnReset},
-		{"Clear", &w.btnClear},
-		{"Help", &w.btnHelp},
+		{i18n.Text("general.cancel"), &w.btnClose},
+		{i18n.Text("keybindings.edit"), &w.btnEdit},
+		{i18n.Text("general.reset"), &w.btnReset},
+		{i18n.Text("general.clear"), &w.btnClear},
+		{i18n.Text("general.help"), &w.btnHelp},
 	}
 
 	// Cancel on the left
 	x := w.boxX + 2
 	btn := allBtns[0]
-	labelRunes := []rune(btn.label)
-	*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: len(labelRunes)}
 	style := term.StyleDefault
 	if w.focusedAction == 0 {
 		style = term.StylePaletteSelected
 	}
-	for _, ch := range labelRunes {
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
-	}
+	limit := w.boxX + w.boxW - 2
+	end := surface.DrawText(x, y, btn.label, limit, style)
+	*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: end - x}
+	leftEnd := end
 
 	// Right-aligned actions
 	rightBtns := allBtns[1:]
@@ -269,28 +275,25 @@ func (w *KeybindingsWidget) renderFooterActions(surface Surface, y, ox, oy int) 
 		if i > 0 {
 			totalW++
 		}
-		totalW += len([]rune(btn.label))
+		totalW += textwidth.String(btn.label)
 	}
-	x = w.boxX + w.boxW - 2 - totalW
+	x = max(limit-totalW, leftEnd+1)
 	for i, btn := range rightBtns {
 		if i > 0 {
-			surface.SetCell(x, y, term.Cell{Ch: ' ', Style: term.StyleDefault})
-			x++
+			x = surface.DrawText(x, y, " ", limit, term.StyleDefault)
 		}
-		labelRunes := []rune(btn.label)
-		*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: len(labelRunes)}
 		style := term.StyleDefault
 		if w.focusedAction == i+1 {
 			style = term.StylePaletteSelected
 		}
-		for _, ch := range labelRunes {
-			surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-			x++
-		}
+		end := surface.DrawText(x, y, btn.label, limit, style)
+		*btn.hit = HitRegion{X: ox + x, Y: oy + y, W: end - x}
+		x = end
 	}
 }
 
 func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
+	w.input.ControlModifiers = w.ControlModifiers
 	if mev, ok := ev.(*tcell.EventMouse); ok {
 		return w.handleMouse(mev)
 	}
@@ -348,7 +351,7 @@ func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
 	case tcell.KeyDelete:
 		w.clearSelected()
 	case tcell.KeyBackspace, tcell.KeyBackspace2:
-		if len(w.input.Text) == 0 {
+		if len(w.input.Text()) == 0 {
 			w.resetSelected()
 		} else {
 			w.focusedAction = -1
@@ -363,6 +366,9 @@ func (w *KeybindingsWidget) HandleEvent(ev tcell.Event) EventResult {
 }
 
 func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
+	if result := handleInputDrag(mev, w.input); result != EventIgnored {
+		return result
+	}
 	btn := mev.Buttons()
 	mx, my := mev.Position()
 
@@ -395,13 +401,13 @@ func (w *KeybindingsWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 
 	if btn&tcell.Button1 != 0 {
 		if my == w.inputY {
-			w.input.HandleClick(mx, my)
+			result := w.input.HandleEvent(mev)
 			if w.recording {
 				w.recording = false
 				w.recordCombo = ""
 				w.recordChord = ""
 			}
-			return EventConsumed
+			return result
 		}
 
 		if !w.recording {
@@ -456,6 +462,10 @@ func (w *KeybindingsWidget) handleRecordKey(kev *tcell.EventKey) EventResult {
 		return EventConsumed
 	}
 
+	kev = term.ControlKeyEvent(kev, w.ControlModifiers)
+	if kev == nil {
+		return EventConsumed
+	}
 	combo := describeKeyCombo(kev)
 
 	if w.recordChord != "" {
@@ -536,7 +546,7 @@ func (w *KeybindingsWidget) clearSelected() {
 }
 
 func (w *KeybindingsWidget) filter() {
-	query := strings.TrimSpace(w.input.Text)
+	query := strings.TrimSpace(w.input.Text())
 	w.items = nil
 
 	if query == "" {
@@ -697,4 +707,10 @@ func specialKeyName(key tcell.Key) string {
 		return name
 	}
 	return ""
+}
+
+func (w *KeybindingsWidget) CancelPointerCapture() bool { return cancelInputDrags(w.input) }
+
+func (w *KeybindingsWidget) OwnsPointerCapture() bool {
+	return ownsInputDrag(w.input) || w.scrollbar.IsDragging()
 }

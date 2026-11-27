@@ -12,11 +12,14 @@ import (
 	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/markdown"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -33,35 +36,35 @@ func registerPluginCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID:       "plugin.list",
-		Title:    "Plugins: List Installed",
+		Title:    i18n.Text("command.pluginsListInstalled"),
 		Keywords: []string{"plugin", "extension"},
 		Handler:  func() { app.showPluginList() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.install",
-		Title:    "Plugins: Install from URL",
+		Title:    i18n.Text("command.pluginsInstallFromURL"),
 		Keywords: []string{"plugin", "extension", "install"},
 		Handler:  func() { app.pluginInstall() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.uninstall",
-		Title:    "Plugins: Uninstall",
+		Title:    i18n.Text("command.pluginsUninstall"),
 		Keywords: []string{"plugin", "extension", "remove"},
 		Handler:  func() { app.pluginUninstall() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.update",
-		Title:    "Plugins: Update",
+		Title:    i18n.Text("command.pluginsUpdate"),
 		Keywords: []string{"plugin", "extension", "upgrade"},
 		Handler:  func() { app.pluginUpdate() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.showPanel",
-		Title:    "Plugins: Show Panel",
+		Title:    i18n.Text("command.pluginsShowPanel"),
 		Keywords: []string{"plugin", "extension", "panel"},
 		Handler: func() {
 			if app.PluginsPanel != nil {
@@ -75,21 +78,21 @@ func registerPluginCommands(app *App) {
 
 	reg.Register(command.Command{
 		ID:       "plugin.refresh",
-		Title:    "Plugins: Refresh",
+		Title:    i18n.Text("command.pluginsRefresh"),
 		Keywords: []string{"plugin", "refresh", "registry", "available"},
 		Handler:  func() { app.PluginRefreshRegistry() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.reload",
-		Title:    "Plugins: Reload",
+		Title:    i18n.Text("command.pluginsReload"),
 		Keywords: []string{"plugin", "reload", "refresh"},
 		Handler:  func() { app.pluginReload() },
 	})
 
 	reg.Register(command.Command{
 		ID:       "plugin.reloadAll",
-		Title:    "Plugins: Reload All",
+		Title:    i18n.Text("command.pluginsReloadAll"),
 		Keywords: []string{"plugin", "reload", "refresh", "all"},
 		Handler:  func() { app.pluginReloadAll() },
 	})
@@ -99,7 +102,7 @@ func registerPluginCommands(app *App) {
 func (a *App) showPluginList() {
 	plugins := a.PluginManager.Plugins()
 	if len(plugins) == 0 {
-		a.ShowConfirmDialogEx("Plugins", "No plugins installed.", []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("plugins.plugins"), i18n.Text("plugins.noPluginsInstalled"), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -107,12 +110,12 @@ func (a *App) showPluginList() {
 
 	var entries []widgets.KeyValueEntry
 	for _, p := range plugins {
-		status := "disabled"
+		status := i18n.Text("plugins.disabled")
 		if p.Enabled {
-			status = "enabled"
+			status = i18n.Text("plugins.enabled")
 		}
 		if p.LastError != nil {
-			status = "error"
+			status = i18n.Text("plugins.error")
 		}
 		entries = append(entries, widgets.KeyValueEntry{
 			Key:   p.Manifest.Title(),
@@ -120,14 +123,17 @@ func (a *App) showPluginList() {
 		})
 	}
 
-	a.ShowInfoDialog("Installed Plugins", entries)
+	a.ShowInfoDialog(i18n.Text("plugins.installedPlugins"), entries)
 }
 
 func (a *App) pluginInstall() {
-	a.ShowInputDialogEx("Install Plugin", "Repository URL", "", "Install", func(repoURL string) {
+	a.ShowInputDialogEx(i18n.Text("plugins.installPlugin"), i18n.Text("plugins.repositoryURL"), "", i18n.Text("general.install"), func(repoURL string) {
 		go func() {
 			p, err := a.PluginManager.Install(repoURL, "")
-			a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
+			if p != nil {
+				p.InstalledFromURL = true
+			}
+			_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
 				plugin: p,
 				err:    err,
 			}))
@@ -144,7 +150,7 @@ type pluginInstallResult struct {
 func (a *App) handlePluginInstallResult(result *pluginInstallResult) {
 	if result.err != nil {
 		a.resetPluginDetailButton(result.name)
-		a.ShowConfirmDialogEx("Install Failed", result.err.Error(), []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("plugins.installFailed"), result.err.Error(), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -158,7 +164,7 @@ func (a *App) handlePluginInstallResult(result *pluginInstallResult) {
 
 func (a *App) resetPluginDetailButton(name string) {
 	if state, ok := a.pluginDetailWidgets[name]; ok {
-		state.installBtn.SetLabel("Install")
+		state.installBtn.SetLabel(i18n.Text("general.install"))
 		state.installBtn.Disabled = false
 	}
 }
@@ -166,7 +172,7 @@ func (a *App) resetPluginDetailButton(name string) {
 func (a *App) pluginUninstall() {
 	names := a.PluginManager.InstalledPluginNames()
 	if len(names) == 0 {
-		a.ShowConfirmDialogEx("Uninstall", "No plugins installed.", []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("general.uninstall"), i18n.Text("plugins.noPluginsInstalled"), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -177,8 +183,8 @@ func (a *App) pluginUninstall() {
 		items = append(items, widgets.SelectItem{ID: name, Label: name})
 	}
 
-	a.ShowSelectDialog("Uninstall Plugin", items, func(name string) {
-		a.ShowConfirmDialogEx("Confirm Uninstall", "Remove plugin \""+name+"\"?", []string{"Cancel", "Uninstall"}, []func(){
+	a.ShowSelectDialog(i18n.Text("plugins.uninstallPlugin"), items, func(name string) {
+		a.ShowConfirmDialogEx(i18n.Text("plugins.confirmUninstall"), i18n.Format("plugins.removePlugin", i18n.Args{"name": name}), []string{i18n.Text("general.cancel"), i18n.Text("general.uninstall")}, []func(){
 			func() { a.DismissDialog() },
 			func() {
 				a.DismissDialog()
@@ -190,22 +196,43 @@ func (a *App) pluginUninstall() {
 
 // ClearPluginSources removes the diagnostics, decorations and status items plugin name set.
 func (a *App) ClearPluginSources(name string) {
-	a.EditorGroup.ClearDiagnosticsSource("plugin:" + name)
-	a.EditorGroup.ClearDecorationsSource("plugin:" + name)
+	for _, group := range a.editorGroups() {
+		group.ClearDiagnosticsSource("plugin:" + name)
+		group.ClearDecorationsSource("plugin:" + name)
+	}
 	a.Status.RemoveSegmentsByOwner("plugin:" + name)
 }
 
 func (a *App) doPluginUninstall(name string) {
+	if a.PluginManager.IsSystemPlugin(name) {
+		a.StatusWarn(i18n.Text("plugins.systemManaged"))
+		return
+	}
+	if err := a.PluginManager.RunUninstallHook(name); err != nil {
+		a.ShowConfirmDialogEx(i18n.Text("plugins.uninstallFailed"), i18n.Format("plugins.cleanupFailed", i18n.Args{"name": name, "error": err.Error()}), []string{i18n.Text("general.cancel"), i18n.Text("plugins.removeAnyway")}, []func(){
+			func() { a.DismissDialog() },
+			func() {
+				a.DismissDialog()
+				a.removePlugin(name)
+			},
+		})
+		return
+	}
+	a.removePlugin(name)
+}
+
+func (a *App) removePlugin(name string) {
 	a.RemovePluginPanels(name)
 
 	if err := a.PluginManager.Uninstall(name); err != nil {
 		slog.Error("plugin uninstall", "error", err)
 	}
-	// After Uninstall: its on_uninstall callback can still publish and open tabs.
+	// After the uninstall hook: its on_uninstall callback can still publish and open tabs.
 	a.ClearPluginSources(name)
 	a.closePluginDrawerAndTabs(name)
 	a.uninstallPluginGrammars(name)
 	a.uninstallPluginThemes(name)
+	a.uninstallPluginLanguages(name)
 
 	a.resetPluginDetailButton(name)
 	if a.PluginsPanel != nil {
@@ -216,7 +243,7 @@ func (a *App) doPluginUninstall(name string) {
 func (a *App) pluginUpdate() {
 	names := a.PluginManager.InstalledPluginNames()
 	if len(names) == 0 {
-		a.ShowConfirmDialogEx("Update", "No plugins installed.", []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("general.update"), i18n.Text("plugins.noPluginsInstalled"), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -227,7 +254,7 @@ func (a *App) pluginUpdate() {
 		items = append(items, widgets.SelectItem{ID: name, Label: name})
 	}
 
-	a.ShowSelectDialog("Update Plugin", items, a.PluginUpdateByName, nil)
+	a.ShowSelectDialog(i18n.Text("plugins.updatePlugin"), items, a.PluginUpdateByName, nil)
 }
 
 type PluginUpdateResult struct {
@@ -253,7 +280,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 		}
 	}
 	if err != nil {
-		a.ShowConfirmDialogEx("Update Failed", err.Error(), []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("plugins.updateFailed"), err.Error(), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -271,6 +298,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 			a.installPluginGrammars(p)
 		} else {
 			a.installPluginThemes(p)
+			a.installPluginLanguages(p)
 		}
 	}
 	if a.PluginsPanel != nil {
@@ -290,27 +318,41 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 	}
 	for _, g := range p.Manifest.Grammars {
 		kvEntries = append(kvEntries, widgets.KeyValueEntry{
-			Key:   "Grammar",
+			Key:   i18n.Text("plugins.grammar"),
 			Value: grammarLabel(g),
 		})
 	}
+	for _, language := range p.Manifest.Languages {
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("settings.displayLanguage"), Value: language.Name + " (" + language.Locale + ")"})
+	}
 	for _, theme := range p.Manifest.Themes {
-		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: "Theme", Value: theme.ID()})
+		kvEntries = append(kvEntries, widgets.KeyValueEntry{Key: i18n.Text("plugins.theme"), Value: theme.ID()})
 	}
 
-	content := widgets.NewWrappingKeyValueListWidget(kvEntries)
-	content.InvertStyles = true
+	permissions := widgets.NewWrappingKeyValueListWidget(kvEntries)
+	permissions.InvertStyles = true
+	var content widgets.Widget = permissions
+	maintained := a.isMaintainedRepo(p.Repo)
+	if p.InstalledFromURL {
+		maintained = plugin.IsMaintained(p.Repo, nil)
+	}
+	if !maintained {
+		notice := widgets.NewParagraphWidget(i18n.Text("plugins.communityApprovalNotice"))
+		notice.Style = term.StyleWarning
+		notice.Box.PaddingTop = 1
+		content = widgets.NewVStackWidget(permissions, notice)
+	}
 
-	dialog := widgets.NewDialogWidget(max(50, content.NaturalWidth()+4))
-	dialog.Title = p.Manifest.Title() + " requests"
+	dialog := widgets.NewDialogWidget(max(50, permissions.NaturalWidth()+4))
+	dialog.Title = i18n.Format("plugins.requests", i18n.Args{"manifestTitle": p.Manifest.Title()})
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Deny", Handler: func() {
+		{Label: i18n.Text("general.denyButton"), Handler: func() {
 			a.DismissDialog()
 			a.denyPluginApproval(p)
 		}},
-		{Label: "&Allow", Handler: func() {
+		{Label: i18n.Text("general.allowButton"), Handler: func() {
 			a.DismissDialog()
 			if err := a.PluginManager.ApproveAndLoad(p); err == nil {
 				a.WirePlugin(p)
@@ -330,7 +372,7 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 	dialog.Build()
 
 	if a.approvalDialog != nil {
-		a.Root.RemoveOverlay(a.approvalDialog)
+		a.restoreFocus(a.Root.RemoveOverlay(a.approvalDialog))
 	}
 	adapter := ui.NewWidgetAdapter(dialog)
 	a.approvalDialog = adapter
@@ -344,11 +386,9 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 	if a.Root.HasModalOverlay() {
 		return errors.New("another dialog is open")
 	}
-	content := widgets.NewParagraphWidget(fmt.Sprintf(
-		"Allow it to run %s? Its manifest allows programs named %s; this approves only this file.",
-		path, filepath.Base(path)))
+	content := widgets.NewParagraphWidget(i18n.Format("plugins.approveExecutable", i18n.Args{"path": path, "filename": filepath.Base(path)}))
 	dialog := widgets.NewDialogWidget(max(50, textwidth.String(path)+6))
-	dialog.Title = p.Manifest.Title() + " requests"
+	dialog.Title = i18n.Format("plugins.requests", i18n.Args{"manifestTitle": p.Manifest.Title()})
 	dialog.Borders = *a.Borders
 	dialog.SetContent(content)
 	deny := func() {
@@ -356,11 +396,11 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 		done(false)
 	}
 	dialog.Buttons = []widgets.DialogButton{
-		{Label: "&Deny", Handler: deny},
-		{Label: "&Allow", Handler: func() {
+		{Label: i18n.Text("general.denyButton"), Handler: deny},
+		{Label: i18n.Text("general.allowButton"), Handler: func() {
 			a.DismissDialog()
 			if err := a.PluginManager.GrantExecPath(p, path); err != nil {
-				a.StatusError("Plugin permission not saved: " + err.Error())
+				a.StatusError(i18n.Format("status.pluginPermissionNotSaved", i18n.Args{"error": err.Error()}))
 				done(false)
 				return
 			}
@@ -374,7 +414,9 @@ func (a *App) ShowExecPathApproval(p *plugin.Plugin, path string, done func(gran
 }
 
 func (a *App) WirePlugin(p *plugin.Plugin) {
+	p.ControlModifiers = &a.Root.ControlModifiers
 	a.installPluginThemes(p)
+	a.installPluginLanguages(p)
 	a.wirePluginDialogs(p)
 	a.wirePluginChanges(p)
 	id := "plugin." + p.Name
@@ -392,10 +434,11 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			break
 		}
 	}
+	a.ApplyPluginPanelIcons()
 	a.syncPluginPanel(&a.Sidebar.TabbedPanel, id, sidebarTitle, sidebar)
 	a.syncPluginPanel(&a.BottomPanel.TabbedPanel, id, bottomTitle, bottom)
 	p.RequestRedraw = func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ShowPanel = func(area string, focus bool) (bool, error) {
 		return a.ShowPluginPanel(p.Name, area, focus)
@@ -434,7 +477,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		if a.Running != nil {
 			*a.Running = false
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.OpenFile = func(path string, line int, readonly bool) {
 		absPath := path
@@ -444,9 +487,13 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			}
 		}
 		if readonly {
-			a.EditorGroup.OpenFileReadOnly(absPath, "")
+			if err := a.EditorGroup.OpenFileReadOnly(absPath, ""); err != nil {
+				return
+			}
 		} else {
-			a.EditorGroup.OpenFile(absPath)
+			if err := a.EditorGroup.OpenFile(absPath); err != nil {
+				return
+			}
 		}
 		if line > 0 {
 			a.EditorGroup.GoToLine(line)
@@ -529,7 +576,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		return result
 	}
 	p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(result))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(result))
 	})
 	pluginSource := "plugin:" + p.Name
 	p.PublishDiagnostics = func(path string, items []plugin.DiagnosticItem) {
@@ -546,44 +593,58 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 				Source:    it.Source,
 			})
 		}
-		a.EditorGroup.SetDiagnosticsSource(pluginSource, path, diags)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		for _, group := range a.editorGroups() {
+			group.SetDiagnosticsSource(pluginSource, path, diags)
+		}
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDiagnostics = func(path string) {
 		if path == "" {
-			a.EditorGroup.ClearDiagnosticsSource(pluginSource)
+			for _, group := range a.editorGroups() {
+				group.ClearDiagnosticsSource(pluginSource)
+			}
 		} else {
-			a.EditorGroup.SetDiagnosticsSource(pluginSource, path, nil)
+			for _, group := range a.editorGroups() {
+				group.SetDiagnosticsSource(pluginSource, path, nil)
+			}
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetDecorations = func(path string, items []plugin.DecorationItem) {
 		decos := make([]ui.Decoration, len(items))
 		for i, it := range items {
 			decos[i] = ui.Decoration{
-				StartLine: it.StartLine,
-				StartCol:  it.StartCol,
-				EndLine:   it.EndLine,
-				EndCol:    it.EndCol,
-				Text:      it.Text,
-				Note:      it.Note,
-				Style:     it.Style,
+				StartLine:  it.StartLine,
+				StartCol:   it.StartCol,
+				EndLine:    it.EndLine,
+				EndCol:     it.EndCol,
+				Text:       it.Text,
+				Note:       it.Note,
+				GhostText:  it.GhostText,
+				GhostAtCol: it.GhostAtCol,
+				Style:      it.Style,
 			}
 		}
-		a.EditorGroup.SetDecorations(pluginSource, path, decos)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		for _, group := range a.editorGroups() {
+			group.SetDecorations(pluginSource, path, decos)
+		}
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.ClearDecorations = func(path string) {
 		if path == "" {
-			a.EditorGroup.ClearDecorationsSource(pluginSource)
+			for _, group := range a.editorGroups() {
+				group.ClearDecorationsSource(pluginSource)
+			}
 		} else {
-			a.EditorGroup.SetDecorations(pluginSource, path, nil)
+			for _, group := range a.editorGroups() {
+				group.SetDecorations(pluginSource, path, nil)
+			}
 		}
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetBookmark = func(line int, icon rune, style term.Style) {
 		a.EditorGroup.Editor.SetBookmark(line, icon, style)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.GetBookmark = func(line int) (rune, term.Style, bool) {
 		b, ok := a.EditorGroup.Editor.GetBookmark(line)
@@ -591,7 +652,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.RemoveBookmark = func(line int) {
 		a.EditorGroup.Editor.RemoveBookmark(line)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.SetAllBookmarks = func(items []plugin.BookmarkItem) {
 		m := make(map[int]ui.Bookmark, len(items))
@@ -599,7 +660,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			m[it.Line] = ui.Bookmark{Icon: it.Icon, Style: it.Style}
 		}
 		a.EditorGroup.Editor.SetAllBookmarks(m)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.GetAllBookmarks = func() []plugin.BookmarkItem {
 		all := a.EditorGroup.Editor.GetAllBookmarks()
@@ -612,7 +673,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	}
 	p.ClearBookmarks = func() {
 		a.EditorGroup.Editor.ClearBookmarks()
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
 	p.RenderMarkdown = func(text string) []plugin.MarkdownLine {
 		rendered := markdown.Render(text)
@@ -652,7 +713,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 		a.ShowInfoDialog(title, entries)
 	}
 	p.ShowConfirmDialog = func(message string, confirmLabel string, cancelLabel string, onConfirm func()) {
-		a.ShowConfirmDialogEx("Confirm", message, []string{cancelLabel, confirmLabel}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("general.confirm"), message, []string{cancelLabel, confirmLabel}, []func(){
 			func() { a.DismissDialog() },
 			func() {
 				a.DismissDialog()
@@ -691,13 +752,13 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			Side:     side,
 			Borders:  *a.Borders,
 			OnDismiss: func() {
-				a.Root.RemoveOverlay(adapter)
+				prev := a.Root.RemoveOverlay(adapter)
 				if a.pluginDrawer == adapter {
 					a.pluginDrawer = nil
 					a.pluginDrawerPanel = nil
 				}
 				panel.Close()
-				a.FocusEditor()
+				a.restoreFocus(prev)
 			},
 		})
 		drawer.SetContent(panel)
@@ -726,8 +787,10 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 			}
 			cmd := entry.Command
 			a.Reg.Register(command.Command{
-				ID:    cmd,
-				Title: entry.Label,
+				ID:           cmd,
+				Title:        entry.Label,
+				DisplayTitle: pluginCommandTitle(p, entry.Label),
+				Keywords:     []string{p.Manifest.DisplayName, p.Name, p.Manifest.Name},
 				Handler: func() {
 					p.CallSidebarAction(cmd)
 				},
@@ -738,7 +801,9 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	a.registerPluginCommandsAndKeys(p)
 	p.FlushPendingDrawer()
 	if len(p.FileHandlers) > 0 {
-		a.EditorGroup.RetryFileHandlers()
+		for _, group := range a.editorGroups() {
+			group.RetryFileHandlers()
+		}
 	}
 }
 
@@ -750,8 +815,34 @@ func (a *App) wirePluginLog(p *plugin.Plugin) {
 			Level:      level,
 			Message:    message,
 		})
-		a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(nil))
 	}
+}
+
+func pluginCommandTitle(p *plugin.Plugin, title string) string {
+	name := strings.TrimSpace(p.Manifest.DisplayName)
+	if name == "" {
+		name = strings.TrimSpace(p.Name)
+	}
+	if name == "" {
+		name = strings.TrimSpace(p.Manifest.Name)
+	}
+	if name == "" {
+		return title
+	}
+	trimmed := strings.TrimSpace(title)
+	titleRunes := []rune(trimmed)
+	for _, alias := range []string{name, strings.TrimSpace(p.Name), strings.TrimSpace(p.Manifest.Name)} {
+		prefixLen := utf8.RuneCountInString(alias)
+		if prefixLen == 0 || len(titleRunes) < prefixLen || !strings.EqualFold(string(titleRunes[:prefixLen]), alias) {
+			continue
+		}
+		rest := strings.TrimSpace(string(titleRunes[prefixLen:]))
+		if strings.HasPrefix(rest, ":") || strings.HasPrefix(rest, "-") || strings.HasPrefix(rest, "–") || strings.HasPrefix(rest, "—") || strings.HasPrefix(rest, "|") {
+			return title
+		}
+	}
+	return name + ": " + trimmed
 }
 
 func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
@@ -760,8 +851,10 @@ func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 		cmdID := cmd.ID
 		plugName := p.Name
 		a.Reg.Register(command.Command{
-			ID:    cmd.ID,
-			Title: cmd.Title,
+			ID:           cmd.ID,
+			Title:        cmd.Title,
+			DisplayTitle: pluginCommandTitle(p, cmd.Title),
+			Keywords:     []string{p.Manifest.DisplayName, p.Name, p.Manifest.Name},
 			Handler: func() {
 				if err := handler(); err != nil {
 					slog.Error("plugin command error", "plugin", plugName, "command", cmdID, "error", err)
@@ -783,16 +876,14 @@ func (a *App) registerPluginCommandsAndKeys(p *plugin.Plugin) {
 				key, mod, rn := comboToTcell(step)
 				tcellSteps[i] = ui.GlobalKeyBinding{Key: key, Mod: mod, Rune: rn}
 			}
-			a.Root.AddChordKey(tcellSteps, func() {
-				a.Reg.Execute(cmdID)
-			})
+			bindCommandChord(a.Root, a.Reg, tcellSteps, cmdID)
 		} else {
 			key, mod, rn := comboToTcell(steps[0])
 			a.Root.AddGlobalKey(key, mod, rn, func() {
 				a.Reg.Execute(cmdID)
 			})
 		}
-		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key))
+		a.Reg.SetShortcut(cmdID, FormatKeyBinding(kb.Key, a.Root.ControlModifiers))
 	}
 }
 
@@ -818,7 +909,7 @@ func (a *App) ensureKeyInterceptor() {
 func (a *App) pluginReload() {
 	plugins := a.PluginManager.Plugins()
 	if len(plugins) == 0 {
-		a.ShowConfirmDialogEx("Reload", "No plugins loaded.", []string{"Close"}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("general.reload"), i18n.Text("plugins.noPluginsLoaded"), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
@@ -833,7 +924,7 @@ func (a *App) pluginReload() {
 	for _, p := range plugins {
 		items = append(items, widgets.SelectItem{ID: p.Name, Label: p.Name})
 	}
-	a.ShowSelectDialog("Reload Plugin", items, func(name string) {
+	a.ShowSelectDialog(i18n.Text("plugins.reloadPlugin"), items, func(name string) {
 		a.doPluginReload(name)
 	}, nil)
 }
@@ -848,7 +939,7 @@ func (a *App) doPluginReload(name string) {
 			Time:       time.Now().Format("15:04:05"),
 			PluginName: name,
 			Level:      "error",
-			Message:    "reload failed: " + err.Error(),
+			Message:    i18n.Format("plugins.reloadFailed", i18n.Args{"error": err.Error()}),
 		})
 		if a.PluginsPanel != nil {
 			a.PluginsPanel.Refresh()
@@ -863,7 +954,7 @@ func (a *App) doPluginReload(name string) {
 		Time:       time.Now().Format("15:04:05"),
 		PluginName: name,
 		Level:      "info",
-		Message:    "reloaded successfully",
+		Message:    i18n.Text("plugins.reloadedSuccessfully"),
 	})
 	if a.PluginsPanel != nil {
 		a.PluginsPanel.Refresh()
@@ -893,7 +984,7 @@ type RemoteRegistryResult struct {
 func (a *App) PluginInstallFromURL(repoURL, repoPath, name string) {
 	go func() {
 		p, err := a.PluginManager.Install(repoURL, repoPath)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInstallResult{
 			plugin: p,
 			name:   name,
 			err:    err,
@@ -902,7 +993,7 @@ func (a *App) PluginInstallFromURL(repoURL, repoPath, name string) {
 }
 
 func (a *App) PluginUninstallByName(name string) {
-	a.ShowConfirmDialogEx("Confirm Uninstall", "Remove plugin \""+name+"\"?", []string{"Cancel", "Uninstall"}, []func(){
+	a.ShowConfirmDialogEx(i18n.Text("plugins.confirmUninstall"), i18n.Format("plugins.removePlugin", i18n.Args{"name": name}), []string{i18n.Text("general.cancel"), i18n.Text("general.uninstall")}, []func(){
 		func() { a.DismissDialog() },
 		func() {
 			a.DismissDialog()
@@ -946,17 +1037,16 @@ func (a *App) PluginUpdateByName(name string) {
 	update := a.PluginManager.PrepareUpdate(name)
 	go func() {
 		err := update.Fetch()
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&PluginUpdateResult{update: update, err: err}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&PluginUpdateResult{update: update, err: err}))
 	}()
 }
 
-func (a *App) handleRemoteRegistryResult(result *RemoteRegistryResult) {
+func (a *App) HandleRemoteRegistryResult(result *RemoteRegistryResult) {
 	if a.PluginsPanel == nil {
 		return
 	}
 	if result.Err != nil {
-		a.PluginsPanel.SearchTree.Config.EmptyText = "Could not load registry"
-		a.PluginsPanel.SearchTree.SetItems(nil)
+		a.PluginsPanel.setRegistryStatus(i18n.Text("plugins.couldNotLoadRegistry"))
 		return
 	}
 	a.PluginsPanel.SetAvailable(result.Entries)
@@ -1022,14 +1112,14 @@ func (a *App) handlePluginDropdownCommand(cmd string) {
 // uninstall) for one installed plugin. Selecting a row no longer toggles it;
 // these actions live here and on the e/u/x shortcuts.
 func (a *App) ShowPluginRowMenu(name string, enabled bool, x, y int) {
-	toggleLabel := "Disable"
+	toggleLabel := i18n.Text("general.disable")
 	if !enabled {
-		toggleLabel = "Enable"
+		toggleLabel = i18n.Text("general.enable")
 	}
 	items := []ui.ContextMenuItem{
 		{Label: toggleLabel, Command: "toggle"},
-		{Label: "Update", Command: "update"},
-		{Label: "Uninstall", Command: "uninstall"},
+		{Label: i18n.Text("general.update"), Command: "update"},
+		{Label: i18n.Text("general.uninstall"), Command: "uninstall"},
 	}
 	menu := ui.NewContextMenuWidget(items, x, y)
 	menu.Borders = a.Borders
@@ -1074,13 +1164,19 @@ func (a *App) ShowPluginRowMenu(name string, enabled bool, x, y int) {
 }
 
 func (a *App) PluginRefreshRegistry() {
+	a.registryRequested = true
 	if a.PluginsPanel != nil {
-		a.PluginsPanel.SearchTree.Config.EmptyText = "Loading plugins..."
-		a.PluginsPanel.SearchTree.SetItems(nil)
+		a.PluginsPanel.setRegistryStatus(i18n.Text("plugins.loadingPlugins"))
+	}
+	fetch := a.FetchRegistry
+	if fetch == nil {
+		fetch = func() ([]plugin.RemoteRegistryEntry, error) {
+			return plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
+		}
 	}
 	go func() {
-		entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&RemoteRegistryResult{Entries: entries, Err: err}))
+		entries, err := fetch()
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RemoteRegistryResult{Entries: entries, Err: err}))
 	}()
 }
 
@@ -1156,34 +1252,37 @@ func (a *App) ShowPluginPanel(name, area string, focus bool) (bool, error) {
 	return true, nil
 }
 
-func (a *App) pluginTab(name, key string) (int, *plugin.PluginPanelWidget) {
-	for i := range a.EditorGroup.TabCount() {
-		panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget)
-		if ok && panel.PluginName() == name && a.EditorGroup.PluginTabKey(i) == key {
-			return i, panel
+func (a *App) pluginTab(name, key string) (*ui.EditorGroupWidget, int, *plugin.PluginPanelWidget) {
+	for _, group := range a.editorGroups() {
+		for i := range group.TabCount() {
+			panel, ok := group.TabContent(i).(*plugin.PluginPanelWidget)
+			if ok && panel.PluginName() == name && group.PluginTabKey(i) == key {
+				return group, i, panel
+			}
 		}
 	}
-	return -1, nil
+	return nil, -1, nil
 }
 
 func (a *App) switchToPluginTab(name, key string, focus bool) bool {
-	i, panel := a.pluginTab(name, key)
+	group, i, panel := a.pluginTab(name, key)
 	if i < 0 {
 		return false
 	}
-	a.EditorGroup.SwitchTab(i)
+	group.SwitchTab(i)
 	if focus && !a.Root.HasModalOverlay() {
-		a.Root.ClaimFocus(a.EditorGroup)
+		a.Root.ClaimFocus(group)
 		panel.FocusAutofocusInput()
 	}
 	return true
 }
 
 func (a *App) closePluginTab(name, key string) bool {
-	if i, _ := a.pluginTab(name, key); i < 0 {
+	group, i, _ := a.pluginTab(name, key)
+	if i < 0 {
 		return false
 	}
-	return a.EditorGroup.ClosePluginTab(key)
+	return group.ClosePluginTab(key)
 }
 
 // Panel images live in the terminal until released, so a plugin panel is closed whenever it leaves the UI.
@@ -1202,17 +1301,29 @@ func (a *App) closePluginDrawerAndTabs(name string) {
 		a.ClosePluginDrawer()
 	}
 	// File-handler tabs are left to SyncFileHandlerTabs, which falls back to the binary card.
-	var keys []string
-	for i := range a.EditorGroup.TabCount() {
-		path, _ := a.EditorGroup.TabInfo(i)
-		if panel, ok := a.EditorGroup.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
-			if _, handled := a.fileHandlerTabs[path]; !handled {
-				keys = append(keys, a.EditorGroup.PluginTabKey(i))
+	for _, group := range a.editorGroups() {
+		var keys []string
+		for i := range group.TabCount() {
+			path, _ := group.TabInfo(i)
+			if panel, ok := group.TabContent(i).(*plugin.PluginPanelWidget); ok && panel.PluginName() == name {
+				if _, handled := a.fileHandlerTabs[path]; !handled {
+					keys = append(keys, group.PluginTabKey(i))
+				}
 			}
 		}
+		for _, key := range keys {
+			group.ClosePluginTab(key)
+		}
 	}
-	for _, key := range keys {
-		a.EditorGroup.ClosePluginTab(key)
+}
+
+func (a *App) ApplyPluginPanelIcons() {
+	if a.PluginManager == nil || a.Sidebar == nil {
+		return
+	}
+	nerd := icons.ActiveIsNerd()
+	for _, reg := range a.PluginManager.SidebarPanels {
+		a.Sidebar.SetPanelIcon(reg.ID, reg.Icon.Resolve(nerd))
 	}
 }
 
@@ -1262,7 +1373,7 @@ type pluginInput struct {
 // postPluginInput sends events as one interrupt: PostEvent falls back to a
 // goroutine when the queue is full, which would reorder separate posts.
 func (a *App) postPluginInput(allowed func() bool, events ...tcell.Event) {
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events, Allowed: allowed}))
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&pluginInput{Events: events, Allowed: allowed}))
 }
 
 func (a *App) simulatePluginKeys(combo string, allowed func() bool) error {

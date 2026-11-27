@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -8,16 +9,18 @@ import (
 
 type TerminalPanelWidget struct {
 	BaseWidget
-	TabBar  *VerticalTabBar
-	widgets []Widget
-	labels  []string
-	active  int
-	Borders *term.BorderSet
+	TabBar   *VerticalTabBar
+	widgets  []Widget
+	labels   []string
+	active   int
+	Borders  *term.BorderSet
+	PaddingX int
 }
 
 func NewTerminalPanelWidget() *TerminalPanelWidget {
 	tp := &TerminalPanelWidget{
-		TabBar: NewVerticalTabBar(),
+		TabBar:   NewVerticalTabBar(),
+		PaddingX: 1,
 	}
 	tp.TabBar.OnSelect = func(index int) {
 		tp.SetActive(index)
@@ -30,7 +33,9 @@ func (tp *TerminalPanelWidget) Focusable() bool { return true }
 func (tp *TerminalPanelWidget) CursorPosition() (int, int, bool) {
 	if w := tp.ActiveWidget(); w != nil {
 		if cp, ok := w.(CursorProvider); ok {
-			return cp.CursorPosition()
+			x, y, visible := cp.CursorPosition()
+			r := w.GetRect()
+			return x, y, visible && x >= r.X && x < r.X+r.W && y >= r.Y && y < r.Y+r.H
 		}
 	}
 	return 0, 0, false
@@ -125,10 +130,30 @@ func (tp *TerminalPanelWidget) Count() int {
 
 func (tp *TerminalPanelWidget) DividerScreenX() int {
 	r := tp.GetRect()
-	if len(tp.widgets) == 0 || r.W <= VerticalTabBarWidth {
+	if len(tp.widgets) == 0 || r.W <= verticalTabBarBorderX {
 		return -1
 	}
-	return r.X + VerticalTabBarWidth - 2
+	return r.X + verticalTabBarBorderX
+}
+
+func (tp *TerminalPanelWidget) ContentRect(r Rect, scrollbar bool) Rect {
+	return tp.ContentRectFor(nil, r, scrollbar)
+}
+
+func (tp *TerminalPanelWidget) ContentRectFor(tw *TerminalWidget, r Rect, scrollbar bool) Rect {
+	return terminalContentRect(tp.areaRect(r), tp.paddingX(tw), scrollbar)
+}
+
+func (tp *TerminalPanelWidget) paddingX(tw *TerminalWidget) int {
+	if tw != nil && tw.PaddingX != nil {
+		return max(*tw.PaddingX, 0)
+	}
+	return tp.PaddingX
+}
+
+func (tp *TerminalPanelWidget) areaRect(r Rect) Rect {
+	stripW := min(VerticalTabBarWidth, max(r.W, 0))
+	return Rect{X: r.X + stripW, Y: r.Y, W: r.W - stripW, H: r.H}
 }
 
 func (tp *TerminalPanelWidget) syncTabBar() {
@@ -142,7 +167,7 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 	r := tp.GetRect()
 
 	if len(tp.widgets) == 0 {
-		msg := "No terminals. Press + to create one."
+		msg := i18n.Text("terminalPanel.noTerminalsPressToCreateOne")
 		x := 1
 		for _, ch := range msg {
 			if x >= w {
@@ -154,28 +179,47 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 		return
 	}
 
-	stripW := VerticalTabBarWidth
-	contentW := w - stripW
-	if contentW <= 0 {
-		return
-	}
-
+	stripW := min(VerticalTabBarWidth, max(w, 0))
 	tp.TabBar.Borders = tp.Borders
 	tp.TabBar.SetRect(Rect{X: r.X, Y: r.Y, W: stripW, H: h})
 	tp.TabBar.Render(surface.Sub(Rect{X: 0, Y: 0, W: stripW, H: h}))
 
+	area := tp.areaRect(Rect{X: r.X, Y: r.Y, W: w, H: h})
+	areaSurface := surface.Sub(Rect{X: stripW, W: area.W, H: h})
 	active := tp.widgets[tp.active]
-	active.SetRect(Rect{X: r.X + stripW, Y: r.Y, W: contentW, H: h})
-	active.Render(surface.Sub(Rect{X: stripW, Y: 0, W: contentW, H: h}))
+	if tw, ok := active.(*TerminalWidget); ok {
+		renderTerminalArea(areaSurface, area, tw, tp.paddingX(tw))
+		return
+	}
+	content := terminalContentRect(area, tp.PaddingX, false)
+	renderPaddedContent(areaSurface, area, content, active, term.Cell{Ch: ' ', Style: term.StyleDefault})
 }
 
 func (tp *TerminalPanelWidget) HandleEvent(ev tcell.Event) EventResult {
 	if mev, ok := ev.(*tcell.EventMouse); ok {
-		if mev.Buttons()&tcell.Button1 != 0 && !tp.activeOwnsPointer() {
-			mx, _ := mev.Position()
+		if !tp.activeOwnsPointer() {
+			mx, my := mev.Position()
 			r := tp.GetRect()
-			if mx-r.X < VerticalTabBarWidth {
+			if mx < r.X || mx >= r.X+r.W || my < r.Y || my >= r.Y+r.H {
+				return EventIgnored
+			}
+			wheel := mev.Buttons()&(tcell.WheelUp|tcell.WheelDown|tcell.WheelLeft|tcell.WheelRight) != 0
+			if wheel {
+				if w := tp.ActiveWidget(); w != nil {
+					return w.HandleEvent(ev)
+				}
+				return EventIgnored
+			}
+			r = tp.TabBar.GetRect()
+			if mev.Buttons()&tcell.Button1 != 0 && mx >= r.X && mx < r.X+r.W && my >= r.Y && my < r.Y+r.H {
 				return tp.TabBar.HandleEvent(ev)
+			}
+			w := tp.ActiveWidget()
+			if w == nil {
+				return EventIgnored
+			}
+			if result, stop := terminalMouseOutsideContent(w, mev); stop {
+				return result
 			}
 		}
 	}

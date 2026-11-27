@@ -19,19 +19,21 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 	}
 
 	mods := kev.Modifiers()
-	if mods&tcell.ModAlt != 0 || mods&tcell.ModCtrl != 0 {
+	if mods&(tcell.ModAlt|tcell.ModCtrl|tcell.ModMeta) != 0 {
 		return EventIgnored
 	}
 
 	shift := mods&tcell.ModShift != 0
 	multi := e.isMultiActive()
+	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
 
 	switch kev.Key() {
 	case tcell.KeyUp:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
+				x := e.goalColumn(cs.Line, cs.Col, &cs.Goal)
 				if e.WordWrap {
-					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, -1, -1)
+					cs.Line, cs.Col, x = e.wrappedRowMove(cs.Line, cs.Col, -1, x)
 				} else if cs.Line > 0 {
 					cs.Line--
 					if e.Folds != nil {
@@ -39,30 +41,24 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 							cs.Line = r.StartLine
 						}
 					}
-					lineLen := len([]rune(e.Buf.Lines[cs.Line]))
-					if cs.Col > lineLen {
-						cs.Col = lineLen
-					}
+					cs.Col = visualColToBufCol(e.Buf.Lines[cs.Line], x, e.resolveTabSize())
 				}
+				cs.Goal.Remember(cs.Line, cs.Col, x)
 			})
 		} else {
 			e.startOrExtendSelection(shift)
 			if e.WordWrap {
-				e.moveCursorWrapped(-1)
-			} else if e.Cursor.Line > 0 {
-				e.Cursor.Line--
-				e.skipHiddenLineUp()
-				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-				if e.Cursor.Col > lineLen {
-					e.Cursor.Col = lineLen
-				}
+				e.moveCursorRows(-1)
+			} else {
+				e.moveCursorUnwrapped(-1)
 			}
 		}
 	case tcell.KeyDown:
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
+				x := e.goalColumn(cs.Line, cs.Col, &cs.Goal)
 				if e.WordWrap {
-					cs.Line, cs.Col, _ = e.wrappedRowMove(cs.Line, cs.Col, 1, -1)
+					cs.Line, cs.Col, x = e.wrappedRowMove(cs.Line, cs.Col, 1, x)
 				} else if cs.Line < len(e.Buf.Lines)-1 {
 					cs.Line++
 					if e.Folds != nil {
@@ -70,26 +66,20 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 							cs.Line = e.Buf.ClampLine(r.EndLine + 1)
 						}
 					}
-					lineLen := len([]rune(e.Buf.Lines[cs.Line]))
-					if cs.Col > lineLen {
-						cs.Col = lineLen
-					}
+					cs.Col = visualColToBufCol(e.Buf.Lines[cs.Line], x, e.resolveTabSize())
 				}
+				cs.Goal.Remember(cs.Line, cs.Col, x)
 			})
 		} else {
 			e.startOrExtendSelection(shift)
 			if e.WordWrap {
-				e.moveCursorWrapped(1)
-			} else if e.Cursor.Line < len(e.Buf.Lines)-1 {
-				e.Cursor.Line++
-				e.skipHiddenLineDown()
-				lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-				if e.Cursor.Col > lineLen {
-					e.Cursor.Col = lineLen
-				}
+				e.moveCursorRows(1)
+			} else {
+				e.moveCursorUnwrapped(1)
 			}
 		}
 	case tcell.KeyLeft:
+		e.ResetCursorGoal()
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
 				if cs.Col > 0 {
@@ -109,6 +99,7 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyRight:
+		e.ResetCursorGoal()
 		if multi {
 			e.multiMoveAll(func(cs *multicursor.CursorState) {
 				lineLen := len([]rune(e.Buf.Lines[cs.Line]))
@@ -130,56 +121,23 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 			}
 		}
 	case tcell.KeyHome:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				runes := []rune(e.Buf.Lines[cs.Line])
-				firstNonSpace := 0
-				for firstNonSpace < len(runes) && (runes[firstNonSpace] == ' ' || runes[firstNonSpace] == '\t') {
-					firstNonSpace++
-				}
-				if cs.Col == firstNonSpace {
-					cs.Col = 0
-				} else {
-					cs.Col = firstNonSpace
-				}
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.SmartHome()
-		}
+		e.MoveToLineEdge(false, shift)
 	case tcell.KeyEnd:
-		if multi {
-			e.multiMoveAll(func(cs *multicursor.CursorState) {
-				cs.Col = len([]rune(e.Buf.Lines[cs.Line]))
-			})
-		} else {
-			e.startOrExtendSelection(shift)
-			e.Cursor.Col = len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		}
+		e.MoveToLineEdge(true, shift)
 	case tcell.KeyPgUp:
 		e.startOrExtendSelection(shift)
 		if e.WordWrap {
-			e.moveCursorWrapped(-e.Viewport.Height)
+			e.moveCursorRows(-e.Viewport.Height)
 			break
 		}
-		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line - e.Viewport.Height)
-		e.skipHiddenLineUp()
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.moveCursorUnwrapped(-e.Viewport.Height)
 	case tcell.KeyPgDn:
 		e.startOrExtendSelection(shift)
 		if e.WordWrap {
-			e.moveCursorWrapped(e.Viewport.Height)
+			e.moveCursorRows(e.Viewport.Height)
 			break
 		}
-		e.Cursor.Line = e.Buf.ClampLine(e.Cursor.Line + e.Viewport.Height)
-		e.skipHiddenLineDown()
-		lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
-		if e.Cursor.Col > lineLen {
-			e.Cursor.Col = lineLen
-		}
+		e.moveCursorUnwrapped(e.Viewport.Height)
 	case tcell.KeyEnter:
 		if e.ReadOnly {
 			return EventConsumed
@@ -293,6 +251,9 @@ func (e *EditorPaneWidget) handleKey(kev *tcell.EventKey) EventResult {
 		return EventIgnored
 	}
 
+	if multi {
+		e.refreshFoldsAfterEdit(version, prevLines)
+	}
 	e.clampCursor()
 	e.scrollViewport()
 	return EventConsumed
@@ -313,6 +274,7 @@ func (e *EditorPaneWidget) execEnter() {
 		col = lineLen
 	}
 	line := e.Buf.Lines[e.Cursor.Line]
+	version := e.Buf.Version()
 
 	var cmds []undo.EditCommand
 	splitCmd := &undo.SplitLineCommand{Line: e.Cursor.Line, Col: col}
@@ -359,6 +321,7 @@ func (e *EditorPaneWidget) execEnter() {
 		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
 	}
 	e.bufferDirty = true
+	e.remapFolds(version)
 	e.refreshFolds()
 }
 
@@ -417,7 +380,7 @@ func (e *EditorPaneWidget) execDelete() {
 	}
 	lineLen := len([]rune(e.Buf.Lines[e.Cursor.Line]))
 	if e.Cursor.Col < lineLen {
-		e.exec(&undo.DeleteRuneCommand{Line: e.Cursor.Line, Col: e.Cursor.Col})
+		e.exec(&undo.DeleteRuneCommand{Line: e.Cursor.Line, Col: e.Cursor.Col, Forward: true})
 	} else if e.Cursor.Line < len(e.Buf.Lines)-1 {
 		e.exec(&undo.JoinLineCommand{Line: e.Cursor.Line + 1})
 	}
@@ -426,6 +389,12 @@ func (e *EditorPaneWidget) execDelete() {
 // execRune inserts a rune for a single cursor, replacing the selection if one is
 // active and dedenting first when a closing bracket is typed.
 func (e *EditorPaneWidget) execRune(r rune) {
+	before := e.undoSelectionPosition()
+	if cmd := e.surroundSelection(r, e.Selection, &e.Cursor.Line, &e.Cursor.Col); cmd != nil {
+		cmd.Before, cmd.After = before, e.undoSelectionPosition()
+		e.exec(cmd)
+		return
+	}
 	if e.Selection != nil && e.Selection.Active {
 		start, _ := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
 		e.replaceSelection(&undo.InsertRuneCommand{Line: start.Line, Col: start.Col, Rune: r})

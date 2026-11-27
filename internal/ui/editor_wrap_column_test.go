@@ -57,7 +57,7 @@ func TestWordWrapColumnPointerAndMovement(t *testing.T) {
 	e := newRowsEditor([]string{"abcdefghij"}, 40, 6)
 	e.WordWrap, e.WordWrapColumn = true, 4
 	renderRows(e)
-	e.moveCursorWrapped(1)
+	e.moveCursorRows(1)
 	if e.Cursor.Col != 4 {
 		t.Fatalf("Down moved to %d", e.Cursor.Col)
 	}
@@ -104,7 +104,7 @@ func TestWordWrapColumnFilePolicies(t *testing.T) {
 	enabled := true
 	column := 65
 	g.LanguageOverrides = map[string]config.EditorLanguageOverride{"markdown": {WordWrap: &enabled, WordWrapColumn: &column}}
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if !g.Editor.WordWrap || g.Editor.WordWrapColumn != 65 {
 		t.Fatal("language override requires global wrap or syntax highlighting")
 	}

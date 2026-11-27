@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,16 +13,19 @@ import (
 )
 
 type AppConfig struct {
-	Keybindings []KeyBinding
-	Settings    Settings
-	Theme       ThemeConfig
+	Keybindings   []KeyBinding
+	Settings      Settings
+	SettingsFile  string
+	SettingsError error
+	Theme         ThemeConfig
 }
 
 func Load(settingsFile string) AppConfig {
 	cfg := AppConfig{
-		Keybindings: DefaultKeybindings(),
-		Settings:    DefaultSettings(),
-		Theme:       DefaultTheme(),
+		Keybindings:  DefaultKeybindings(),
+		Settings:     DefaultSettings(),
+		SettingsFile: settingsFile,
+		Theme:        DefaultTheme(),
 	}
 
 	paths := configPaths()
@@ -33,23 +37,18 @@ func Load(settingsFile string) AppConfig {
 	}
 
 	if settingsFile != "" {
-		if data, err := os.ReadFile(settingsFile); err == nil {
-			json.Unmarshal(data, &cfg.Settings)
-		}
-	} else if data, err := readFirst(paths, "settings.json"); err == nil {
-		json.Unmarshal(data, &cfg.Settings)
+		cfg.Settings, cfg.SettingsError = ReadSettingsFile(settingsFile)
+	} else {
+		cfg.Settings, cfg.SettingsError = ReadSettings()
 	}
 
 	if cfg.Settings.Theme != "" {
-		themeFile := cfg.Settings.Theme + ".json"
-		if data, err := readFirstTheme(paths, themeFile); err == nil {
-			json.Unmarshal(data, &cfg.Theme)
-		} else if data, err := themes.FS.ReadFile(themeFile); err == nil {
-			json.Unmarshal(data, &cfg.Theme)
+		if theme, err := LoadTheme(cfg.Settings.Theme); err != nil {
+			slog.Error("load theme", "theme", cfg.Settings.Theme, "error", err)
+		} else {
+			cfg.Theme = theme
 		}
 	}
-
-	normalizeSettings(&cfg.Settings)
 
 	cfg.Theme.ResolveColors()
 
@@ -104,7 +103,7 @@ func ListThemes() []string {
 			}
 		}
 		pluginDir := filepath.Join(themesDir, "plugins")
-		filepath.WalkDir(pluginDir, func(path string, entry fs.DirEntry, err error) error {
+		_ = filepath.WalkDir(pluginDir, func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() || entry.Type()&os.ModeSymlink != 0 {
 				return nil
 			}
@@ -163,6 +162,7 @@ func themeNameFromFile(filename string) string {
 	return ""
 }
 
+// ConfigFilePath attempts to create the parent; callers must still handle write errors.
 func ConfigFilePath(filename string) string {
 	paths := configPaths()
 	for _, dir := range paths {
@@ -172,23 +172,27 @@ func ConfigFilePath(filename string) string {
 		}
 	}
 	if OverrideConfigDir != "" {
-		os.MkdirAll(OverrideConfigDir, 0755)
+		_ = os.MkdirAll(OverrideConfigDir, 0755)
 		return filepath.Join(OverrideConfigDir, filename)
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		dir := filepath.Join(home, ".config", "ttt")
-		os.MkdirAll(dir, 0755)
+		_ = os.MkdirAll(dir, 0755)
 		return filepath.Join(dir, filename)
 	}
 	return filepath.Join(".config", filename)
 }
 
-func EnsureConfigFile(path, defaultContent string) {
+func EnsureConfigFile(path, defaultContent string) error {
 	if _, err := os.Stat(path); err == nil {
-		return
+		return nil
+	} else if !os.IsNotExist(err) {
+		return err
 	}
-	os.MkdirAll(filepath.Dir(path), 0755)
-	os.WriteFile(path, []byte(defaultContent), 0644)
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, []byte(defaultContent), 0644)
 }
 
 func readFirst(dirs []string, filename string) ([]byte, error) {

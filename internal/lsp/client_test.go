@@ -17,8 +17,8 @@ func pipeClient(t *testing.T) (*Client, *jsonrpc.Codec) {
 	clientR, serverW := io.Pipe()
 	serverR, clientW := io.Pipe()
 	t.Cleanup(func() {
-		serverW.Close()
-		clientW.Close()
+		_ = serverW.Close()
+		_ = clientW.Close()
 	})
 	c := newClient(clientR, clientW, ClientHooks{})
 	return c, jsonrpc.NewCodec(serverR, serverW)
@@ -27,7 +27,7 @@ func pipeClient(t *testing.T) (*Client, *jsonrpc.Codec) {
 func blockingReader(t *testing.T) io.Reader {
 	t.Helper()
 	r, w := io.Pipe()
-	t.Cleanup(func() { w.Close() })
+	t.Cleanup(func() { _ = w.Close() })
 	return r
 }
 
@@ -56,15 +56,16 @@ func receiveWithin(t *testing.T, codec *jsonrpc.Codec) jsonrpc.Message {
 
 func TestClientCallAndResponse(t *testing.T) {
 	c, server := pipeClient(t)
-	go func() {
+	serverDone := serveAsync(func() error {
 		req, err := server.Receive()
 		if err != nil {
-			return
+			return err
 		}
-		server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"status":"ok"}`)})
-	}()
+		return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"status":"ok"}`)})
+	})
 
 	result, err := c.call("test/method", map[string]string{"key": "value"})
+	requireNoError(t, <-serverDone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,13 +114,15 @@ func TestHoverContextCancellationDropsLateResponse(t *testing.T) {
 	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: request.ID, Result: json.RawMessage(`{"contents":"stale"}`)}); err != nil {
 		t.Fatal(err)
 	}
-	go func() {
+	serverDone := serveAsync(func() error {
 		req, err := server.Receive()
-		if err == nil {
-			server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"contents":"latest"}`)})
+		if err != nil {
+			return err
 		}
-	}()
+		return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage(`{"contents":"latest"}`)})
+	})
 	hover, err := c.Hover("file:///test.go", 2, 3)
+	requireNoError(t, <-serverDone)
 	if err != nil || hover == nil || hover.Contents.Value != "latest" {
 		t.Fatalf("next hover = %v, error = %v", hover, err)
 	}
@@ -281,20 +284,23 @@ func TestClientDiagnosticRefreshCallsHook(t *testing.T) {
 
 func TestClientServerRequestDoesNotResolvePendingCall(t *testing.T) {
 	c, server := pipeClient(t)
-	go func() {
+	serverDone := serveAsync(func() error {
 		call, err := server.Receive()
 		if err != nil {
-			return
+			return err
 		}
 		// Same integer id as the outstanding call, but a request.
-		server.Send(json.RawMessage(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"method":"workspace/configuration","params":{"items":[{}]}}`, call.ID)))
-		if _, err := server.Receive(); err != nil {
-			return
+		if err := server.Send(json.RawMessage(fmt.Sprintf(`{"jsonrpc":"2.0","id":%s,"method":"workspace/configuration","params":{"items":[{}]}}`, call.ID))); err != nil {
+			return err
 		}
-		server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: call.ID, Result: json.RawMessage(`"real"`)})
-	}()
+		if _, err := server.Receive(); err != nil {
+			return err
+		}
+		return server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: call.ID, Result: json.RawMessage(`"real"`)})
+	})
 
 	result, err := c.call("test/method", nil)
+	requireNoError(t, <-serverDone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -357,7 +363,7 @@ func TestClientConnectionClosed(t *testing.T) {
 
 	c := newClient(clientR, &buf, ClientHooks{})
 
-	serverW.Close()
+	requireNoError(t, serverW.Close())
 
 	_, err := c.call("test/method", nil)
 	if err == nil {
@@ -441,7 +447,8 @@ func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
 	// null diagnostics field with -32602.
 	var params struct {
 		Context struct {
-			Diagnostics json.RawMessage `json:"diagnostics"`
+			Diagnostics json.RawMessage       `json:"diagnostics"`
+			TriggerKind CodeActionTriggerKind `json:"triggerKind"`
 		} `json:"context"`
 	}
 	if err := json.Unmarshal(req.Params, &params); err != nil {
@@ -450,6 +457,115 @@ func TestCodeActionSendsEmptyDiagnosticsArray(t *testing.T) {
 	if string(params.Context.Diagnostics) != "[]" {
 		t.Fatalf("expected diagnostics to serialize as [], got %s", params.Context.Diagnostics)
 	}
+	if params.Context.TriggerKind != CodeActionInvoked {
+		t.Fatalf("trigger kind = %d, want invoked", params.Context.TriggerKind)
+	}
 
-	server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")})
+	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")}); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCodeActionSendsDiagnostics(t *testing.T) {
+	c, server := pipeClient(t)
+	want := []Diagnostic{{
+		Range: Range{
+			Start: Position{Line: 2, Character: 3},
+			End:   Position{Line: 2, Character: 7},
+		},
+		Severity: 1,
+		Source:   "compiler",
+		Message:  "undefined: missing",
+	}}
+	go func() {
+		_, _ = c.CodeActionWithDiagnostics("file:///a.go", Range{}, nil, want)
+	}()
+
+	req := receiveWithin(t, server)
+	var params CodeActionParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if len(params.Context.Diagnostics) != 1 || params.Context.Diagnostics[0] != want[0] {
+		t.Fatalf("diagnostics = %+v, want %+v", params.Context.Diagnostics, want)
+	}
+	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("[]")}); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestCodeActionParsesGoplsCommand(t *testing.T) {
+	c, server := pipeClient(t)
+	done := make(chan []CodeAction, 1)
+	go func() {
+		actions, _ := c.CodeAction("file:///a.go", Range{}, nil)
+		done <- actions
+	}()
+	req := receiveWithin(t, server)
+	if err := server.Send(jsonrpc.Reply{
+		JSONRPC: "2.0", ID: req.ID,
+		Result: json.RawMessage(`[{"title":"Extract variable","kind":"refactor.extract.variable","command":{"title":"Extract variable","command":"gopls.apply_fix","arguments":[{"Fix":"extract_variable"}]}}]`),
+	}); err != nil {
+		t.Error(err)
+	}
+	select {
+	case actions := <-done:
+		if len(actions) != 1 || actions[0].Command == nil {
+			t.Fatalf("actions = %+v, want a command-bearing action", actions)
+		}
+		cmd := actions[0].Command
+		if cmd.Command != "gopls.apply_fix" || len(cmd.Arguments) != 1 || string(cmd.Arguments[0]) != `{"Fix":"extract_variable"}` {
+			t.Fatalf("command = %+v, want gopls apply_fix with arguments", cmd)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("CodeAction did not return")
+	}
+}
+
+func TestExecuteCommandRequest(t *testing.T) {
+	c, server := pipeClient(t)
+	done := make(chan error, 1)
+	go func() {
+		done <- c.ExecuteCommand("gopls.apply_fix", []json.RawMessage{json.RawMessage(`{"Fix":"extract_variable"}`)})
+	}()
+	req := receiveWithin(t, server)
+	if req.Method != "workspace/executeCommand" {
+		t.Fatalf("method = %q, want workspace/executeCommand", req.Method)
+	}
+	var params ExecuteCommandParams
+	if err := json.Unmarshal(req.Params, &params); err != nil {
+		t.Fatal(err)
+	}
+	if params.Command != "gopls.apply_fix" || len(params.Arguments) != 1 {
+		t.Fatalf("params = %+v, want gopls.apply_fix with one argument", params)
+	}
+	if err := server.Send(jsonrpc.Reply{JSONRPC: "2.0", ID: req.ID, Result: json.RawMessage("null")}); err != nil {
+		t.Error(err)
+	}
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWorkspaceApplyEditUsesHandler(t *testing.T) {
+	c, _ := pipeClient(t)
+	c.OnApplyEdit = func(edit WorkspaceEdit) ApplyWorkspaceEditResult {
+		if len(edit.Changes) != 1 {
+			t.Errorf("workspace edit = %+v, want one file change", edit)
+		}
+		return ApplyWorkspaceEditResult{Applied: true}
+	}
+	result, err := c.answer("workspace/applyEdit", json.RawMessage(`{"edit":{"changes":{"file:///a.go":[]}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := result.(ApplyWorkspaceEditResult); !ok || !got.Applied {
+		t.Fatalf("result = %#v, want applied result", result)
+	}
+}
+
+func serveAsync(serve func() error) <-chan error {
+	done := make(chan error, 1)
+	go func() { done <- serve() }()
+	return done
 }

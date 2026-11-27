@@ -2,8 +2,12 @@ package terminal
 
 import (
 	"io"
+	"log/slog"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -58,10 +62,14 @@ type Terminal struct {
 // New spawns the terminal program in a fresh PTY. `args` are passed to the
 // program unchanged (e.g. Shell="pi", Args=["--model", "openrouter/free"]); a
 // plain shell call site simply omits them.
+// Environment entries use KEY=value to set a value and a bare KEY to remove it.
 func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, args ...string) (*Terminal, error) {
-	if shell == "" {
-		shell = defaultShell()
+	resolved, err := resolveShell(shell)
+	if err != nil {
+		return nil, err
 	}
+	shell = resolved
+
 	if scrollbackMax <= 0 {
 		scrollbackMax = 1000
 	}
@@ -79,7 +87,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	}
 	pollable, err := makePtyPollable(pt)
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	pt = pollable
@@ -91,7 +99,9 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	)
 	t.watchPromptMarks()
 	t.term.OnData(func(s string) {
-		io.WriteString(pt, s)
+		if _, err := io.WriteString(pt, s); err != nil {
+			slog.Debug("terminal response write", "error", err)
+		}
 	})
 
 	cmd := pt.Command(shell, args...)
@@ -102,11 +112,24 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 			cmd.Dir = dir
 		}
 	}
-	cmd.Env = append(os.Environ(), env...)
+	cmd.Env = os.Environ()
+	for _, entry := range env {
+		if entry == "" {
+			continue
+		}
+		if strings.Contains(entry, "=") {
+			cmd.Env = append(cmd.Env, entry)
+		} else {
+			cmd.Env = slices.DeleteFunc(cmd.Env, func(s string) bool {
+				name, _, _ := strings.Cut(s, "=")
+				return name == entry || runtime.GOOS == "windows" && strings.EqualFold(name, entry)
+			})
+		}
+	}
 	cmd.Env = append(cmd.Env, "TERM=xterm-256color")
 
 	if err := pt.Resize(cols, rows); err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 
@@ -114,7 +137,7 @@ func New(shell string, cols, rows, scrollbackMax int, env []string, dir string, 
 	err = cmd.Start()
 	restoreHangup()
 	if err != nil {
-		pt.Close()
+		_ = pt.Close()
 		return nil, err
 	}
 	t.pt = pt
@@ -136,6 +159,24 @@ func defaultShell() string {
 	return "/bin/sh"
 }
 
+// resolveShell normalizes the shell program path. If shell contains no directory
+// separators, it is resolved against PATH using exec.LookPath so that callers
+// supplying a working directory (e.g. workspace folder on Windows) do not have
+// the shell mistakenly looked up relative to that directory.
+func resolveShell(shell string) (string, error) {
+	if shell == "" {
+		shell = defaultShell()
+	}
+	if !strings.ContainsAny(shell, `/\`) && filepath.VolumeName(shell) == "" {
+		if resolved, err := exec.LookPath(shell); err == nil {
+			return filepath.Abs(resolved)
+		} else {
+			return "", err
+		}
+	}
+	return shell, nil
+}
+
 func (t *Terminal) Run() {
 	t.mu.Lock()
 	t.started = true
@@ -144,12 +185,18 @@ func (t *Terminal) Run() {
 	go t.readLoop()
 }
 
+func (t *Terminal) Exited() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.exited
+}
+
 func (t *Terminal) waitLoop() {
 	if t.cmd == nil {
 		close(t.waited)
 		return
 	}
-	t.cmd.Wait()
+	_ = t.cmd.Wait()
 
 	t.mu.Lock()
 	t.exited = true
@@ -157,7 +204,7 @@ func (t *Terminal) waitLoop() {
 	if isUnix {
 		// go-pty retains the parent's slave fd. Release it so the reader can
 		// drain to EOF without closing the master and discarding queued output.
-		unixPty.Slave().Close()
+		_ = unixPty.Slave().Close()
 		t.lastRead = time.Now()
 	}
 	t.mu.Unlock()
@@ -207,7 +254,7 @@ func (t *Terminal) readLoop() {
 		if n > 0 {
 			t.mu.Lock()
 			if !t.closed {
-				t.term.Write(buf[:n])
+				_, _ = t.term.Write(buf[:n])
 				t.appendRawTail(buf[:n])
 			}
 			t.lastRead = time.Now()
@@ -228,7 +275,9 @@ func (t *Terminal) readLoop() {
 }
 
 func (t *Terminal) WriteString(s string) {
-	io.WriteString(t.pt, s)
+	if _, err := io.WriteString(t.pt, s); err != nil {
+		slog.Debug("terminal input write", "error", err)
+	}
 }
 
 func (t *Terminal) Resize(cols, rows int) {
@@ -238,9 +287,16 @@ func (t *Terminal) Resize(cols, rows int) {
 	rows = max(rows, xterm.MinimumRows)
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if t.resizeEmulator(cols, rows) {
-		t.pt.Resize(cols, rows)
+	if cols == t.cols && rows == t.rows {
+		return
 	}
+	if !t.exited && !t.closed {
+		if err := t.pt.Resize(cols, rows); err != nil {
+			slog.Warn("resize terminal", "cols", cols, "rows", rows, "error", err)
+			return
+		}
+	}
+	t.resizeEmulator(cols, rows)
 }
 
 // resizeEmulator reports whether the size changed. An unchanged size must not
@@ -300,6 +356,14 @@ func (t *Terminal) Close() {
 	t.mu.Unlock()
 	t.cbMu.Unlock()
 
+	shellRunning := t.cmd != nil && t.cmd.Process != nil
+	if started {
+		select {
+		case <-t.waited:
+			shellRunning = false
+		default:
+		}
+	}
 	t.signalShell(sigHangup, started)
 	// Closing the pty while bash handles SIGHUP can make it exit without
 	// hanging up its jobs, so the pty stays open until the shell is gone.
@@ -323,6 +387,10 @@ func (t *Terminal) Close() {
 	t.signalShell(sigKill, started)
 	if started {
 		<-t.waited
+		// Jobs of a shell that exited on its own are not ours to hang up.
+		if shellRunning {
+			hangupSessionJobs(t.cmd.Process.Pid)
+		}
 		select {
 		case <-t.done:
 		case <-time.After(readLoopGrace):
@@ -336,7 +404,7 @@ func (t *Terminal) closePty() {
 		return
 	}
 	t.ptyClosed = true
-	t.pt.Close()
+	_ = t.pt.Close()
 }
 
 func (t *Terminal) signalShell(sig shellSignal, started bool) {
@@ -411,3 +479,5 @@ func (t *Terminal) ScreenText() string {
 	}
 	return strings.Join(lines, "\n")
 }
+
+func (t *Terminal) PID() int { return t.cmd.Process.Pid }

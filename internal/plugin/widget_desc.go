@@ -109,8 +109,10 @@ type WidgetDesc struct {
 	KeyCommands   map[rune]string
 
 	BadgeRight bool
+	ActiveID   string
 
 	Label        string
+	Spans        []widgets.ButtonSpan
 	OnClick      func()
 	Disabled     bool
 	Variant      widgets.ButtonVariant

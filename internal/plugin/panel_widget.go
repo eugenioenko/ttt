@@ -116,7 +116,7 @@ func (pw *PluginPanelWidget) HandleEvent(ev tcell.Event) widgets.EventResult {
 		}
 		return result
 	case *tcell.EventKey:
-		if isCopyKey(e) && pw.CopyTextSelection() {
+		if isCopyKey(e, pw.plugin) && pw.CopyTextSelection() {
 			return widgets.EventConsumed
 		}
 		if e.Key() == tcell.KeyEscape {
@@ -197,7 +197,13 @@ func eachTable(w widgets.Widget, fn func(*widgets.TableWidget)) {
 	}
 }
 
-func (pw *PluginPanelWidget) CancelPointerCapture() bool { return pw.sel.release() }
+func (pw *PluginPanelWidget) CancelPointerCapture() bool {
+	canceled := pw.sel.release()
+	if pw.state != nil && pw.state.root != nil {
+		canceled = widgets.CancelPointerCapture(pw.state.root) || canceled
+	}
+	return canceled
+}
 
 func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	if pw.state != nil && pw.state.focus != nil {
@@ -213,9 +219,9 @@ func (pw *PluginPanelWidget) dispatch(ev tcell.Event) widgets.EventResult {
 	}
 
 	if pw.eventFunc != nil && pw.plugin.State != nil {
-		tbl := eventToLua(pw.plugin.State, ev)
+		tbl := eventToLua(pw.plugin.State, ev, pw.plugin.ControlModifiers)
 		if tbl != nil {
-			pw.plugin.CallLuaFunc(pw.eventFunc, tbl)
+			_ = pw.plugin.CallLuaFunc(pw.eventFunc, tbl)
 		}
 	}
 

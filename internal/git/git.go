@@ -52,6 +52,8 @@ func RepoRootContext(ctx context.Context, dir string) string {
 // retain a previously verified repository identity and retry.
 func RepoRootWithErrorContext(ctx context.Context, dir string) (string, error) {
 	cmd := gitCommandContext(ctx, "-C", dir, "rev-parse", "--show-toplevel")
+	// Discovery classifies Git failure text in one locale.
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	out, err := cmd.Output()
 	if err != nil {
 		if ctx.Err() != nil {
@@ -192,13 +194,20 @@ func DiscardUntracked(dir string, paths ...string) error {
 }
 
 func runPaths(dir string, gitArgs, paths []string) error {
+	return runPathsContext(context.Background(), dir, gitArgs, paths)
+}
+
+func runPathsContext(ctx context.Context, dir string, gitArgs, paths []string) error {
 	if len(paths) == 0 {
 		return nil
 	}
 	args := append([]string{"-C", dir, "--literal-pathspecs"}, gitArgs...)
 	args = append(args, paths...)
-	cmd := exec.Command("git", args...)
+	cmd := gitMutationCommandContext(ctx, args...)
 	if out, err := cmd.CombinedOutput(); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("%s: %s", err, strings.TrimSpace(string(out)))
 	}
 	return nil
@@ -422,13 +431,43 @@ func parseNameStatusZ(out []byte) []FileStatus {
 	return files
 }
 
+func commitIdentityAndFirstParent(ctx context.Context, dir, ref string) (string, string, error) {
+	out, err := gitCommandContext(ctx, "-C", dir, "rev-list", "--parents", "-n", "1", ref, "--").Output()
+	if err != nil {
+		if ctx.Err() != nil {
+			return "", "", ctx.Err()
+		}
+		return "", "", err
+	}
+	refs := strings.Fields(string(out))
+	if len(refs) == 0 {
+		return "", "", fmt.Errorf("revision has no identity")
+	}
+	parent := ""
+	if len(refs) > 1 {
+		parent = refs[1]
+	}
+	return refs[0], parent, nil
+}
+
 func CommitFileDiff(dir, hash string, file FileStatus) (string, error) {
 	return CommitFileDiffContext(context.Background(), dir, hash, file)
 }
 
 func CommitFileDiffContext(ctx context.Context, dir, hash string, file FileStatus) (string, error) {
-	args := []string{"-C", dir, "--literal-pathspecs", "show", "--diff-merges=first-parent", "-M", "-C", "--find-copies-harder", "--format=", hash, "--"}
-	if file.OldPath != "" {
+	commit, parent, err := commitIdentityAndFirstParent(ctx, dir, hash)
+	if err != nil {
+		return "", err
+	}
+	// Diff against the resolved first parent so merge commits with a pathspec
+	// don't return empty output on older Git versions (e.g. git 2.34).
+	var args []string
+	if parent != "" {
+		args = []string{"-C", dir, "--literal-pathspecs", "diff", "-M", "-C", "--find-copies-harder", parent, commit, "--"}
+	} else {
+		args = []string{"-C", dir, "--literal-pathspecs", "show", "-M", "-C", "--find-copies-harder", "--format=", commit, "--"}
+	}
+	if file.OldPath != "" && file.OldPath != file.Path {
 		args = append(args, file.OldPath)
 	}
 	args = append(args, file.Path)
@@ -827,22 +866,25 @@ func TreeEntryContext(ctx context.Context, dir, revision, path string) (TreeEntr
 
 // DiffWorktreeFile diffs the index against the working tree.
 func DiffWorktreeFile(dir, path string) (string, error) {
-	return diffPaths(dir, nil, path)
+	return diffPaths(context.Background(), dir, nil, path)
 }
 
 // DiffStagedFile diffs HEAD against the index. Pass the old and new path of a
 // staged rename to get a rename diff.
 func DiffStagedFile(dir string, paths ...string) (string, error) {
-	return diffPaths(dir, []string{"--cached", "-M"}, paths...)
+	return diffPaths(context.Background(), dir, []string{"--cached", "-M"}, paths...)
 }
 
-func diffPaths(dir string, flags []string, paths ...string) (string, error) {
+func diffPaths(ctx context.Context, dir string, flags []string, paths ...string) (string, error) {
 	args := append([]string{"-C", dir, "--literal-pathspecs", "diff"}, flags...)
 	args = append(args, "--")
 	for _, p := range paths {
 		args = append(args, filepath.Join(dir, p))
 	}
-	out, err := gitCommandContext(context.Background(), args...).Output()
+	out, err := gitCommandContext(ctx, args...).Output()
+	if ctx.Err() != nil {
+		return "", ctx.Err()
+	}
 	if err != nil {
 		return "", err
 	}

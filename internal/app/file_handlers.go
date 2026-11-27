@@ -1,8 +1,7 @@
 package app
 
 import (
-	"fmt"
-
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -17,7 +16,7 @@ func (a *App) openWithFileHandler(path string, head []byte) ui.Widget {
 	}
 	panel, err := p.OpenFileHandler(h, path)
 	if err != nil {
-		a.StatusError(fmt.Sprintf("%s could not open %s: %v", h.Title, path, err))
+		a.StatusError(i18n.Format("status.couldNotOpen", i18n.Args{"hTitle": h.Title, "path": path, "error": err}))
 		return nil
 	}
 	if a.fileHandlerTabs == nil {
@@ -50,11 +49,15 @@ func (a *App) SyncFileHandlerTabs() {
 		if owner.Loaded() && owner.Enabled {
 			continue
 		}
-		a.EditorGroup.ShowBinaryCard(path)
+		for _, group := range a.editorGroups() {
+			group.ShowBinaryCard(path)
+		}
 		a.closeFileHandlerTab(path)
 		released = true
 	}
 	if released {
-		a.EditorGroup.RetryFileHandlers()
+		for _, group := range a.editorGroups() {
+			group.RetryFileHandlers()
+		}
 	}
 }

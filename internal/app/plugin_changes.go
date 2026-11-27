@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"sort"
@@ -49,7 +50,7 @@ func (a *App) wirePluginChanges(p *plugin.Plugin) {
 			}
 			file := ui.CommitDetailFile{Path: path, OldPath: oldPath, Status: status, Diff: diff.Parse(text)}
 			if len(file.Diff.Hunks) == 0 {
-				file.Error = "No textual changes"
+				file.Error = i18n.Text("plugins.noTextualChanges")
 			}
 			files = append(files, file)
 		}

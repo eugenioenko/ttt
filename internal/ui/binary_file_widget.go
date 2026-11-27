@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -33,9 +34,9 @@ func (w *BinaryFileWidget) Refresh() {
 	fi, err := os.Stat(w.FilePath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			w.Err = "File not found."
+			w.Err = i18n.Text("binaryFile.fileNotFound")
 		} else {
-			w.Err = fmt.Sprintf("Cannot read file: %v", err)
+			w.Err = i18n.Format("binaryFile.cannotReadFile", i18n.Args{"error": err})
 		}
 		return
 	}
@@ -47,13 +48,13 @@ func (w *BinaryFileWidget) Focusable() bool { return true }
 func (w *BinaryFileWidget) cardLines() []string {
 	name := filepath.Base(w.FilePath)
 	if w.Err != "" {
-		return []string{name, "Binary file", w.Err}
+		return []string{name, i18n.Text("binaryFile.binaryFile"), w.Err}
 	}
 	return []string{
 		name,
-		"Binary file",
-		fmt.Sprintf("%s on disk", formatFileSize(w.Size)),
-		"Binary files are shown as info, not text.",
+		i18n.Text("binaryFile.binaryFile"),
+		i18n.Format("binaryFile.onDisk", i18n.Args{"size": formatFileSize(w.Size)}),
+		i18n.Text("binaryFile.binaryFilesAreShownAsInfoNotText"),
 	}
 }
 
@@ -77,8 +78,8 @@ func formatFileSize(n int64) string {
 	case n < 1024:
 		return fmt.Sprintf("%d B", n)
 	case n < 1024*1024:
-		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+		return i18n.Format("files.kilobytes", i18n.Args{"size": fmt.Sprintf("%.1f", float64(n)/1024)})
 	default:
-		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+		return i18n.Format("files.megabytes", i18n.Args{"size": fmt.Sprintf("%.1f", float64(n)/(1024*1024))})
 	}
 }

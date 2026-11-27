@@ -2,10 +2,14 @@ package e2e
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/icons"
+	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -26,7 +30,7 @@ func TestSettingsViewOpensAsTab(t *testing.T) {
 	screen := h.screenText()
 	for _, want := range []string{
 		"Settings",
-		"General", "Editor", "Appearance", "Sidebar", "Terminal", "Diff",
+		"General", "Editor", "Appearance", "Explorer", "Sidebar", "Terminal", "Diff",
 		"Plugins", "Enable plugins",
 		"Cancel", "Apply",
 	} {
@@ -51,6 +55,26 @@ func TestSettingsViewReflectsCurrentValues(t *testing.T) {
 	}
 }
 
+func TestSettingsTerminalPaddingAcceptsZeroAndLiveApplies(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Terminal", "Terminal")
+	if !rowHas(h, "Horizontal padding", "❯ 1") {
+		t.Fatalf("padding should default to 1:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, "Horizontal padding", "❯")
+	h.pressKey(tcell.KeyEnd, tcell.ModNone)
+	h.pressKey(tcell.KeyBackspace2, tcell.ModNone)
+	h.pressRune('0')
+	h.exec("settings.apply")
+	if h.app.Settings.Terminal.PaddingX != 0 || h.app.TerminalPanel.PaddingX != 0 {
+		t.Fatalf("padding did not live-apply: settings=%d panel=%d", h.app.Settings.Terminal.PaddingX, h.app.TerminalPanel.PaddingX)
+	}
+	if got := config.LoadSettings().Terminal.PaddingX; got != 0 {
+		t.Fatalf("saved padding = %d, want 0", got)
+	}
+}
+
 func TestSettingsQuitOptions(t *testing.T) {
 	h := newTestHarness(t, 120, 50)
 	h.exec("settings.openUI")
@@ -65,6 +89,50 @@ func TestSettingsQuitOptions(t *testing.T) {
 	if !h.app.Settings.Editor.SaveAllOnQuit || !h.app.Settings.Editor.SaveAllOnQuitExceptUnnamed {
 		t.Fatal("quit options were not applied")
 	}
+}
+
+func TestSettingsExplorerUseTrash(t *testing.T) {
+	h := newTestHarness(t, 120, 40)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Explorer", "Explorer")
+	for _, row := range []struct{ label, state string }{
+		{"Hidden files", checkedBox},
+		{"Git-ignored files", checkedBox},
+		{"Reveal active file", uncheckedBox},
+		{"Compact folders", checkedBox},
+		{"Git status colors", checkedBox},
+		{"Dim staged colors", uncheckedBox},
+	} {
+		if !rowHas(h, row.label, row.state) {
+			t.Fatalf("Explorer is missing %q with state %q:\n%s", row.label, row.state, h.screenText())
+		}
+	}
+	label := "Move deleted files to Trash"
+	if !rowHas(h, label, checkedBox) {
+		t.Fatalf("Trash should default to enabled:\n%s", h.screenText())
+	}
+	clickRowControl(t, h, label, checkedBox)
+	h.exec("settings.apply")
+	if h.app.Settings.Explorer.UseTrash || config.LoadSettings().Explorer.UseTrash {
+		t.Fatal("useTrash=false was not applied and saved")
+	}
+	// explorer.delete refuses the workspace root, so target a file inside it.
+	// The name is short enough for the whole warning to stay on one row.
+	shortName := filepath.Join(h.dir, "x")
+	if err := os.WriteFile(shortName, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.app.ExplorerContextNode = &widgets.TreeNode{ID: shortName}
+	h.exec("explorer.delete")
+	h.assertContains("Permanently delete")
+	h.assertContains("This cannot be undone.")
+	h.pressKey(tcell.KeyEscape, tcell.ModNone)
+	h.exec("settings.openUI")
+	clickRowControl(t, h, "Sidebar", "Sidebar")
+	if strings.Contains(h.screenText(), label) {
+		t.Fatal("Trash setting still appears under Sidebar")
+	}
+	h.assertContains("Tab style")
 }
 
 const (
@@ -146,38 +214,65 @@ func TestSettingsMouseTogglesAndApplies(t *testing.T) {
 	}
 }
 
+func TestSettingsPointerShapesToggle(t *testing.T) {
+	h := openSettings(t)
+	clickRowControl(t, h, "Appearance", "Appearance")
+
+	if !rowHas(h, "Pointer shapes", checkedBox) {
+		t.Fatalf("expected Pointer shapes to be checked by default:\n%s", h.screenText())
+	}
+	if !h.app.Screen.PointerShapesEnabled() {
+		t.Fatal("screen pointer shapes should start enabled")
+	}
+
+	clickRowControl(t, h, "Pointer shapes", checkedBox)
+	if !rowHas(h, "Pointer shapes", uncheckedBox) {
+		t.Fatalf("clicking Pointer shapes checkbox did not toggle it to unchecked:\n%s", h.screenText())
+	}
+
+	clickRowControl(t, h, "Apply", "Apply")
+	if h.app.Settings.Appearance.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Settings.Appearance.PointerShapes to false")
+	}
+	if h.app.Screen.PointerShapesEnabled() {
+		t.Error("clicking Apply did not update Screen.PointerShapesEnabled to false")
+	}
+}
+
 func TestSettingsEnumSelectOpensPopup(t *testing.T) {
 	h := openSettings(t)
 	clickRowControl(t, h, "Appearance", "Appearance")
 
-	// The theme select shows "Default" until it is opened.
-	if strings.Contains(h.screenText(), "default-dark") {
+	if !rowHas(h, "default-dark", string(icons.PlainChevronDown)) {
+		t.Fatalf("select should display the default theme:\n%s", h.screenText())
+	}
+	if strings.Contains(h.screenText(), "default-light") {
 		t.Fatal("theme list visible before the select was opened")
 	}
 
-	clickRowControl(t, h, "Default", "Default")
+	clickRowControl(t, h, "default-dark", "default-dark")
 
 	screen := h.screenText()
-	if !strings.Contains(screen, "▴") {
+	if !strings.Contains(screen, string(icons.PlainChevronUp)) {
 		t.Errorf("chevron should point up while open:\n%s", screen)
 	}
-	if !strings.Contains(screen, "default-dark") {
+	if !strings.Contains(screen, "default-light") {
 		t.Fatalf("expected the theme list in the open popup:\n%s", screen)
 	}
 
 	// Picking an item closes the popup and updates the displayed value.
-	clickRowControl(t, h, "default-dark", "default-dark")
+	clickRowControl(t, h, "default-light", "default-light")
 	screen = h.screenText()
 	if strings.Contains(screen, "dracula") {
 		t.Errorf("popup should close after picking an item:\n%s", screen)
 	}
-	if !rowHas(h, "default-dark", "▾") {
+	if !rowHas(h, "default-light", string(icons.PlainChevronDown)) {
 		t.Errorf("select should display the picked value:\n%s", screen)
 	}
 
 	h.exec("settings.apply")
-	if h.app.Settings.Theme != "default-dark" {
-		t.Errorf("theme = %q, want default-dark", h.app.Settings.Theme)
+	if h.app.Settings.Theme != "default-light" {
+		t.Errorf("theme = %q, want default-light", h.app.Settings.Theme)
 	}
 }
 

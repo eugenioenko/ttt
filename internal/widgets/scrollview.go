@@ -11,6 +11,11 @@ type ScrollViewWidget struct {
 	// Follow keeps the view at the end of the content as it grows, unless
 	// the user has scrolled away from the end.
 	Follow bool
+	// KeyScroll opts the view into keyboard scrolling for keys the child did
+	// not consume: Up/Down scroll one row, PgUp/PgDn one page, Home/End jump
+	// to the ends. Keep it off for views whose child can take focus — it must
+	// not steal arrows from inputs or lists.
+	KeyScroll bool
 
 	followEnd int
 
@@ -198,13 +203,13 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 		btn := e.Buttons()
 		mx, my := e.Position()
 
-		mod := e.Modifiers()
-		if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && mod&tcell.ModShift != 0) {
+		sideways := HorizontalWheelMod(e.Modifiers())
+		if btn&tcell.WheelLeft != 0 || (btn&tcell.WheelUp != 0 && sideways) {
 			horizontal, _ := sv.currentScrollRanges()
 			sv.scrollX = horizontal.clampOffset(sv.scrollX - 3)
 			return EventConsumed
 		}
-		if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && mod&tcell.ModShift != 0) {
+		if btn&tcell.WheelRight != 0 || (btn&tcell.WheelDown != 0 && sideways) {
 			sv.scrollHRight(3)
 			return EventConsumed
 		}
@@ -228,7 +233,31 @@ func (sv *ScrollViewWidget) HandleEvent(ev tcell.Event) EventResult {
 	}
 
 	if sv.Child != nil {
-		return sv.Child.HandleEvent(ev)
+		if result := sv.Child.HandleEvent(ev); result != EventIgnored {
+			return result
+		}
+	}
+	if sv.KeyScroll {
+		if e, ok := ev.(*tcell.EventKey); ok {
+			_, vertical := sv.currentScrollRanges()
+			switch e.Key() {
+			case tcell.KeyUp:
+				sv.scrollY = vertical.clampOffset(sv.scrollY - 1)
+			case tcell.KeyDown:
+				sv.scrollY = vertical.clampOffset(sv.scrollY + 1)
+			case tcell.KeyPgUp:
+				sv.scrollY = vertical.clampOffset(sv.scrollY - max(vertical.trackLength, 1))
+			case tcell.KeyPgDn:
+				sv.scrollY = vertical.clampOffset(sv.scrollY + max(vertical.trackLength, 1))
+			case tcell.KeyHome:
+				sv.scrollY = 0
+			case tcell.KeyEnd:
+				sv.scrollY = vertical.maxOffset()
+			default:
+				return EventIgnored
+			}
+			return EventConsumed
+		}
 	}
 	return EventIgnored
 }

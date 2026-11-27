@@ -59,7 +59,7 @@ func newGitGutterTestHarness(t *testing.T) *gitGutterTestHarness {
 	runTreeGit(t, dir, "add", ".")
 	runTreeGit(t, dir, "-c", "user.name=Test", "-c", "user.email=test@example.com", "-c", "commit.gpgsign=false", "commit", "-qm", "initial")
 	a := buildTestApp(t, config.DefaultSettings())
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	a.SyncRepositoryBranch()
 	h := &gitGutterTestHarness{a: a, clock: gitGutterTestClock{now: time.Unix(0, 0)}}
 	a.tasks.post = func(fn func()) error {
@@ -194,7 +194,7 @@ func TestGitGutterStopsWhenTargetCannotUseGutter(t *testing.T) {
 				if err := os.WriteFile(path, []byte("plain\n"), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 			case "disabled":
 				enabled := false
 				a.Settings.Editor.GitGutter = &enabled
@@ -272,5 +272,33 @@ func TestGitGutterDropsQueuedDebounceOnEdit(t *testing.T) {
 	changes := a.EditorGroup.Editor.LineChanges
 	if len(changes) < 2 || changes[1] != diff.LineAdded {
 		t.Fatalf("gutter changes = %v, want added line 1", changes)
+	}
+}
+
+func TestInactiveInlineDiffRequestsRefreshWithGutterDisabled(t *testing.T) {
+	for _, delayed := range []bool{false, true} {
+		t.Run(map[bool]string{false: "request", true: "schedule"}[delayed], func(t *testing.T) {
+			h := newGitGutterTestHarness(t)
+			a := h.a
+			owner, path := a.EditorGroup, a.EditorGroup.ActiveFilePath()
+			if !owner.EnableInlineDiff(path, []string{"one", "two", ""}) {
+				t.Fatal("inline diff did not open")
+			}
+			a.SplitEditor()
+			if err := a.EditorGroup.OpenFile(path); err != nil {
+				t.Fatal(err)
+			}
+			enabled := false
+			a.Settings.Editor.GitGutter = &enabled
+			if delayed {
+				a.ScheduleGitGutter()
+				h.clock.advance(gitGutterDelay)
+			} else {
+				a.RequestGitGutter(path, a.EditorGroup.ActiveBuffer().Lines)
+			}
+			if len(h.work) != 1 {
+				t.Fatalf("queued refresh work = %d, want 1 for the inactive inline diff", len(h.work))
+			}
+		})
 	}
 }

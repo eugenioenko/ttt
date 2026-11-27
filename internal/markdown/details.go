@@ -170,6 +170,16 @@ func Parse(text string) *Document {
 }
 
 func parseDocument(lines []string, nextID *int) *Document {
+	return parseDocumentMasked(lines, nil, nextID)
+}
+
+// parseDocumentMasked parses lines, treating HTML tags inside inline code spans
+// as literal text. masked must keep the offsets of lines; when it is missing or
+// misaligned the mask is rebuilt from lines.
+func parseDocumentMasked(lines, masked []string, nextID *int) *Document {
+	if masked == nil || len(masked) != len(lines) {
+		masked = maskCodeSpans(lines)
+	}
 	var blocks []Block
 	var allDetails []*DetailBlock
 	var contentLines []string
@@ -213,7 +223,8 @@ func parseDocument(lines []string, nextID *int) *Document {
 			}
 		}
 
-		if indent <= 3 && detailsStartRegex.MatchString(trimmedLeft) {
+		trimmedMasked := strings.TrimLeft(masked[i], " ")
+		if indent <= 3 && len(trimmedMasked) == len(trimmedLeft) && detailsStartRegex.MatchString(trimmedMasked) {
 			flushContent()
 
 			loc := detailsStartRegex.FindStringIndex(trimmedLeft)
@@ -224,6 +235,7 @@ func parseDocument(lines []string, nextID *int) *Document {
 			var summaryText string
 			var summarySpans []Span
 			var innerLines []string
+			var innerMasked []string
 
 			trimmedAfter := strings.TrimSpace(afterDetails)
 			if summaryStartRegex.MatchString(trimmedAfter) {
@@ -259,6 +271,7 @@ func parseDocument(lines []string, nextID *int) *Document {
 
 			trimmedAfterSummary := strings.TrimSpace(afterDetails)
 			singleLineClosed := false
+			sameLineBody := ""
 			if trimmedAfterSummary != "" {
 				if closeLoc := findDetailsClose(trimmedAfterSummary); closeLoc != nil {
 					inside := trimmedAfterSummary[:closeLoc[0]]
@@ -267,24 +280,45 @@ func parseDocument(lines []string, nextID *int) *Document {
 					}
 					singleLineClosed = true
 				} else {
-					innerLines = append(innerLines, trimmedAfterSummary)
+					sameLineBody = trimmedAfterSummary
 				}
 			}
 
 			if !singleLineClosed {
 				depth := 1
 				innerFence := ""
-				i++
+				// Masking starts at the body boundary so backticks in the
+				// summary cannot pair with text outside the disclosure. Body
+				// text on the summary line is the first body line, so it joins
+				// the mask and keeps innerMasked aligned with innerLines.
+				bodyStart := i + 1
+				bodyLines := lines[bodyStart:]
+				offset := 0
+				if sameLineBody != "" {
+					bodyLines = append([]string{sameLineBody}, bodyLines...)
+					offset = 1
+				}
+				maskedBody := maskCodeSpans(bodyLines)
+				appendInner := func(raw, maskedLine string) {
+					innerLines = append(innerLines, raw)
+					innerMasked = append(innerMasked, maskedLine)
+				}
+				if offset == 1 {
+					appendInner(sameLineBody, maskedBody[0])
+				}
+				i = bodyStart
 				for i < len(lines) {
 					curr := lines[i]
+					currMasked := maskedBody[i-bodyStart+offset]
 					currTrimmedLeft := strings.TrimLeft(curr, " ")
 					currIndent := len(curr) - len(currTrimmedLeft)
+					currTagText := strings.TrimLeft(currMasked, " ")
 
 					if innerFence != "" {
 						if currIndent <= 3 && matchFenceEnd(currTrimmedLeft, innerFence) {
 							innerFence = ""
 						}
-						innerLines = append(innerLines, curr)
+						appendInner(curr, currMasked)
 						i++
 						continue
 					}
@@ -292,23 +326,23 @@ func parseDocument(lines []string, nextID *int) *Document {
 					if currIndent <= 3 {
 						if fence, ok := matchFenceStart(currTrimmedLeft); ok {
 							innerFence = fence
-							innerLines = append(innerLines, curr)
+							appendInner(curr, currMasked)
 							i++
 							continue
 						}
 					}
 
 					if currIndent <= 3 {
-						hasStart := detailsStartRegex.MatchString(currTrimmedLeft)
-						hasClose := findDetailsClose(currTrimmedLeft) != nil
+						hasStart := detailsStartRegex.MatchString(currTagText)
+						hasClose := detailsCloseRegex.MatchString(currTagText)
 						if hasStart && hasClose {
-							innerLines = append(innerLines, curr)
+							appendInner(curr, currMasked)
 							i++
 							continue
 						}
 						if hasStart {
 							depth++
-							innerLines = append(innerLines, curr)
+							appendInner(curr, currMasked)
 							i++
 							continue
 						}
@@ -317,20 +351,20 @@ func parseDocument(lines []string, nextID *int) *Document {
 							if depth == 0 {
 								break
 							}
-							innerLines = append(innerLines, curr)
+							appendInner(curr, currMasked)
 							i++
 							continue
 						}
 					}
 
-					innerLines = append(innerLines, curr)
+					appendInner(curr, currMasked)
 					i++
 				}
 			}
 
 			detID := *nextID
 			(*nextID)++
-			childDoc := parseDocument(innerLines, nextID)
+			childDoc := parseDocumentMasked(innerLines, innerMasked, nextID)
 
 			det := &DetailBlock{
 				ID:           detID,
@@ -408,6 +442,307 @@ func maskInlineCode(s string) string {
 		return s
 	}
 	return string(masked)
+}
+
+// maskCodeSpans blanks out inline code spans, including spans that continue
+// across lines within one paragraph, keeping byte offsets and line breaks
+// intact. An opener with no matching run is left as literal text; fenced and
+// indented code blocks are skipped, and a span never crosses into another
+// block, so callers can match HTML tags on the masked copy.
+func maskCodeSpans(lines []string) []string {
+	masked := make([]string, len(lines))
+	copy(masked, lines)
+
+	inFence := ""
+	for i := 0; i < len(lines); {
+		line := lines[i]
+		trimmed := strings.TrimLeft(line, " ")
+		indent := len(line) - len(trimmed)
+
+		if inFence != "" {
+			if indent <= 3 && matchFenceEnd(trimmed, inFence) {
+				inFence = ""
+			}
+			i++
+			continue
+		}
+		if indent <= 3 {
+			if fence, ok := matchFenceStart(trimmed); ok {
+				inFence = fence
+				i++
+				continue
+			}
+		}
+		if strings.TrimSpace(line) == "" {
+			i++
+			continue
+		}
+		if indent >= 4 {
+			// Indented code block: inline markup is literal, so no span
+			// starts or continues here.
+			i++
+			continue
+		}
+		if interruptsParagraph(trimmed) {
+			maskParagraphCodeSpans(lines[i:i+1], masked[i:i+1])
+			i++
+			continue
+		}
+
+		end := i + 1
+		for end < len(lines) && strings.TrimSpace(lines[end]) != "" {
+			next := strings.TrimLeft(lines[end], " ")
+			if len(lines[end])-len(next) <= 3 {
+				if _, ok := matchFenceStart(next); ok {
+					break
+				}
+				if interruptsParagraph(next) {
+					break
+				}
+			}
+			end++
+		}
+		maskParagraphCodeSpans(lines[i:end], masked[i:end])
+		i = end
+	}
+	return masked
+}
+
+// interruptsParagraph reports whether a line begins a block that ends the
+// paragraph above it. A code span cannot cross such a boundary, so the masker
+// starts a fresh paragraph there instead of pairing backticks across blocks.
+func interruptsParagraph(s string) bool {
+	if s == "" {
+		return false
+	}
+	if s[0] == '>' {
+		return true
+	}
+	if headingLevel(s) > 0 {
+		return true
+	}
+	trimmed := strings.TrimRight(s, " \t")
+	if isThematicBreak(trimmed) || isSetextUnderline(trimmed) {
+		return true
+	}
+	return isListItemStart(s)
+}
+
+func headingLevel(s string) int {
+	n := 0
+	for n < len(s) && s[n] == '#' {
+		n++
+	}
+	if n == 0 || n > 6 {
+		return 0
+	}
+	if n == len(s) || s[n] == ' ' || s[n] == '\t' {
+		return n
+	}
+	return 0
+}
+
+func isThematicBreak(s string) bool {
+	var marker byte
+	count := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '*', '-', '_':
+			if marker == 0 {
+				marker = s[i]
+			}
+			if s[i] != marker {
+				return false
+			}
+			count++
+		case ' ', '\t':
+		default:
+			return false
+		}
+	}
+	return count >= 3
+}
+
+func isSetextUnderline(s string) bool {
+	if s == "" {
+		return false
+	}
+	marker := s[0]
+	if marker != '=' && marker != '-' {
+		return false
+	}
+	for i := 1; i < len(s); i++ {
+		if s[i] != marker {
+			return false
+		}
+	}
+	return true
+}
+
+func isListItemStart(s string) bool {
+	if s == "" {
+		return false
+	}
+	if s[0] == '-' || s[0] == '+' || s[0] == '*' {
+		if len(s) == 1 || s[1] == ' ' || s[1] == '\t' {
+			// An empty list item (a bare marker, optionally followed by
+			// spaces) does not interrupt a paragraph (CommonMark 0.31.2
+			// example 285).
+			return strings.TrimSpace(s[1:]) != ""
+		}
+		return false
+	}
+	value := 0
+	digits := 0
+	for digits < len(s) && digits < 9 && s[digits] >= '0' && s[digits] <= '9' {
+		value = value*10 + int(s[digits]-'0')
+		digits++
+	}
+	if digits == 0 || digits >= len(s) {
+		return false
+	}
+	if s[digits] != '.' && s[digits] != ')' {
+		return false
+	}
+	if digits+1 != len(s) && s[digits+1] != ' ' && s[digits+1] != '\t' {
+		return false
+	}
+	// Only a non-empty ordered list item starting at one interrupts a
+	// paragraph; a bare "1." or "1)" line stays inside the paragraph.
+	return value == 1 && strings.TrimSpace(s[digits+1:]) != ""
+}
+
+// maskParagraphCodeSpans masks the code spans of one paragraph. A span opens on
+// a run of n backticks and closes on the next run of exactly n backticks in the
+// same paragraph; an unmatched opener stays literal.
+func maskParagraphCodeSpans(lines []string, masked []string) {
+	bufs := make([][]byte, len(lines))
+	for i, line := range lines {
+		bufs[i] = []byte(line)
+	}
+
+	line, col := 0, 0
+	for line < len(lines) {
+		if col >= len(lines[line]) {
+			line++
+			col = 0
+			continue
+		}
+		if lines[line][col] != '`' {
+			if lines[line][col] == '<' {
+				if end := htmlTagEnd(lines[line], col); end >= 0 {
+					col = end
+					continue
+				}
+			}
+			col++
+			continue
+		}
+
+		backslashes := 0
+		for b := col - 1; b >= 0 && lines[line][b] == '\\'; b-- {
+			backslashes++
+		}
+		if backslashes%2 == 1 {
+			col++
+			continue
+		}
+
+		open := col
+		for col < len(lines[line]) && lines[line][col] == '`' {
+			col++
+		}
+		run := col - open
+
+		closeLine, closeCol, ok := findCodeSpanClose(lines, line, col, run)
+		if !ok {
+			continue
+		}
+		for l := line; l <= closeLine; l++ {
+			from, to := 0, len(bufs[l])
+			if l == line {
+				from = open
+			}
+			if l == closeLine {
+				to = closeCol + run
+			}
+			for m := from; m < to; m++ {
+				bufs[l][m] = ' '
+			}
+		}
+		line, col = closeLine, closeCol+run
+	}
+
+	for i := range bufs {
+		masked[i] = string(bufs[i])
+	}
+}
+
+// findCodeSpanClose returns the start of the next backtick run of exactly n
+// backticks, searching from col on line through the end of the paragraph.
+// Once a span is open, tag-shaped text is code content, so the search matches
+// the next backtick run even when it sits inside what looks like an HTML tag.
+func findCodeSpanClose(lines []string, line, col, n int) (int, int, bool) {
+	for ; line < len(lines); line++ {
+		for col < len(lines[line]) {
+			if lines[line][col] != '`' {
+				col++
+				continue
+			}
+			start := col
+			for col < len(lines[line]) && lines[line][col] == '`' {
+				col++
+			}
+			if col-start == n {
+				return line, start, true
+			}
+		}
+		col = 0
+	}
+	return 0, 0, false
+}
+
+// htmlTagEnd reports where the HTML tag starting at line[start] ends. It
+// returns the index just past the tag's '>', or len(line) when the tag is
+// still open at the end of the line, and -1 when line[start] does not begin
+// a tag at all. Raw HTML is consumed before code-span delimiters are
+// matched, so a backtick inside a tag (for example in a quoted attribute)
+// is literal text and never opens or closes a code span.
+func htmlTagEnd(line string, start int) int {
+	if start+1 >= len(line) {
+		return -1
+	}
+	c := line[start+1]
+	if isTagNameStart(c) {
+		// Open tag.
+	} else if c == '/' && start+2 < len(line) && isTagNameStart(line[start+2]) {
+		// Closing tag.
+	} else {
+		return -1
+	}
+	for i := start + 1; i < len(line); i++ {
+		switch line[i] {
+		case '"':
+			if j := strings.IndexByte(line[i+1:], '"'); j >= 0 {
+				i += j + 1
+			} else {
+				return len(line)
+			}
+		case '\'':
+			if j := strings.IndexByte(line[i+1:], '\''); j >= 0 {
+				i += j + 1
+			} else {
+				return len(line)
+			}
+		case '>':
+			return i + 1
+		}
+	}
+	return len(line)
+}
+
+func isTagNameStart(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 func extractSummaryFromLine(line string) (summary string, spans []Span, remaining string) {

@@ -3,10 +3,12 @@ package app
 import (
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"log/slog"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/git"
+	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/plugin"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -17,6 +19,7 @@ import (
 )
 
 type highlightStep struct{}
+type eventLoopShutdown struct{}
 
 const highlightStepBudget = 4 * time.Millisecond
 
@@ -33,12 +36,13 @@ func RunEventLoop(
 	defer app.Root.CancelPointerCapture()
 	defer app.ShutdownGitReads()
 	if app.Watcher != nil {
-		defer app.Watcher.Close()
+		defer func() { _ = app.Watcher.Close() }()
 	}
 	if app.Repository != nil {
 		defer app.Repository.Close()
 	}
 	defer app.CloseTasks()
+	defer app.persistEditorSession()
 
 	lastGutterFile := ""
 	lastGutterRepo := ""
@@ -55,9 +59,9 @@ func RunEventLoop(
 		filePath := app.EditorGroup.ActiveFilePath()
 		cursorCount := app.EditorGroup.MultiCursorCount()
 
-		posText := fmt.Sprintf("Ln %d, Col %d", line+1, col+1)
+		posText := i18n.Format("status.lnCol", i18n.Args{"line": line + 1, "column": col + 1})
 		if cursorCount > 1 {
-			posText += fmt.Sprintf(" (%d cursors)", cursorCount)
+			posText += i18n.Format("status.cursors", i18n.Args{"cursorCount": cursorCount})
 		}
 		app.Status.SetSegment(view.StatusSegment{ID: "position", Side: "right", Priority: 100, Text: posText})
 
@@ -85,9 +89,9 @@ func RunEventLoop(
 			tabSize = app.Settings.Editor.TabSize
 			useTabs = !app.Settings.Editor.InsertSpaces
 		}
-		indentLabel := "Spaces"
+		indentLabel := i18n.Text("status.spaces")
 		if useTabs {
-			indentLabel = "Tab Size"
+			indentLabel = i18n.Text("status.tabSize")
 		}
 		app.Status.SetSegment(view.StatusSegment{ID: "indent", Side: "right", Priority: 200, Text: fmt.Sprintf("%s: %d", indentLabel, tabSize)})
 
@@ -164,8 +168,8 @@ func RunEventLoop(
 		}
 		// Must run after Render/CursorPosition, else content and cursor read different Term states mid-frame.
 		resizeTerminals(app)
-		if app.Screen != nil && mouseX >= 0 {
-			app.Screen.SetPointerShape(app.pointerShapeAt(mouseX, mouseY))
+		if app.Screen != nil && mouseX >= 0 && app.Screen.PointerShapesEnabled() {
+			app.Screen.SetPointerShape(app.Root.PointerShapeAt(mouseX, mouseY))
 		}
 	}
 
@@ -212,13 +216,7 @@ func RunEventLoop(
 		}
 		slog.Debug("mouse", "x", mx, "y", my, "btn", btn)
 		app.EditorGroup.SignatureHelp = nil
-		if app.EditorGroup.Hover == nil {
-			if btn == 0 {
-				app.checkMouseHover(mx, my)
-			}
-		} else if !app.isMouseOverHover(mx, my) && !app.EditorGroup.Hover.IsDragging() {
-			app.DismissHover()
-		}
+		app.TrackMouseHover(tev)
 		app.Root.HandleEvent(tev)
 		app.FlushEditorOnChange()
 		syncStatus()
@@ -238,6 +236,12 @@ func RunEventLoop(
 					pev := screen.PollEvent()
 					if pev == nil || !*running {
 						break
+					}
+					if interrupt, ok := pev.(*tcell.EventInterrupt); ok {
+						if _, shutdown := interrupt.Data().(eventLoopShutdown); shutdown {
+							*running = false
+							return
+						}
 					}
 					if pe, ok := pev.(*tcell.EventPaste); ok && !pe.Start() {
 						break
@@ -262,6 +266,9 @@ func RunEventLoop(
 		case *tcell.EventMouse:
 			handleMouse(tev)
 			redraw()
+		case *tcell.EventFocus:
+			app.Root.HandleEvent(tev)
+			redraw()
 
 		case *tcell.EventResize:
 			w, h := screen.Size()
@@ -277,13 +284,16 @@ func RunEventLoop(
 			var execErr error
 			skipRedraw := false
 			switch v := tev.Data().(type) {
+			case eventLoopShutdown:
+				*running = false
+				return
 			case *taskDelivery:
 				v.run()
 			case *highlightStep:
 				// Short steps keep input responsive while a large file catches up;
 				// the frame is redrawn once the deferred lines are ready.
 				if highlight.Step(highlightStepBudget) {
-					screen.PostEvent(tcell.NewEventInterrupt(v))
+					_ = screen.PostEvent(tcell.NewEventInterrupt(v))
 					skipRedraw = true
 				}
 			case string:
@@ -291,9 +301,17 @@ func RunEventLoop(
 					closeTerminal(v)
 				}
 			case *ui.TabDragAutoScrollTick:
-				app.EditorGroup.TabBar.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.TabBar
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *ui.EditorDragAutoScrollTick:
-				app.EditorGroup.Editor.HandleDragAutoScrollTick(v.Generation)
+				target := v.Target
+				if target == nil {
+					target = app.EditorGroup.Editor
+				}
+				target.HandleDragAutoScrollTick(v.Generation)
 			case *execInputRequest:
 				if v.Lifecycle.claim() {
 					switch event := v.Event.(type) {
@@ -302,7 +320,7 @@ func RunEventLoop(
 					case *tcell.EventMouse:
 						handleMouse(event)
 					default:
-						execErr = failedExec("unsupported input event %T", v.Event)
+						execErr = failedExec(i18n.Text("status.unsupportedInputEventT"), v.Event)
 					}
 					execRequest = v.Lifecycle
 				}
@@ -333,8 +351,12 @@ func RunEventLoop(
 				if len(v.Locations) > 0 {
 					loc := v.Locations[0]
 					path := URIToPath(loc.URI)
-					app.EditorGroup.OpenFile(path)
-					app.EditorGroup.GoToLine(loc.Range.Start.Line + 1)
+					if err := app.EditorGroup.OpenFile(path); err != nil {
+						app.StatusWarn(err.Error())
+						break
+					}
+					pos := lsp.PositionToRunes(app.lspLines(path), loc.Range.Start)
+					app.EditorGroup.GoToLineCol(pos.Line+1, pos.Character+1)
 					app.Root.SetFocus(app.EditorGroup)
 					syncStatus()
 				}
@@ -342,16 +364,40 @@ func RunEventLoop(
 				app.ApplyWorkspaceEdit(v.Edit)
 			case *CodeActionResult:
 				app.applyCodeActionEdit(v.Path, v.Edit)
+			case *CodeActionsResult:
+				app.HandleCodeActionsResult(v)
+			case *CodeActionCommandResult:
+				if v.Err != nil {
+					app.StatusWarn(v.Err.Error())
+				} else if v.Notify {
+					app.StatusNotify(i18n.Text("status.codeActionCompleted"))
+				}
+			case *LSPApplyEditRequest:
+				if !v.Lifecycle.claim() {
+					break
+				}
+				batches, ok := app.workspaceTextEdits(&v.Edit)
+				applied := false
+				if ok && len(batches) > 0 {
+					_, applied = app.applyWorkspaceEditBatches(batches, false)
+				}
+				result := lsp.ApplyWorkspaceEditResult{Applied: applied}
+				if !applied {
+					result.FailureReason = i18n.Text("status.workspaceEditNotApplied")
+				}
+				v.Result <- result
 			case *ReferencesResult:
 				if len(v.Locations) > 0 {
 					app.ShowReferences(v.Locations)
 				} else {
-					app.StatusNotify("No references found")
+					app.StatusNotify(i18n.Text("status.noReferencesFound"))
 				}
 			case *FormattingResult:
 				app.applyFormattingResult(v)
 			case *DiagnosticsResult:
-				app.EditorGroup.SetDiagnosticsSource(lspDiagnosticsSource(v.Server), v.Path, v.Diagnostics)
+				app.applyLSPDiagnostics(v)
+			case *LSPRootStopped:
+				app.handleLSPRootStopped(v)
 			case *LSPDiagnosticRefresh:
 				app.handleDiagnosticRefresh(v.Server)
 			case *LSPServerStopped:
@@ -397,18 +443,7 @@ func RunEventLoop(
 			case *ui.SearchBatch:
 				app.Search.ApplyBatch(v)
 			case *DiffContentResult:
-				if v.Err != nil {
-					app.StatusError("Failed to fetch file content: " + v.Err.Error())
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.FailLoading()
-					}
-				} else {
-					if dv := app.EditorGroup.DiffWidgetByTab(v.TabName); dv != nil {
-						dv.SetOldLines(v.OldLines)
-						dv.SetNewLines(v.NewLines)
-						dv.FinishLoading()
-					}
-				}
+				app.applyDiffContent(v)
 			case *plugin.PluginAsyncResult:
 				if v.Callback != nil {
 					v.Callback()
@@ -418,10 +453,10 @@ func RunEventLoop(
 			case *PluginUpdateResult:
 				app.HandlePluginUpdateResult(v)
 			case *RemoteRegistryResult:
-				app.handleRemoteRegistryResult(v)
+				app.HandleRemoteRegistryResult(v)
 			case *PrFetchResult:
 				if v.Err != nil {
-					app.StatusError("PR fetch failed: " + v.Err.Error())
+					app.StatusError(i18n.Format("status.prFetchFailed", i18n.Args{"error": v.Err.Error()}))
 				} else {
 					var files []git.FileStatus
 					for _, f := range v.Info.Files {
@@ -430,7 +465,7 @@ func RunEventLoop(
 							Path:   f.Path,
 						})
 					}
-					groupName := fmt.Sprintf("PR #%d: %s", v.Info.Number, v.Info.Title)
+					groupName := i18n.Format("status.pr", i18n.Args{"number": v.Info.Number, "infoTitle": v.Info.Title})
 					app.Changes.AddPRGroup(groupName, v.URL, v.Info.Owner, v.Info.Repo, v.Info.BaseSHA, v.Info.HeadSHA, v.Info.Body, files, v.Diffs)
 					app.Sidebar.SetActivePanel("changes")
 					if !app.Sidebar.Visible {
@@ -438,7 +473,7 @@ func RunEventLoop(
 					}
 					app.Root.SetFocus(app.Changes.Adapter)
 					app.Sidebar.SetPanelDirty("changes", app.Changes.TotalChanges() > 0)
-					app.StatusNotify(fmt.Sprintf("Opened PR #%d: %s (%d files)", v.Info.Number, v.Info.Title, len(v.Info.Files)))
+					app.StatusNotify(i18n.Format("status.openedPRFiles", i18n.Args{"number": v.Info.Number, "infoTitle": v.Info.Title, "infoFilesCount": len(v.Info.Files)}))
 				}
 			}
 			if !skipRedraw {
@@ -448,20 +483,5 @@ func RunEventLoop(
 				execRequest.complete(execErr)
 			}
 		}
-	}
-}
-
-func resizeTerminals(app *App) {
-	if !app.ContentSplit.ShowBottom {
-		return
-	}
-	r := app.BottomPanel.GetRect()
-	cols := r.W - terminalStripWidth
-	rows := r.H - 2
-	if cols <= 0 || rows <= 0 {
-		return
-	}
-	for _, tt := range app.Terminals {
-		tt.Term.Resize(cols, rows)
 	}
 }

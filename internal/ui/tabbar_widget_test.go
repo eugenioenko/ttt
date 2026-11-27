@@ -3,6 +3,7 @@ package ui
 import (
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/fileicons"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
 )
@@ -117,7 +119,7 @@ func TestTabBarOverflowArrows(t *testing.T) {
 		t.Fatal("should have right overflow with narrow width")
 	}
 	// Right arrow is at innerRight+1 = (30-3)+1 = 28
-	if grid[1][28].Ch != '▸' {
+	if grid[1][28].Ch != icons.PlainChevronRight {
 		t.Fatalf("expected right arrow at row 1 col 28, got '%c'", grid[1][28].Ch)
 	}
 }
@@ -140,8 +142,8 @@ func TestTabBarOverflowScrollLeft(t *testing.T) {
 	if !tb.hasOverflowLeft {
 		t.Fatal("should have left overflow when active tab is scrolled right")
 	}
-	// Left arrow " ◂ " — chevron is at col 1
-	if grid[1][1].Ch != '◂' {
+	// Left arrow is at col 1
+	if grid[1][1].Ch != icons.PlainChevronLeft {
 		t.Fatalf("expected left arrow at row 1 col 1, got '%c'", grid[1][1].Ch)
 	}
 }
@@ -559,7 +561,7 @@ func TestTabBarChevronNotDrawnOverTab(t *testing.T) {
 	if (tb.hasOverflowLeft || tb.hasOverflowRight) && tb.renderArrowW == 0 {
 		t.Fatal("chevron shown without a reserved gutter — tabs will overlap it")
 	}
-	if tb.hasOverflowLeft && grid[1][1].Ch != '◂' {
+	if tb.hasOverflowLeft && grid[1][1].Ch != icons.PlainChevronLeft {
 		t.Fatalf("left chevron cell overwritten by a tab, got '%c'", grid[1][1].Ch)
 	}
 }
@@ -599,7 +601,7 @@ func TestTabBarNoOverScrollAfterClose(t *testing.T) {
 	}
 }
 
-// TestTabBarGutterClickDoesNotSpawnTab: at the first tab the ◂ is hidden but its
+// TestTabBarGutterClickDoesNotSpawnTab: at the first tab the left chevron is hidden but its
 // gutter is still reserved. Double-clicking that empty gutter must be a no-op —
 // it must NOT fall through to the empty-space double-click handler and spawn a
 // tab (which looked like "jumping to the other side").
@@ -622,11 +624,11 @@ func TestTabBarGutterClickDoesNotSpawnTab(t *testing.T) {
 	tb.SetRect(r)
 	tb.Render(NewRenderSurface(makeGrid(40, 3), r))
 	if tb.hasOverflowLeft || tb.renderArrowW == 0 {
-		t.Fatalf("test setup: want hidden ◂ with reserved gutter, got ovL=%v arrowW=%d",
+		t.Fatalf("test setup: want a hidden left chevron with reserved gutter, got ovL=%v arrowW=%d",
 			tb.hasOverflowLeft, tb.renderArrowW)
 	}
 
-	// Two clicks on the empty left gutter (where ◂ would be), fast enough to be a
+	// Two clicks on the empty left gutter (where the left chevron would be), fast enough to be a
 	// double-click.
 	for i := 0; i < 2; i++ {
 		tb.HandleEvent(tcell.NewEventMouse(r.X+1, 1, tcell.Button1, 0))
@@ -637,7 +639,7 @@ func TestTabBarGutterClickDoesNotSpawnTab(t *testing.T) {
 		t.Fatalf("gutter double-click spawned a tab (OnDoubleClick fired %d times)", doubleClicks)
 	}
 	if prevTabs != 0 {
-		t.Fatalf("gutter click on a hidden ◂ scrolled (OnPrevTab fired %d times)", prevTabs)
+		t.Fatalf("gutter click on a hidden left chevron scrolled (OnPrevTab fired %d times)", prevTabs)
 	}
 }
 
@@ -810,5 +812,58 @@ func TestTabBarDirtyMarkerPreservesFileIconAndPinnedStyling(t *testing.T) {
 		if grid[1][x].Style != term.StyleActiveTab {
 			t.Fatalf("tab label col %d (%q) style = %v, want StyleActiveTab", x, grid[1][x].Ch, grid[1][x].Style)
 		}
+	}
+}
+
+func TestTabBarCutsLongNamesAndReportsFullName(t *testing.T) {
+	long := `PR #1452: "feat(terminal): close a single terminal from the tab context menu"`
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{
+		{Name: "main.go", Active: true, Closable: true},
+		{Name: long},
+	})
+	tb.SetRect(Rect{X: 2, Y: 5, W: 120, H: 3})
+	grid := makeGrid(120, 3)
+	tb.Render(NewRenderSurface(grid, Rect{W: 120, H: 3}))
+
+	row := strings.TrimRight(gridRow(grid, 1, 120), " ")
+	cut := `PR #1452: "feat(terminal): clos…`
+	if !strings.HasSuffix(row, cut) {
+		t.Fatalf("tab row = %q, want it to end with %q", row, cut)
+	}
+	if strings.Contains(row, "close a single") {
+		t.Fatalf("long name was not cut: %q", row)
+	}
+
+	start := 2 + textwidth.String(row[:strings.Index(row, "PR #")])
+	index, name, ax, ay, ok := tb.CutTabAt(start+3, 6)
+	if !ok || index != 1 || name != long {
+		t.Fatalf("CutTabAt = (%d, %q, %v), want (1, %q, true)", index, name, ok, long)
+	}
+	if ay != 6 || ax >= start {
+		t.Fatalf("anchor = (%d, %d), want x before %d on row 6", ax, ay, start)
+	}
+	if i, _, _, _, _ := tb.CutTabAt(ax, ay); i != 1 {
+		t.Fatalf("anchor x %d is not on the cut tab", ax)
+	}
+	if i, _, _, _, _ := tb.CutTabAt(ax-1, ay); i == 1 {
+		t.Fatalf("anchor x %d is not the cut tab's first column", ax)
+	}
+	if _, _, _, _, ok := tb.CutTabAt(4, 6); ok {
+		t.Fatal("uncut tab must not report a hover")
+	}
+	if _, _, _, _, ok := tb.CutTabAt(2+start+3, 9); ok {
+		t.Fatal("pointer below the tab bar must not report a hover")
+	}
+}
+
+func TestTabBarCutsLongNamesBetweenGraphemes(t *testing.T) {
+	family := "👨‍👩‍👧"
+	tb := NewTabBarWidget()
+	tb.SetTabs([]Tab{{Name: strings.Repeat(family, 20) + ".txt", Active: true}})
+	label := tb.tabLabelParts(tb.Tabs[0]).text
+	want := strings.Repeat(family, 15) + "…"
+	if !strings.Contains(label, want) || strings.Contains(label, want[:len(want)-len("…")]+family) {
+		t.Fatalf("tab label = %q, want the name cut to %q", label, want)
 	}
 }

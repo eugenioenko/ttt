@@ -12,8 +12,8 @@ func TestTrimTrailingWhitespaceWholeBuffer(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "trim.txt")
-	os.WriteFile(f, []byte("a  \n\tb\t\nc \t \n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("a  \n\tb\t\nc \t \n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.trimTrailingWhitespace")
@@ -29,8 +29,8 @@ func TestTrimTrailingWhitespaceSelection(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "trimsel.txt")
-	os.WriteFile(f, []byte("one  \ntwo\t\nthree  \n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("one  \ntwo\t\nthree  \n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	ed := h.app.EditorGroup.Editor
@@ -53,8 +53,8 @@ func TestTrimTrailingWhitespaceSingleUndo(t *testing.T) {
 
 	f := filepath.Join(h.dir, "trimundo.txt")
 	content := "a  \n\tb\t\nc \t \n"
-	os.WriteFile(f, []byte(content), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(content), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	original := slices.Clone(h.app.EditorGroup.Editor.Buf.Lines)
@@ -71,8 +71,8 @@ func TestTrimTrailingWhitespaceKeepsCursorOnTrimmedLine(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "trimcursor.txt")
-	os.WriteFile(f, []byte("c    \n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("c    \n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.app.EditorGroup.Editor.Cursor.Col = 5
@@ -89,8 +89,8 @@ func TestTrimTrailingWhitespaceNoOp(t *testing.T) {
 	defer h.stop()
 
 	f := filepath.Join(h.dir, "trimclean.txt")
-	os.WriteFile(f, []byte("clean\n\tindented\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("clean\n\tindented\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 
 	h.exec("editor.trimTrailingWhitespace")

@@ -46,7 +46,7 @@ func TestPluginDecorationsTintHighlightAndHide(t *testing.T) {
 	if err := p.State.CallByParam(lua.P{Fn: p.State.GetGlobal("decorate"), Protect: true}, lua.LString(file)); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(file)
+	h.openFile(file)
 	h.redraw()
 
 	h.assertContains(" Read me first.")

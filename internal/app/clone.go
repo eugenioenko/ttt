@@ -10,6 +10,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/git"
 	"github.com/eugenioenko/ttt/internal/github"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/workspace"
 )
 
@@ -31,25 +32,25 @@ func cloneSource(input string, haveGH bool) (repo, name string, viaGH bool) {
 }
 
 func (a *App) CloneRepository() {
-	a.ShowInputDialogEx("Clone Repository", "URL or owner/repo", "", "Next", func(input string) {
+	a.ShowInputDialogEx(i18n.Text("clone.cloneRepository"), i18n.Text("clone.uRLOrOwnerRepo"), "", i18n.Text("general.next"), func(input string) {
 		if strings.TrimSpace(input) == "" {
 			return
 		}
 		_, ghErr := exec.LookPath("gh")
 		repo, name, viaGH := cloneSource(input, ghErr == nil)
 		if name == "" {
-			a.StatusError("Cannot tell the folder name from " + input)
+			a.StatusError(i18n.Format("status.cannotTellTheFolderNameFrom", i18n.Args{"input": input}))
 			return
 		}
-		a.ShowFolderPicker("Clone Into", "Clone", "", func(parent string) {
+		a.ShowFolderPicker(i18n.Text("clone.cloneInto"), i18n.Text("clone.clone"), "", func(parent string) {
 			parent, err := filepath.Abs(workspace.ExpandPath(parent))
 			if err != nil {
-				a.StatusError("Error: " + err.Error())
+				a.StatusError(i18n.Format("status.error", i18n.Args{"error": err.Error()}))
 				return
 			}
 			dest := filepath.Join(parent, name)
 			if _, err := os.Stat(dest); !errors.Is(err, os.ErrNotExist) {
-				a.StatusError("Already exists: " + dest)
+				a.StatusError(i18n.Format("status.pathAlreadyExists", i18n.Args{"dest": dest}))
 				return
 			}
 			clone := func(string) error { return git.Clone(repo, dest) }
@@ -57,8 +58,8 @@ func (a *App) CloneRepository() {
 				clone = func(string) error { return github.CloneRepo(repo, dest) }
 			}
 			a.RunRepoTask(RepoTask{
-				Progress: "Cloning " + name,
-				Done:     "Cloned " + name,
+				Progress: i18n.Format("clone.cloning", i18n.Args{"name": name}),
+				Done:     i18n.Format("clone.cloned", i18n.Args{"name": name}),
 				Dirs:     []string{parent},
 				Ops:      []RepoOp{{Name: "clone", Run: clone}},
 				OnDone:   func() { a.openFolderPath(dest) },

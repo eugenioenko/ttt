@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/eugenioenko/ttt/internal/core/clipboard"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
 	"github.com/gdamore/tcell/v3"
@@ -25,6 +26,8 @@ type OutputLine struct {
 }
 
 type OutputWidget struct {
+	ControlModifiers *tcell.ModMask
+
 	Lines      []OutputLine
 	nodes      []*widgets.TreeNode
 	seq        int
@@ -35,7 +38,7 @@ type OutputWidget struct {
 func NewOutputWidget() *OutputWidget {
 	o := &OutputWidget{autoScroll: true}
 	o.tree = widgets.NewListWidgetFromConfig(widgets.ListConfig{
-		EmptyText: "No output",
+		EmptyText: i18n.Text("output.noOutput"),
 		RenderItem: func(surface widgets.Surface, node *widgets.TreeNode, idx, y, w int, selected bool) {
 			o.renderItem(surface, idx, y, w, selected)
 		},
@@ -54,7 +57,7 @@ func (o *OutputWidget) SetBoxModel(bm widgets.BoxModel) { o.tree.SetBoxModel(bm)
 func (o *OutputWidget) Render(surface Surface)          { o.tree.Render(surface) }
 
 func (o *OutputWidget) HandleEvent(ev tcell.Event) EventResult {
-	if kev, ok := ev.(*tcell.EventKey); ok && kev.Key() == tcell.KeyCtrlC {
+	if kev, ok := ev.(*tcell.EventKey); ok && term.ControlKeyMatches(kev, tcell.KeyCtrlC, o.ControlModifiers) {
 		if o.CopySelected() {
 			return EventConsumed
 		}

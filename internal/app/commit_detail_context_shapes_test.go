@@ -41,7 +41,7 @@ func TestReadCommitDetailContextUsesTypedPathsAcrossCommitShapes(t *testing.T) {
 		{file: ui.CommitDetailFile{Status: "A", Path: "link.txt"}, newLines: []string{"normal.txt"}},
 	}
 	for _, test := range rootCases {
-		result := readCommitDetailContext(context.Background(), 1, "tab", dir, root, 0, test.file)
+		result := readCommitDetailContext(context.Background(), 1, "tab", testRevisionSource(dir), root, 0, test.file)
 		if result.Err != "" || result.Canceled || result.ContentKind != test.kind {
 			t.Fatalf("root context for %q = %+v", test.file.Path, result)
 		}
@@ -71,7 +71,7 @@ func TestReadCommitDetailContextUsesTypedPathsAcrossCommitShapes(t *testing.T) {
 		{file: ui.CommitDetailFile{Status: "D", Path: "empty.txt"}, kind: ui.CommitDetailContentEmpty},
 	}
 	for _, test := range shapeCases {
-		result := readCommitDetailContext(context.Background(), 2, "tab", dir, ref, 0, test.file)
+		result := readCommitDetailContext(context.Background(), 2, "tab", testRevisionSource(dir), ref, 0, test.file)
 		if result.Err != "" || result.Canceled || result.ContentKind != test.kind {
 			t.Fatalf("context for %q = %+v", test.file.Path, result)
 		}

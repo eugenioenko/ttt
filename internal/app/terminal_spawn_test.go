@@ -3,14 +3,21 @@
 package app
 
 import (
+	"fmt"
+	"github.com/eugenioenko/ttt/internal/command"
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/terminal"
+	"github.com/eugenioenko/ttt/internal/ui"
+	"github.com/eugenioenko/xterm-go"
 )
 
 func spawnTestApp(t *testing.T) *App {
@@ -73,6 +80,39 @@ func TestSpawnTerminalSpecUsesExplicitCwd(t *testing.T) {
 	waitForTerminalOutput(t, a.Terminals[0].Term, dir)
 }
 
+func TestSpawnTerminalSpecExportsOwnForwardSocket(t *testing.T) {
+	for _, state := range []string{"listening", "stopped", "disabled"} {
+		t.Run(state, func(t *testing.T) {
+			setupForwardTest(t)
+			t.Setenv(forwardSocketEnv, "/inherited.sock")
+			a := spawnTestApp(t)
+			want := ""
+			if state != "disabled" {
+				stop := StartForward(a)
+				t.Cleanup(stop)
+				if a.forwardSocket == "" {
+					t.Fatal("forwarding listener did not start")
+				}
+				want = a.forwardSocket
+				if state == "stopped" {
+					stop()
+					want = ""
+				}
+			}
+			id, err := a.SpawnTerminalSpec(TerminalSpec{
+				Shell: "/bin/sh",
+				Args:  []string{"-c", `printf 'SOCKET=<%s> EXTRA=<%s>\n' "$TTT_FORWARD_SOCKET" "$TTT_TEST_EXTRA"; exec cat`},
+				Env:   []string{forwardSocketEnv + "=/overridden.sock", "TTT_TEST_EXTRA=preserved"},
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer a.CloseTerminal(id)
+			waitForTerminalOutput(t, a.Terminals[0].Term, "SOCKET=<"+want+"> EXTRA=<preserved>")
+		})
+	}
+}
+
 func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
 	a := spawnTestApp(t)
 	a.Renderer = &render.Renderer{}
@@ -105,5 +145,397 @@ func TestTerminalCtrlVPastesAppliesToExistingAndNewTabs(t *testing.T) {
 	defer a.CloseTerminal(id)
 	if !a.Terminals[2].Widget.CtrlVPastes {
 		t.Fatal("new terminal ignored ctrlVPastes=true")
+	}
+}
+
+func TestTerminalSuperShortcutsApplyToExistingAndNewTabs(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	s := *a.Settings
+	s.Keyboard.ModifierKey = config.ModifierControlSuper
+	a.ApplySettings(s)
+	spawn := func(inEditor bool) {
+		t.Helper()
+		id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat", InEditor: inEditor})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { a.CloseTerminal(id) })
+		if !a.terminalByID(id).Widget.SuperShortcuts {
+			t.Fatal("new terminal ignored the shortcut modifier")
+		}
+	}
+	spawn(false)
+	spawn(true)
+	for _, mode := range []string{config.ModifierControl, config.ModifierControlSuper, config.ModifierSuper} {
+		s.Keyboard.ModifierKey = mode
+		a.ApplySettings(s)
+		for _, tab := range a.allTerminals() {
+			if got, want := tab.Widget.SuperShortcuts, mode != config.ModifierControl; got != want {
+				t.Errorf("mode=%s terminal=%s: SuperShortcuts=%t, want %t", mode, tab.ID, got, want)
+			}
+		}
+	}
+	spawn(false)
+	spawn(true)
+}
+
+func TestTerminalPaddingAppliesToSpawnResizeAndSettings(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		t.Run(name, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(120, 40)
+			a.ContentSplit.Position = position
+			a.Root.Render(a.Renderer.NextFrame(120, 40))
+			for i := 0; i < 2; i++ {
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			check := func(width, height, padding int) {
+				t.Helper()
+				a.Root.SetSize(width, height)
+				a.Root.Render(a.Renderer.NextFrame(width, height))
+				resizeTerminals(a)
+				r := a.TerminalPanel.ActiveWidget().GetRect()
+				panel := a.TerminalPanel.GetRect()
+				if left, right := r.X-panel.X-ui.VerticalTabBarWidth, panel.X+panel.W-r.X-r.W; left != padding || right != padding {
+					t.Fatalf("margins = (%d,%d), want (%d,%d)", left, right, padding, padding)
+				}
+				for _, tab := range a.Terminals {
+					if cols, rows := tab.Term.Size(); cols != r.W || rows != r.H {
+						t.Fatalf("terminal %s size = %dx%d, content = %+v", tab.ID, cols, rows, r)
+					}
+				}
+			}
+			check(120, 40, 1)
+			for _, padding := range []int{0, 2, 1} {
+				s := *a.Settings
+				s.Terminal.PaddingX = padding
+				a.ApplySettings(s)
+				check(100, 35, padding)
+				wantCols := a.TerminalPanel.ActiveWidget().GetRect().W
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+				if cols, _ := a.Terminals[len(a.Terminals)-1].Term.Size(); cols != wantCols {
+					t.Fatalf("spawn width = %d, want %d", cols, wantCols)
+				}
+				check(100, 35, padding)
+				a.TerminalPanel.SetActive(0)
+				check(110, 36, padding)
+			}
+			s := *a.Settings
+			s.Terminal.PaddingX = int(^uint(0) >> 1)
+			a.ApplySettings(s)
+			check(110, 36, (a.TerminalPanel.GetRect().W-ui.VerticalTabBarWidth-2)/2)
+		})
+	}
+}
+
+func TestTerminalSpawnUsesConstrainedLayoutBeforeFirstRender(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		for _, requested := range []int{0, 15, 1000} {
+			t.Run(fmt.Sprintf("%s/%d", name, requested), func(t *testing.T) {
+				a := spawnTestApp(t)
+				a.ContentSplit.SetRect(ui.Rect{X: 2, Y: 3, W: 80, H: 30})
+				a.ContentSplit.Position = position
+				a.ContentSplit.BottomH = requested
+				a.ContentSplit.RightW = requested
+				a.ContentSplit.BottomRatio = 0.5
+				a.BottomPanel.SetRect(ui.Rect{W: 200, H: 100})
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				defer a.CloseTerminal(id)
+				cols, rows := a.Terminals[0].Term.Size()
+				cells := make([][]term.Cell, 35)
+				for y := range cells {
+					cells[y] = make([]term.Cell, 85)
+				}
+				a.ContentSplit.Render(ui.NewRenderSurface(cells, a.ContentSplit.GetRect()))
+				r := a.Terminals[0].Widget.GetRect()
+				if cols != r.W || rows != r.H {
+					t.Fatalf("spawn size = %dx%d, first rendered content = %+v", cols, rows, r)
+				}
+				resizeTerminals(a)
+				if resizedCols, resizedRows := a.Terminals[0].Term.Size(); resizedCols != cols || resizedRows != rows {
+					t.Fatalf("first resize changed spawn size from %dx%d to %dx%d", cols, rows, resizedCols, resizedRows)
+				}
+			})
+		}
+	}
+}
+
+func TestTerminalScrollbarSizingTracksEachTab(t *testing.T) {
+	for name, position := range map[string]ui.SplitPosition{"bottom": ui.SplitBottom, "right": ui.SplitRight} {
+		t.Run(name, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(120, 40)
+			a.ContentSplit.Position = position
+			a.Root.Render(a.Renderer.NextFrame(120, 40))
+			for i := 0; i < 2; i++ {
+				id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			wide, rows := a.Terminals[1].Term.Size()
+			first := a.Terminals[0].Term
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString(strings.Repeat("line\r\n", rows*2)) })
+			a.Terminals[1].Term.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049h") })
+			check := func(firstCols int) {
+				t.Helper()
+				resizeTerminals(a)
+				for i, want := range []int{firstCols, wide} {
+					if cols, _ := a.Terminals[i].Term.Size(); cols != want {
+						t.Fatalf("tab %d width = %d, want %d", i, cols, want)
+					}
+				}
+			}
+			check(wide - 1)
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049h") })
+			check(wide)
+			first.Snapshot(func(xt *xterm.Terminal) { xt.WriteString("\x1b[?1049l") })
+			check(wide - 1)
+			a.TerminalPanel.SetActive(0)
+			id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { a.CloseTerminal(id) })
+			if cols, _ := a.Terminals[2].Term.Size(); cols != wide {
+				t.Fatalf("new tab width = %d, want %d without a scrollbar", cols, wide)
+			}
+		})
+	}
+}
+
+func TestInactiveTerminalOutputRearmsUpdatesAndScrollbarSizing(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	a.Root.SetSize(120, 40)
+	a.ContentSplit.ShowBottom = true
+	updates := make(chan string)
+	updateHandled := make(chan struct{})
+	stopUpdates := make(chan struct{})
+	for i := 0; i < 2; i++ {
+		dev, err := terminal.New("/bin/cat", 80, 24, 1000, nil, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(dev.Close)
+		if i == 0 {
+			dev.OnUpdate = func() {
+				select {
+				case updates <- string(dev.RawTail()):
+				case <-stopUpdates:
+					return
+				}
+				// Keep the reader paused until the frame has rearmed this notification.
+				select {
+				case <-updateHandled:
+				case <-stopUpdates:
+				}
+			}
+		}
+		widget := ui.NewTerminalWidget(dev, a.Palette)
+		a.Terminals = append(a.Terminals, TerminalTab{Term: dev, Widget: widget})
+		a.TerminalPanel.AddTerminal(widget)
+		dev.Run()
+	}
+	t.Cleanup(func() { close(stopUpdates) })
+	redraw := func() {
+		a.Root.Render(a.Renderer.NextFrame(120, 40))
+		resizeTerminals(a)
+	}
+	redraw()
+	dev := a.Terminals[0].Term
+	wide, rows := dev.Size()
+	waitForUpdate := func(text string, scrollback bool) {
+		t.Helper()
+		timeout := time.NewTimer(3 * time.Second)
+		defer timeout.Stop()
+		for {
+			select {
+			case raw := <-updates:
+				redraw()
+				updateHandled <- struct{}{}
+				if strings.Contains(raw, text) && (!scrollback || dev.ScrollbackLen() > 0) {
+					redraw()
+					return
+				}
+			case <-timeout.C:
+				t.Fatalf("inactive terminal did not deliver %q", text)
+			}
+		}
+	}
+	dev.WriteString("first-wave\n")
+	waitForUpdate("first-wave", false)
+	dev.WriteString(strings.Repeat("second-wave\n", rows*2))
+	waitForUpdate("second-wave", true)
+	if cols, _ := dev.Size(); cols != wide-1 {
+		t.Fatalf("inactive terminal width = %d, want %d with scrollbar", cols, wide-1)
+	}
+}
+
+func TestAppRerunsAfterExitAndRetainsPreviousOutput(t *testing.T) {
+	for _, location := range []string{"editor", "panel"} {
+		t.Run(location, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Reg = command.NewRegistry()
+			s := *a.Settings
+			s.Applications = []config.Application{{Name: "tests", Command: "/bin/sh", Args: []string{"-c", "printf 'retained-output\\n'; read line"}, Location: location, KeepOpen: true}}
+			a.ApplySettings(s)
+			key := appLaunchKey{name: "tests"}
+			a.LaunchApp("tests")
+			firstID := a.appTerminals[key]
+			first := a.terminalByID(firstID)
+			if first == nil {
+				t.Fatal("first launch did not create a terminal")
+			}
+			t.Cleanup(func() { a.CloseTerminal(firstID) })
+			waitForTerminalOutput(t, first.Term, "retained-output")
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != firstID {
+				t.Fatal("running app was not reused")
+			}
+			first.Term.WriteString("finish\n")
+			deadline := time.Now().Add(3 * time.Second)
+			for !first.Term.Exited() && time.Now().Before(deadline) {
+				time.Sleep(10 * time.Millisecond)
+			}
+			if !first.Term.Exited() {
+				t.Fatal("first run did not exit")
+			}
+			a.LaunchApp("tests")
+			secondID := a.appTerminals[key]
+			if secondID == firstID || a.terminalByID(secondID) == nil {
+				t.Fatal("launching a finished app did not start a new run")
+			}
+			t.Cleanup(func() { a.CloseTerminal(secondID) })
+			if a.terminalByID(firstID) == nil || !strings.Contains(first.Term.ScreenText(), "retained-output") {
+				t.Fatal("rerunning discarded the first output tab")
+			}
+			a.CloseTerminal(firstID)
+			a.LaunchApp("tests")
+			if a.appTerminals[key] != secondID {
+				t.Fatal("closing the old output tab forgot the current run")
+			}
+		})
+	}
+}
+
+func TestAppPaddingIsPerTerminalAndSurvivesGlobalChanges(t *testing.T) {
+	for _, placement := range []string{"editor", "bottom", "right"} {
+		t.Run(placement, func(t *testing.T) {
+			a := spawnTestApp(t)
+			a.Reg = command.NewRegistry()
+			a.Renderer = &render.Renderer{}
+			a.Root.SetSize(140, 40)
+			if placement == "right" {
+				a.ContentSplit.Position = ui.SplitRight
+			}
+			a.Root.Render(a.Renderer.NextFrame(140, 40))
+			zero, two := 0, 2
+			location := "editor"
+			if placement != "editor" {
+				location = "panel"
+			}
+			s := *a.Settings
+			s.Terminal.PaddingX = 3
+			s.Applications = []config.Application{
+				{Name: "zero", Command: "/bin/cat", Location: location, PaddingX: &zero},
+				{Name: "two", Command: "/bin/cat", Location: location, PaddingX: &two},
+				{Name: "default", Command: "/bin/cat", Location: location},
+			}
+			a.ApplySettings(s)
+			var ids []string
+			for _, name := range []string{"zero", "two", "default"} {
+				a.LaunchApp(name)
+				id := a.appTerminals[appLaunchKey{name: name}]
+				if id == "" {
+					t.Fatalf("%s did not launch", name)
+				}
+				ids = append(ids, id)
+				t.Cleanup(func() { a.CloseTerminal(id) })
+			}
+			regular, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat", InEditor: placement == "editor"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { a.CloseTerminal(regular) })
+			ids = append(ids, regular)
+			check := func(width, height int, want []int) {
+				t.Helper()
+				a.Root.SetSize(width, height)
+				for i, id := range ids {
+					if err := a.FocusTerminal(id); err != nil {
+						t.Fatal(err)
+					}
+					a.Root.Render(a.Renderer.NextFrame(width, height))
+					resizeTerminals(a)
+					tt := a.terminalByID(id)
+					content := tt.Widget.GetRect()
+					area := a.TerminalPanel.GetRect()
+					strip := ui.VerticalTabBarWidth
+					if tt.Tab != nil {
+						area = tt.Tab.GetRect()
+						strip = 0
+					}
+					left, right := content.X-area.X-strip, area.X+area.W-content.X-content.W
+					if left != want[i] || right != want[i] {
+						t.Fatalf("%s padding=(%d,%d),want %d", tt.Label, left, right, want[i])
+					}
+					if cols, rows := tt.Term.Size(); cols != content.W || rows != content.H {
+						t.Fatalf("%s PTY=%dx%d,content=%+v", tt.Label, cols, rows, content)
+					}
+				}
+			}
+			check(140, 40, []int{0, 2, 1, 3})
+			check(120, 35, []int{0, 2, 1, 3})
+			s = *a.Settings
+			s.Terminal.PaddingX = 4
+			s.Applications = slices.Clone(s.Applications)
+			updated := 0
+			s.Applications[1].PaddingX = &updated
+			a.ApplySettings(s)
+			check(140, 40, []int{0, 0, 1, 4})
+		})
+	}
+}
+
+func TestNativeLinksApplyToEditorsAndTerminals(t *testing.T) {
+	a := spawnTestApp(t)
+	a.Renderer = &render.Renderer{}
+	s := *a.Settings
+	for _, native := range []bool{false, true, false} {
+		s.Links.Native = native
+		a.ApplySettings(s)
+		id, err := a.SpawnTerminalSpec(TerminalSpec{Shell: "/bin/cat"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer a.CloseTerminal(id)
+		for _, tab := range a.Terminals {
+			if tab.Widget.NativeLinks != native || tab.Widget.OnOpenURL == nil {
+				t.Fatal("existing or new terminal ignored link settings")
+			}
+		}
+		if a.EditorGroup.NativeLinks != native || a.EditorGroup.Editor.NativeLinks != native {
+			t.Fatal("editor ignored link settings")
+		}
+		other := a.newEditorGroupLike(a.EditorGroup)
+		if other.NativeLinks != native {
+			t.Fatal("split editor ignored link settings")
+		}
 	}
 }

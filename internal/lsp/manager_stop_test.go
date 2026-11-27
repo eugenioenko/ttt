@@ -2,8 +2,10 @@ package lsp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
+	"io"
 	"os"
 	"testing"
 	"time"
@@ -15,33 +17,46 @@ const fakeServerEnv = "TTT_LSP_FAKE_SERVER"
 
 func TestMain(m *testing.M) {
 	if mode := os.Getenv(fakeServerEnv); mode != "" {
-		runFakeServer(mode)
+		if err := runFakeServer(mode); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		os.Exit(0)
 	}
 	os.Exit(m.Run())
 }
 
-func runFakeServer(mode string) {
+func runFakeServer(mode string) error {
 	codec := jsonrpc.NewCodec(os.Stdin, os.Stdout)
-	reply := func(id json.RawMessage, result any) {
-		body, _ := json.Marshal(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
-		fmt.Fprintf(os.Stdout, "Content-Length: %d\r\n\r\n%s", len(body), body)
+	reply := func(id json.RawMessage, result any) error {
+		return codec.Send(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 	}
 	for {
 		msg, err := codec.Receive()
 		if err != nil {
-			return
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
 		}
 		switch msg.Method {
 		case "initialize":
-			reply(msg.ID, map[string]any{"capabilities": map[string]any{}})
+			if mode == "initialize-hang" {
+				fmt.Fprintln(os.Stderr, "initializing")
+				continue
+			}
+			if err := reply(msg.ID, map[string]any{"capabilities": map[string]any{}}); err != nil {
+				return err
+			}
 		case "shutdown":
 			if mode == "hang" {
 				continue
 			}
-			reply(msg.ID, nil)
+			if err := reply(msg.ID, nil); err != nil {
+				return err
+			}
 		case "exit":
-			return
+			return nil
 		}
 	}
 }
@@ -113,6 +128,37 @@ func TestManagerStopKillsHungServer(t *testing.T) {
 	case <-client.conn.Done():
 	default:
 		t.Fatal("hung server's read loop still running after Stop")
+	}
+}
+
+// A startup notification blocked on a server that stopped reading stdin must
+// not hold Stop past start.done: the write is only released by closing the
+// client, which stopStart has to do before waiting.
+func TestStopStartReleasesBlockedStartupWrite(t *testing.T) {
+	_, clientW := io.Pipe() // no reader, so every frame write blocks
+	client := newClient(blockingReader(t), clientW, ClientHooks{})
+	start := &serverStart{done: make(chan struct{}), cancel: func() {}}
+	start.starting.Store(client)
+
+	writeDone := make(chan struct{})
+	go func() {
+		_ = client.notify("solution/open", roslynSolutionParams{Solution: "file:///App.sln"})
+		close(writeDone)
+	}()
+	go func() {
+		<-writeDone
+		close(start.done)
+	}()
+
+	stopped := make(chan struct{})
+	go func() {
+		stopStart("roslyn", start)
+		close(stopped)
+	}()
+	select {
+	case <-stopped:
+	case <-time.After(2 * time.Second):
+		t.Fatal("stopStart waited on a startup write blocked on stdin")
 	}
 }
 

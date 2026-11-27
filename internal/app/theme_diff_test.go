@@ -84,3 +84,23 @@ func TestBuildStyleMapScrollMarksUseGutterColorForForegroundAndBackground(t *tes
 		t.Fatalf("scroll mark style = fg %v bg %v, want both %v", style.GetForeground(), style.GetBackground(), want)
 	}
 }
+
+func TestBuildStyleMapDefaultsIndentGuideToLineNumber(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.Editor.LineNumber.Fg = "#123456"
+	theme.Muted.Fg = "#abcdef"
+	styles := BuildStyleMap(theme)
+	if got := styles[term.StyleIndentGuide].GetForeground(); got != tcell.GetColor("#123456") {
+		t.Fatalf("indent guide foreground = %v, want line-number foreground", got)
+	}
+}
+
+func TestBuildStyleMapIncludesIndentGuideStyle(t *testing.T) {
+	theme := config.DefaultTheme()
+	theme.Editor.LineNumber.Fg = "#123456"
+	theme.Editor.IndentGuide = config.StyleDef{Fg: "#654321"}
+	styles := BuildStyleMap(theme)
+	if got := styles[term.StyleIndentGuide].GetForeground(); got != tcell.GetColor("#654321") {
+		t.Fatalf("indent guide foreground = %v, want theme indentGuide foreground", got)
+	}
+}

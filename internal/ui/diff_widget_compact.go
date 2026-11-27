@@ -1,9 +1,9 @@
 package ui
 
 import (
-	"fmt"
-
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/icons"
 )
 
 // compactDiffLinesWithEdges also collapses the unchanged lines above the first
@@ -193,9 +193,10 @@ func hunkLineDistance(previous, next diff.Hunk, right bool) int {
 }
 
 func collapsedDistanceLabel(distance int) string {
-	unit := "lines"
+	label := i18n.Format("diff.collapsedLines", i18n.Args{"count": distance})
 	if distance == 1 {
-		unit = "line"
+		label = i18n.Format("diff.collapsedLine", i18n.Args{"count": distance})
 	}
-	return fmt.Sprintf(" ⋯ %d %s ⋯", distance, unit)
+	marker := string(icons.Rune(icons.Ellipsis))
+	return " " + marker + " " + label + " " + marker
 }

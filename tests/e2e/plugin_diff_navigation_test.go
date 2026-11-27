@@ -17,12 +17,12 @@ func TestPluginEditorAPISeesInlineDiffHunks(t *testing.T) {
 	h := newTestHarness(t, 160, 40)
 	defer h.stop()
 	path := filepath.Join(h.dir, "code.txt")
-	os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("one\ntwo\nthree\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
 	h.app.Repository.RefreshNow(app.RepositoryWorktree)
-	os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("one\nTWO\nthree\n"), 0644))
 
-	h.app.OpenChangeDiff(h.dir, git.FileStatus{Path: "code.txt", Status: "M"}, false, false)
+	h.app.OpenChangeDiff(h.dir, git.ToChange(git.FileStatus{Path: "code.txt", Status: "M"}), false)
 	h.redraw()
 
 	if !h.app.EditorGroup.IsInlineDiffActive() {
@@ -50,9 +50,9 @@ func TestPluginEditorAPIReturnsNilOnAPlainFile(t *testing.T) {
 	h := newTestHarness(t, 160, 40)
 	defer h.stop()
 	path := filepath.Join(h.dir, "code.txt")
-	os.WriteFile(path, []byte("one\ntwo\n"), 0644)
+	requireNoError(t, os.WriteFile(path, []byte("one\ntwo\n"), 0644))
 	initializeHarnessRepository(t, h.dir)
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	if hunks := app.NewPluginEditorAPI(h.app).DiffHunks(); hunks != nil {

@@ -3,6 +3,7 @@ package app
 import (
 	"errors"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"os"
 	"path/filepath"
 	"slices"
@@ -89,20 +90,27 @@ func resolveLineColArg(arg string) (FileTarget, bool) {
 	return FileTarget{Path: abs, Line: line, Col: col}, true
 }
 
-func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
-	var folders []string
-	var wsFile string
-	welcome := false
+type openArgs struct {
+	folders       []string
+	files         []FileTarget
+	workspaceFile string
+	configFile    string
+	prURLs        []string
+	welcome       bool
+}
+
+func parseOpenArgs() openArgs {
+	var parsed openArgs
 
 	args := os.Args[1:]
 	for i := 0; i < len(args); i++ {
 		if args[i] == "--workspace" && i+1 < len(args) {
-			wsFile = args[i+1]
+			parsed.workspaceFile = args[i+1]
 			i++
 			continue
 		}
 		if args[i] == "--config" && i+1 < len(args) {
-			configFile = args[i+1]
+			parsed.configFile = args[i+1]
 			i++
 			continue
 		}
@@ -135,18 +143,18 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 			continue
 		}
 		if args[i] == "--welcome" {
-			welcome = true
+			parsed.welcome = true
 			continue
 		}
 		if isPRURL(args[i]) {
 			if _, _, _, err := github.ParsePRURL(args[i]); err == nil {
-				prURLs = append(prURLs, args[i])
+				parsed.prURLs = append(parsed.prURLs, args[i])
 			}
 			continue
 		}
 		absPath, err := filepath.Abs(workspace.ExpandPath(args[i]))
 		if err != nil {
-			openFiles = append(openFiles, FileTarget{Path: args[i]})
+			parsed.files = append(parsed.files, FileTarget{Path: args[i]})
 			continue
 		}
 		info, err := os.Stat(absPath)
@@ -157,21 +165,27 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 			// A file that genuinely contains a colon still wins, because the
 			// stat above is attempted first.
 			if target, ok := resolveLineColArg(args[i]); ok {
-				openFiles = append(openFiles, target)
+				parsed.files = append(parsed.files, target)
 				continue
 			}
-			openFiles = append(openFiles, FileTarget{Path: absPath})
+			parsed.files = append(parsed.files, FileTarget{Path: absPath})
 			continue
 		}
 		if info.IsDir() {
-			folders = append(folders, absPath)
+			parsed.folders = append(parsed.folders, absPath)
 		} else {
-			openFiles = append(openFiles, FileTarget{Path: absPath})
+			parsed.files = append(parsed.files, FileTarget{Path: absPath})
 		}
 	}
+	return parsed
+}
 
-	if wsFile != "" {
-		loaded, err := workspace.LoadFile(wsFile)
+func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileTarget, configFile string, prURLs []string) {
+	parsed := parseOpenArgs()
+	folders := parsed.folders
+	openFiles, configFile, prURLs = parsed.files, parsed.configFile, parsed.prURLs
+	if parsed.workspaceFile != "" {
+		loaded, err := workspace.LoadFile(parsed.workspaceFile)
 		if err == nil {
 			ws = loaded
 			for _, f := range folders {
@@ -184,7 +198,7 @@ func resolveArgs(welcomeOnHome bool) (ws *workspace.Workspace, openFiles []FileT
 	// Opening only files intentionally creates no workspace — a folder must be passed explicitly.
 	// --welcome, or starting in $HOME with welcome.showOnHome, opens no folder
 	// so the welcome page shows instead.
-	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 && !welcome {
+	if len(folders) == 0 && len(prURLs) == 0 && len(openFiles) == 0 && !parsed.welcome {
 		cwd, _ := os.Getwd()
 		if home, err := os.UserHomeDir(); !welcomeOnHome || err != nil || filepath.Clean(cwd) != filepath.Clean(home) {
 			folders = append(folders, cwd)
@@ -212,69 +226,42 @@ func ResolveBracketColorStyles(colors []string) []term.Style {
 	if len(colors) == 0 {
 		colors = []string{"yellow", "magenta", "blue"}
 	}
-	n := len(colors)
-	if n > len(bracketColorSlots) {
-		n = len(bracketColorSlots)
-	}
+	n := min(len(colors), len(bracketColorSlots))
 	return bracketColorSlots[:n]
 }
 
 func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *workspace.Workspace, openFiles []FileTarget) *App {
+	settingsFile := cfg.SettingsFile
+	if settingsFile != "" {
+		if absolute, err := filepath.Abs(settingsFile); err == nil {
+			settingsFile = absolute
+		}
+	}
+	locale, languageErr := loadDisplayLanguage(cfg.Settings.Language)
+	initText()
 
 	bracketStyles := ResolveBracketColorStyles(cfg.Theme.Editor.BracketColors)
 
 	highlight.SetTimeLimit(time.Duration(cfg.Settings.Editor.HighlightTimeLimit) * time.Millisecond)
-	editorGroup := ui.NewEditorGroupWidget(borders, cfg.Settings.Editor.TabSize, cfg.Settings.Editor.LineNumbers, cfg.Settings.Editor.GutterStyle)
-	editorGroup.SetFileIconMode(cfg.Settings.Appearance.Icons)
-	editorGroup.InsertSpaces = cfg.Settings.Editor.InsertSpaces
-	editorGroup.InsertFinalNewline = cfg.Settings.Editor.InsertFinalNewline
-	editorGroup.ShowTrailingNewline = cfg.Settings.Editor.IsShowTrailingNewlineEnabled()
-	editorGroup.TrimTrailingWhitespace = cfg.Settings.Editor.TrimTrailingWhitespace
-	editorGroup.SyntaxHighlight = cfg.Settings.Editor.IsSyntaxHighlightEnabled()
-	editorGroup.WordWrap = cfg.Settings.Editor.WordWrap
-	editorGroup.WordWrapColumn = cfg.Settings.Editor.WordWrapColumn
-	editorGroup.LanguageOverrides = cfg.Settings.Editor.LanguageOverrides
-	editorGroup.WordWrapMaxBytes = cfg.Settings.Editor.WordWrapMaxBytes()
-	editorGroup.DiffMode = configuredDiffMode(cfg.Settings.Editor.DiffMode)
-	editorGroup.DiffContext = configuredDiffContext(cfg.Settings.Editor.DiffContext)
-	editorGroup.DiffWordWrap = cfg.Settings.Editor.DiffWordWrap
-	editorGroup.SetMarkdownMaxWidth(cfg.Settings.Markdown.WrapWidth)
-	editorGroup.DiffHighContrast = cfg.Settings.Editor.DiffHighContrast
-	editorGroup.DiffCollapsedEmphasis = cfg.Settings.Editor.DiffCollapsedEmphasis
-	editorGroup.DiffSigns = cfg.Settings.Editor.DiffSigns
-	editorGroup.DiffSignsColor = cfg.Settings.Editor.DiffSignsColor
-	editorGroup.DiffGutterHighlight = cfg.Settings.Editor.DiffGutterHighlight
-	editorGroup.DiffColorGutterNumbers = cfg.Settings.Editor.DiffColorGutterNumbers
-	editorGroup.DiffScrollbarGitMarks = cfg.Settings.Editor.DiffScrollbarGitMarks
-	editorGroup.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-	editorGroup.ApplyFileWordWrap()
-	editorGroup.Editor.AutoDedent = cfg.Settings.Editor.IsAutoDedentEnabled()
-	editorGroup.Editor.AutoIndent = cfg.Settings.Editor.IsAutoIndentEnabled()
-	editorGroup.Editor.AutoClosing = cfg.Settings.Editor.AutoClosing
-	editorGroup.Editor.LegacyScrollbarGlyphs = cfg.Settings.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
-	editorGroup.Editor.ScrollbarGitMarks = cfg.Settings.Editor.IsScrollbarGitMarksEnabled()
-	editorGroup.UndoDeleteCursorStart = cfg.Settings.Editor.UndoDeleteCursorStart
-	editorGroup.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
-	editorGroup.Editor.BracketPairColorization = cfg.Settings.Editor.BracketPairColorization
-	editorGroup.SetImageProtocol(cfg.Settings.Image.Protocol)
-	editorGroup.BracketColorStyles = bracketStyles
-	editorGroup.Editor.BracketColorStyles = bracketStyles
+	editorGroup := newEditorGroup(&cfg.Settings, borders, bracketStyles)
 	grammarErrs := loadGrammarSettings(cfg.Settings.Editor.Grammars)
 	_, _ = openFileTargets(editorGroup, openFiles)
 
 	terminalPanel := ui.NewTerminalPanelWidget()
 	terminalPanel.Borders = borders
+	terminalPanel.PaddingX = cfg.Settings.Terminal.PaddingX
 	problems := ui.NewProblemsWidget()
 	references := ui.NewReferencesWidget()
 	output := ui.NewOutputWidget()
 	bottomPanel := ui.NewBottomPanelWidget(borders)
-	bottomPanel.AddPanel("terminal", "Terminal", terminalPanel)
-	bottomPanel.AddPanel("problems", "Diagnostics", problems)
-	bottomPanel.AddPanel("references", "References", references)
-	bottomPanel.AddPanel("output", "Output", output)
+	bottomPanel.AddPanel("terminal", i18n.Text("panel.terminal"), terminalPanel)
+	bottomPanel.AddPanel("problems", i18n.Text("panel.diagnostics"), problems)
+	bottomPanel.AddPanel("references", i18n.Text("panel.references"), references)
+	bottomPanel.AddPanel("output", i18n.Text("panel.output"), output)
 
 	contentSplit := ui.NewContentSplitWidget()
-	contentSplit.Top = editorGroup
+	editorSplit := ui.NewEditorLayoutWidget(editorGroup, borders)
+	contentSplit.Top = editorSplit
 	contentSplit.Bottom = bottomPanel
 	contentSplit.Borders = borders
 	contentSplit.ShowBottom = false
@@ -283,12 +270,12 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	statusBar := ui.NewStatusBarWidget(status)
 
 	menuBar := ui.NewMenuBarWidget([]ui.MenuItem{
-		{Name: "File"},
-		{Name: "Edit"},
-		{Name: "Selection"},
-		{Name: "View"},
-		{Name: "Options"},
-		{Name: "Help"},
+		{Name: i18n.Text("menu.file")},
+		{Name: i18n.Text("menu.edit")},
+		{Name: i18n.Text("menu.selection")},
+		{Name: i18n.Text("menu.view")},
+		{Name: i18n.Text("menu.options")},
+		{Name: i18n.Text("general.help")},
 	})
 
 	search := ui.NewSearchWidget()
@@ -312,10 +299,10 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	explorer := NewNavigationPanel(cfg.Settings.Explorer, cfg.Settings.Appearance.Icons, ws.Paths()...)
 
 	sidebar := ui.NewSidebarWidget()
-	sidebar.AddPanel("explorer", "Explore", explorer.Adapter)
-	sidebar.AddPanel("search", "Find", search)
-	sidebar.AddPanel("changes", "Changes", changes.Adapter)
-	sidebar.AddPanel("outline", "Outline", symbols.Adapter)
+	sidebar.AddPanel("explorer", i18n.Text("panel.explore"), explorer.Adapter)
+	sidebar.AddPanel("search", i18n.Text("general.find"), search)
+	sidebar.AddPanel("changes", i18n.Text("panel.changes"), changes.Adapter)
+	sidebar.AddPanel("outline", i18n.Text("panel.outline"), symbols.Adapter)
 	if len(state.SidebarPanelOrder) > 0 {
 		sidebar.SetPanelOrder(state.SidebarPanelOrder)
 	} else {
@@ -351,24 +338,35 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	}
 	splitPanel.ShowLeft = sidebar.Visible
 	splitPanel.RightBorderStartY = 2
-	contentSplit.RightBorderStartY = &splitPanel.RightBorderStartY
 	editorGroup.TabBar.PointerInteractionValid = func() bool {
-		return contentSplit.TopContentHeight() > 3
+		return contentSplit.TopContentHeight() > editorGroup.TabBar.Height()
 	}
 	sidebar.Tabs.Config.PointerInteractionValid = func() bool {
 		r := sidebar.GetRect()
 		return sidebar.Visible && splitPanel.ShowLeft && r.W > 0 && r.H > 2
 	}
+	bottomPanel.Tabs.Config.PointerInteractionValid = func() bool {
+		r := bottomPanel.GetRect()
+		return contentSplit.ShowBottom && bottomPanel.Visible && r.W > 0 && r.H > 2
+	}
 
 	rootBox := widgets.NewVStackWidget(menuBar, splitPanel, statusBar)
 
 	root := ui.NewRoot(rootBox)
+	root.SetControlModifiers(controlModifiers(cfg.Settings.Keyboard.ModifierKey))
+	root.SetForwardShortcuts(cfg.Settings.Terminal.ForwardShortcuts)
+	editorGroup.ControlModifiers = &root.ControlModifiers
+	output.ControlModifiers = &root.ControlModifiers
+	for _, input := range []*widgets.InputWidget{search.Input, search.Include, search.Exclude, search.ReplaceInput, changes.Input} {
+		input.ControlModifiers = &root.ControlModifiers
+	}
 	root.SetFocus(editorGroup)
 
 	app := &App{
 		Root:                root,
 		RootBox:             rootBox,
 		EditorGroup:         editorGroup,
+		EditorSplit:         editorSplit,
 		Sidebar:             sidebar,
 		SplitPanel:          splitPanel,
 		ContentSplit:        contentSplit,
@@ -382,6 +380,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		Status:              status,
 		Borders:             borders,
 		Settings:            &cfg.Settings,
+		settingsFile:        settingsFile,
 		State:               state,
 		Workspace:           ws,
 		Palette:             BuildTerminalPalettePtr(cfg.Theme, WithTransparentBackground(cfg.Settings.Editor.TransparentBackground), WithTerminalSelectionStyle(cfg.Settings.Terminal.SelectionStyle)),
@@ -396,6 +395,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 		LspNotified:         make(map[string]bool),
 		pluginDetailWidgets: make(map[string]*pluginDetailState),
 	}
+	root.OnMouseMove = app.updateAutoHiddenTabs
+	app.wireEditorTabAutoHide(editorGroup)
+	app.setExplorerSearchDebounce(cfg.Settings.Search.Debounce)
 	app.diagPull = NewTask[pulledDiagnostics](app, asynctask.TaskOptions{Delay: pullDiagnosticsDelay})
 	app.diagBackground = make(map[string]*asynctask.Task[[]backgroundPull])
 	app.Repository = NewRepositoryState(changes, ws.Paths())
@@ -407,11 +409,27 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	app.EditorGroup.OnDiagnosticsChanged = app.refreshProblems
 	app.EditorGroup.FileHandler = app.openWithFileHandler
 	app.EditorGroup.OnFileHandled = app.fileHandlerTabOpened
+	app.EditorGroup.LinkWorkDir = app.Workspace.Primary
+	app.EditorGroup.OnOpenURL = OpenURL
+	app.EditorGroup.OnOpenFileLink = app.openFileLink
+	app.EditorGroup.OnLinkHover = app.Root.TrackEditorLinkHover
+	app.EditorGroup.ResolveFileLinks = app.resolveEditorFileLinks
 	app.applyIcons(cfg.Settings.Appearance)
+	app.applySidebarTabStyle(cfg.Settings.Sidebar.TabStyle)
 	app.loadedGrammars = slices.Clone(cfg.Settings.Editor.Grammars)
 	app.reportGrammarErrors(grammarErrs)
+	app.language.locale = locale
+	app.language.requested = cfg.Settings.Language.Locale
+	if languageErr != nil {
+		app.LogOutput("error", "languages", languageErr.Error())
+	}
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
+	app.appliedSettings.Terminal.ForwardShortcuts = cfg.Settings.Terminal.ForwardShortcuts
+	if cfg.SettingsError != nil {
+		app.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": cfg.SettingsError.Error()}))
+	}
+	app.restoreSessionOnStartup = len(openFiles) == 0
 	return app
 }
 
@@ -425,9 +443,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 // keep a correct cursor and an unscrolled view instead.
 func (a *App) ApplyFileTargets(targets []FileTarget) {
 	active := a.EditorGroup.ActiveFilePath()
-	for i := len(targets) - 1; i >= 0; i-- {
-		if targets[i].Line > 0 && targets[i].Path == active {
-			a.EditorGroup.GoToLineCol(targets[i].Line, targets[i].Col)
+	for _, target := range slices.Backward(targets) {
+		if target.Line > 0 && target.Path == active {
+			a.EditorGroup.GoToLineCol(target.Line, target.Col)
 			return
 		}
 	}
@@ -437,12 +455,15 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 	var opened []FileTarget
 	var failures []error
 	for _, f := range targets {
-		if err := g.OpenFile(f.Path); err != nil {
+		err := g.OpenFile(f.Path)
+		if g.ActiveFilePath() == f.Path {
+			g.CommitActiveTab()
+		}
+		if err != nil {
 			failures = append(failures, err)
 			continue
 		}
 		opened = append(opened, f)
-		g.CommitActiveTab()
 		// The tab just opened is the active one, so this lands on the right
 		// buffer without switching tabs. PlaceCursor rather than GoToLineCol:
 		// the viewport has no height yet, and ApplyFileTargets frames the file
@@ -452,4 +473,53 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 		}
 	}
 	return opened, errors.Join(failures...)
+}
+
+func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles []term.Style) *ui.EditorGroupWidget {
+	editorGroup := ui.NewEditorGroupWidget(borders, s.Editor.TabSize, s.Editor.LineNumbers, s.Editor.GutterStyle)
+	editorGroup.NativeLinks = s.Links.Native
+	editorGroup.Editor.NativeLinks = s.Links.Native
+	editorGroup.TabBar.SetStyle(s.Editor.TabBarStyle)
+	editorGroup.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
+	editorGroup.SetFileIconMode(s.Appearance.Icons)
+	editorGroup.InsertSpaces = s.Editor.InsertSpaces
+	editorGroup.SetIndentGuides(s.Editor.IndentGuides)
+	editorGroup.SetFullLineSelection(s.Editor.FullLineSelection)
+	editorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
+	editorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
+	editorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()
+	editorGroup.TrimTrailingWhitespace = s.Editor.TrimTrailingWhitespace
+	editorGroup.SyntaxHighlight = s.Editor.IsSyntaxHighlightEnabled()
+	editorGroup.WordWrap = s.Editor.WordWrap
+	editorGroup.WordWrapColumn = s.Editor.WordWrapColumn
+	editorGroup.WordWrapBreak = s.Editor.WordWrapBreak
+	editorGroup.LanguageOverrides = s.Editor.LanguageOverrides
+	editorGroup.AutoSurround = s.Editor.AutoSurround
+	editorGroup.ApplyFileAutoSurround()
+	editorGroup.WordWrapMaxBytes = s.Editor.WordWrapMaxBytes()
+	editorGroup.DiffMode = configuredDiffMode(s.Editor.DiffMode)
+	editorGroup.DiffContext = configuredDiffContext(s.Editor.DiffContext)
+	editorGroup.DiffWordWrap = s.Editor.DiffWordWrap
+	editorGroup.SetMarkdownMaxWidth(s.Markdown.WrapWidth)
+	editorGroup.DiffHighContrast = s.Editor.DiffHighContrast
+	editorGroup.DiffCollapsedEmphasis = s.Editor.DiffCollapsedEmphasis
+	editorGroup.DiffSigns = s.Editor.DiffSigns
+	editorGroup.DiffSignsColor = s.Editor.DiffSignsColor
+	editorGroup.DiffGutterHighlight = s.Editor.DiffGutterHighlight
+	editorGroup.DiffColorGutterNumbers = s.Editor.DiffColorGutterNumbers
+	editorGroup.DiffScrollbarGitMarks = s.Editor.DiffScrollbarGitMarks
+	editorGroup.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+	editorGroup.ApplyFileWordWrap()
+	editorGroup.Editor.AutoDedent = s.Editor.IsAutoDedentEnabled()
+	editorGroup.Editor.AutoIndent = s.Editor.IsAutoIndentEnabled()
+	editorGroup.Editor.AutoClosing = s.Editor.AutoClosing
+	editorGroup.Editor.LegacyScrollbarGlyphs = s.Appearance.ScrollbarGlyphs == config.ScrollbarGlyphsLegacy
+	editorGroup.Editor.ScrollbarGitMarks = s.Editor.IsScrollbarGitMarksEnabled()
+	editorGroup.UndoDeleteCursorStart = s.Editor.UndoDeleteCursorStart
+	editorGroup.BracketPairColorization = s.Editor.BracketPairColorization
+	editorGroup.Editor.BracketPairColorization = s.Editor.BracketPairColorization
+	editorGroup.SetImageProtocol(s.Image.Protocol)
+	editorGroup.BracketColorStyles = bracketStyles
+	editorGroup.Editor.BracketColorStyles = bracketStyles
+	return editorGroup
 }

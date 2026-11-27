@@ -12,20 +12,24 @@ import (
 )
 
 type Overlay struct {
-	Widget Widget
-	Modal  bool
+	Widget      Widget
+	Modal       bool
+	returnFocus Widget
 }
 
 type GlobalKeyBinding struct {
-	Key     tcell.Key
-	Mod     tcell.ModMask
-	Rune    rune
-	Handler func()
+	Key             tcell.Key
+	Mod             tcell.ModMask
+	Rune            rune
+	Handler         func()
+	TerminalOnly    bool
+	WhileForwarding bool
 }
 
 type ChordKeyBinding struct {
-	Steps   []GlobalKeyBinding
-	Handler func()
+	Steps      []GlobalKeyBinding
+	Handler    func()
+	EditorOnly bool
 }
 
 type chordState struct {
@@ -45,6 +49,10 @@ type Root struct {
 	ImageLayer       *tttimage.Layer
 	chord            *chordState
 	KeyInterceptor   func(ev *tcell.EventKey) bool
+	ControlModifiers tcell.ModMask
+	ForwardShortcuts bool
+	nextTerminalKey  *TerminalWidget
+	OnMouseMove      func(mx, my int) bool
 	OnRightClick     func(mx, my int)
 	EscapeDismissers []func() bool
 	EscapeFallback   func()
@@ -53,6 +61,7 @@ type Root struct {
 	mouseReceiver    Widget
 	button1Held      bool
 	focusClaimed     bool
+	linkHover        *EditorPaneWidget
 }
 
 func NewRoot(main Widget) *Root {
@@ -65,8 +74,8 @@ func NewRoot(main Widget) *Root {
 
 func (r *Root) SetSize(w, h int) {
 	if w != r.Width || h != r.Height {
+		r.CancelPointerCapture()
 		widgets.InvalidatePointerInteraction(r.Main)
-		r.capturedWidget = nil
 	}
 	r.Width = w
 	r.Height = h
@@ -75,6 +84,9 @@ func (r *Root) SetSize(w, h int) {
 
 func (r *Root) CancelPointerCapture() bool {
 	canceled := widgets.CancelPointerCapture(r.Main)
+	if r.capturedWidget != nil && r.capturedWidget != r.Main {
+		canceled = widgets.CancelPointerCapture(r.capturedWidget) || canceled
+	}
 	if r.capturedWidget != nil {
 		canceled = true
 		r.capturedWidget = nil
@@ -107,15 +119,63 @@ func (r *Root) AddForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler fu
 	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler})
 }
 
+func (r *Root) AddTerminalForceKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true})
+}
+
+func (r *Root) AddTerminalToggleKey(key tcell.Key, mod tcell.ModMask, rn rune, handler func()) {
+	r.ForceKeys = append(r.ForceKeys, GlobalKeyBinding{Key: key, Mod: mod, Rune: rn, Handler: handler, TerminalOnly: true, WhileForwarding: true})
+}
+
 func (r *Root) AddChordKey(steps []GlobalKeyBinding, handler func()) {
 	r.ChordKeys = append(r.ChordKeys, ChordKeyBinding{Steps: steps, Handler: handler})
 }
 
+func (r *Root) AddEditorChordKey(steps []GlobalKeyBinding, handler func()) {
+	r.ChordKeys = append(r.ChordKeys, ChordKeyBinding{Steps: steps, Handler: handler, EditorOnly: true})
+}
+
 func (r *Root) ClearKeys() {
+	r.cancelTerminalKey()
 	r.GlobalKeys = nil
 	r.ForceKeys = nil
 	r.ChordKeys = nil
 	r.chord = nil
+}
+
+func (r *Root) SetControlModifiers(modifiers tcell.ModMask) {
+	if r.ControlModifiers != modifiers {
+		r.cancelTerminalKey()
+		r.ControlModifiers = modifiers
+		r.chord = nil
+	}
+}
+
+func (r *Root) SetForwardShortcuts(forward bool) {
+	r.cancelTerminalKey()
+	r.chord = nil
+	r.ForwardShortcuts = forward
+}
+
+func (r *Root) SendNextTerminalKey(tw *TerminalWidget) {
+	r.cancelTerminalKey()
+	r.chord = nil
+	if tw != nil && tw.focused && tw.Term != nil && !tw.Term.Exited() {
+		tw.sendNextKey = true
+		r.nextTerminalKey = tw
+	}
+}
+
+func (r *Root) AwaitingTerminalKey() bool {
+	tw := r.nextTerminalKey
+	return tw != nil && tw.sendNextKey && tw.focused && tw.Term != nil && !tw.Term.Exited()
+}
+
+func (r *Root) cancelTerminalKey() {
+	if r.nextTerminalKey != nil {
+		r.nextTerminalKey.sendNextKey = false
+		r.nextTerminalKey = nil
+	}
 }
 
 // normalizeKey folds KeyBackspace2 (DEL, 0x7F) into KeyBackspace (BS, 0x08) so
@@ -188,6 +248,14 @@ func (r *Root) rawKeysFocused() bool {
 }
 
 func (r *Root) HandleEvent(ev tcell.Event) EventResult {
+	// Overlays and global shortcuts can consume input before the hovered pane sees it.
+	linkPress := r.linkHover != nil && r.linkHover.links.pressed
+	if r.linkHover != nil {
+		r.linkHover.observeLinkInput(ev)
+		if !r.linkHover.links.active && !r.linkHover.links.pressed {
+			r.linkHover = nil
+		}
+	}
 	mev, ok := ev.(*tcell.EventMouse)
 	if !ok {
 		return r.dispatch(ev)
@@ -199,6 +267,18 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if mev.Buttons() == tcell.ButtonNone && !released && !linkPress && !r.HasOverlay() && !r.PointerCaptureActive() && r.OnMouseMove != nil {
+		x, y := mev.Position()
+		if r.OnMouseMove(x, y) {
+			return EventConsumed
+		}
+	}
+	if linkPress {
+		if released {
+			r.pressTarget = nil
+		}
+		return EventConsumed
+	}
 	receiver, modal := r.pointerTarget()
 	r.mouseReceiver = nil
 	result := r.dispatch(ev)
@@ -207,6 +287,10 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	}
 	if released {
 		r.releasePressTarget(ev, receiver, modal)
+		if r.OnMouseMove != nil && !r.HasOverlay() && !r.PointerCaptureActive() {
+			x, y := mev.Position()
+			r.OnMouseMove(x, y)
+		}
 	}
 	return result
 }
@@ -246,6 +330,38 @@ func (r *Root) hasOverlayWidget(w Widget) bool {
 
 func (r *Root) dispatch(ev tcell.Event) EventResult {
 	kev, isKey := ev.(*tcell.EventKey)
+	if r.nextTerminalKey != nil {
+		if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons() != tcell.ButtonNone {
+			r.cancelTerminalKey()
+			r.chord = nil
+		}
+		if !r.AwaitingTerminalKey() {
+			r.cancelTerminalKey()
+			r.chord = nil
+		} else if isKey {
+			// Plain continuations retain TTT chords; modified keys bypass all handlers.
+			if r.chord != nil && kev.Modifiers()&(tcell.ModCtrl|tcell.ModMeta|tcell.ModAlt) == 0 {
+				keys := []*tcell.EventKey{kev}
+				if kev.Key() == tcell.KeyRune && kev.Modifiers() == tcell.ModShift {
+					keys = append(keys, tcell.NewEventKey(tcell.KeyRune, kev.Str(), 0))
+				}
+				for _, chordKey := range keys {
+					for _, ci := range r.chord.candidates {
+						chord := r.ChordKeys[ci]
+						if r.chord.stepIdx < len(chord.Steps) && matchKeyChord(chordKey, chord.Steps[r.chord.stepIdx]) {
+							r.cancelTerminalKey()
+							return r.handleChord(chordKey)
+						}
+					}
+				}
+			}
+			tw := r.nextTerminalKey
+			r.cancelTerminalKey()
+			r.chord = nil
+			tw.SendKey(kev)
+			return EventConsumed
+		}
+	}
 	// ForceKeys punch through two things that would otherwise swallow them: a
 	// raw key consumer, and an overlay (a second ctrl+q force-quits past the
 	// unsaved-changes dialog). With neither present nothing is swallowing keys,
@@ -253,8 +369,17 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 	// which is what lets a key interceptor claim them while editing.
 	if isKey && (r.rawKeysFocused() || r.HasOverlay()) {
 		for _, gk := range r.ForceKeys {
-			if matchKey(kev, gk) {
+			if gk.TerminalOnly && r.HasOverlay() {
+				continue
+			}
+			if r.ForwardShortcuts && !r.HasOverlay() && !gk.WhileForwarding {
+				continue
+			}
+			if key := term.ControlKeyEvent(kev, &r.ControlModifiers); key != nil && matchKey(key, gk) {
 				gk.Handler()
+				if r.AwaitingTerminalKey() {
+					r.handleChord(kev)
+				}
 				return EventConsumed
 			}
 		}
@@ -274,8 +399,15 @@ func (r *Root) dispatch(ev tcell.Event) EventResult {
 		return r.handleMouse(ev)
 	}
 
-	// The terminal gets every non-force key, chord prefixes included.
+	if kev.Key() == tcell.KeyEscape && r.PointerCaptureActive() {
+		r.CancelPointerCapture()
+		return EventConsumed
+	}
+
 	if r.rawKeysFocused() {
+		if !r.ForwardShortcuts && r.handleChord(kev) == EventConsumed {
+			return EventConsumed
+		}
 		return r.Focused.HandleEvent(kev)
 	}
 
@@ -331,6 +463,13 @@ func (r *Root) handleOverlay(ev tcell.Event) EventResult {
 	top := r.Overlays[len(r.Overlays)-1]
 	slog.Debug("root", "action", "overlayIntercept", "modal", top.Modal, "count", len(r.Overlays))
 	result := top.Widget.HandleEvent(ev)
+	if result == EventCaptured {
+		if r.TopOverlayWidget() == top.Widget {
+			r.capturedWidget = top.Widget
+		}
+		r.mouseReceiver = top.Widget
+		return EventConsumed
+	}
 	if top.Modal || result == EventConsumed {
 		r.mouseReceiver = top.Widget
 		return EventConsumed
@@ -379,10 +518,19 @@ func (r *Root) handleMouse(ev tcell.Event) EventResult {
 }
 
 func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
+	editorAllowed := !r.rawKeysFocused()
+	kev = term.ControlKeyEvent(kev, &r.ControlModifiers)
+	if kev == nil {
+		r.chord = nil
+		return EventIgnored
+	}
 	if r.chord != nil {
 		var next []int
 		for _, ci := range r.chord.candidates {
 			chord := r.ChordKeys[ci]
+			if chord.EditorOnly && !editorAllowed {
+				continue
+			}
 			if r.chord.stepIdx < len(chord.Steps) && matchKeyChord(kev, chord.Steps[r.chord.stepIdx]) {
 				if r.chord.stepIdx+1 == len(chord.Steps) {
 					r.chord = nil
@@ -402,6 +550,9 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 
 	var candidates []int
 	for i, chord := range r.ChordKeys {
+		if chord.EditorOnly && !editorAllowed {
+			continue
+		}
 		if len(chord.Steps) > 1 && matchKeyChord(kev, chord.Steps[0]) {
 			candidates = append(candidates, i)
 		}
@@ -415,6 +566,10 @@ func (r *Root) handleChord(kev *tcell.EventKey) EventResult {
 }
 
 func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
+	kev = term.ControlKeyEvent(kev, &r.ControlModifiers)
+	if kev == nil {
+		return EventIgnored
+	}
 	for _, gk := range r.GlobalKeys {
 		if matchKey(kev, gk) {
 			gk.Handler()
@@ -462,36 +617,65 @@ func (r *Root) TopOverlayWidget() Widget {
 }
 
 func (r *Root) PushOverlay(o Overlay) {
+	r.cancelTerminalKey()
+	r.chord = nil
+	r.ClearEditorLinkHover()
 	r.CancelPointerCapture()
+	o.returnFocus = r.Focused
 	r.Overlays = append(r.Overlays, o)
 	slog.Debug("root", "action", "pushOverlay", "count", len(r.Overlays), "modal", o.Modal)
 }
 
-func (r *Root) PopOverlay() {
-	if len(r.Overlays) > 0 {
-		r.Overlays = r.Overlays[:len(r.Overlays)-1]
-		slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
+// PopOverlay removes the top overlay and returns the widget that was focused
+// when it was pushed. That widget may since have been hidden or removed.
+func (r *Root) PopOverlay() Widget {
+	if len(r.Overlays) == 0 {
+		return nil
 	}
+	if r.capturedWidget == r.TopOverlayWidget() {
+		r.CancelPointerCapture()
+	}
+	top := r.Overlays[len(r.Overlays)-1]
+	r.Overlays = r.Overlays[:len(r.Overlays)-1]
+	slog.Debug("root", "action", "popOverlay", "count", len(r.Overlays))
+	return top.returnFocus
 }
 
-// RemoveOverlay removes the overlay holding the given widget without disturbing overlays above it.
-func (r *Root) RemoveOverlay(w Widget) {
+// RemoveOverlay removes the overlay holding the given widget without disturbing
+// overlays above it, and returns the widget that was focused when it was pushed.
+func (r *Root) RemoveOverlay(w Widget) Widget {
 	for i, o := range r.Overlays {
 		if o.Widget == w {
+			if r.capturedWidget == w {
+				r.CancelPointerCapture()
+			}
+			// Overlays above w that would return focus to it inherit w's own
+			// return target, since w is about to disappear.
+			for j := i + 1; j < len(r.Overlays); j++ {
+				if r.Overlays[j].returnFocus == w {
+					r.Overlays[j].returnFocus = o.returnFocus
+				}
+			}
 			r.Overlays = append(r.Overlays[:i], r.Overlays[i+1:]...)
 			slog.Debug("root", "action", "removeOverlay", "count", len(r.Overlays))
-			return
+			return o.returnFocus
 		}
 	}
+	return nil
 }
 
 // Refocusing the already-focused widget is a no-op: a click inside the focused
 // pane routes through here, and blurring it first would discard transient state
 // such as an open dropdown.
 func (r *Root) SetFocus(w Widget) {
+	if adapter, ok := w.(*WidgetAdapter); ok {
+		adapter.SetControlModifiers(&r.ControlModifiers)
+	}
 	if r.Focused == w {
 		return
 	}
+	r.cancelTerminalKey()
+	r.ClearEditorLinkHover()
 	r.chord = nil
 	if r.capturedWidget != nil {
 		r.CancelPointerCapture()

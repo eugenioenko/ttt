@@ -46,6 +46,60 @@ func TestContextMenuCheckedStateControlsIndicatorLayout(t *testing.T) {
 	}
 }
 
+func TestContextMenuSubmenuChevronHasPaddingBeforeBorder(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:   "Open With",
+		Submenu: []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 40, 5)
+	want := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != want {
+		t.Errorf("submenu chevron at col %d = %q, want %q", menuW-3, got, want)
+	}
+	if got := cells[1][menuW-2].Ch; got != ' ' {
+		t.Errorf("cell before right border = %q, want padding space", got)
+	}
+}
+
+func TestContextMenuSubmenuChevronKeepsShortcutsIntact(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: "Open With", Shortcut: "ctrl+k o", Submenu: []ContextMenuItem{{Label: "Editor"}}},
+		{Label: "Copy Path", Shortcut: "ctrl+k c"},
+	}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 40, 6)
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := gridRow(cells, 1, menuW); !strings.Contains(got, "ctrl+k o") {
+		t.Errorf("submenu row lost its shortcut: %q", got)
+	}
+	if got := cells[2][menuW-3].Ch; got != 'c' {
+		t.Errorf("sibling row shortcut moved: col %d = %q, want 'c'", menuW-3, got)
+	}
+}
+
+func TestContextMenuLongLabelDoesNotReachSubmenuChevron(t *testing.T) {
+	long := "Open With Some Extremely Long Label Text"
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: long, Shortcut: "ctrl+k o", Submenu: []ContextMenuItem{{Label: "Editor"}}},
+	}, 0, 0)
+
+	menuW := menu.menuWidth()
+	cells := renderContextMenu(menu, 60, 5)
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := gridRow(cells, 1, menuW-1); !strings.Contains(got, long) || !strings.Contains(got, "ctrl+k o") {
+		t.Errorf("label or shortcut truncated or overwritten: %q", got)
+	}
+}
+
 func TestContextMenuWidthUsesTerminalColumns(t *testing.T) {
 	menu := NewContextMenuWidget([]ContextMenuItem{{
 		Label:    "界界界界界",
@@ -196,6 +250,54 @@ func TestContextMenuKeyboardNavigatesSubmenu(t *testing.T) {
 	}
 }
 
+func TestContextMenuSubmenuRowAlignment(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		x, y    int
+		index   int
+		wantRow int
+	}{
+		{name: "first item at top", x: 2, y: 0, index: 0, wantRow: 1},
+		{name: "later item", x: 2, y: 2, index: 1, wantRow: 4},
+		{name: "opens left", x: 36, y: 2, index: 1, wantRow: 4},
+		{name: "bottom clamped", x: 2, y: 12, index: 1, wantRow: 12},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			items := []ContextMenuItem{{Label: "First"}, {Label: "Second"}}
+			items[tc.index].Submenu = []ContextMenuItem{
+				{Label: "Child", Command: "child"},
+				{Label: "Other", Command: "other"},
+			}
+			menu := NewContextMenuWidget(items, tc.x, tc.y)
+			menu.firstEvent = false
+			var executed string
+			menu.OnExec = func(command string) { executed = command }
+			renderContextMenu(menu, 50, 15)
+			parent := menu.GetRect()
+			menu.HandleEvent(tcell.NewEventMouse(parent.X+2, parent.Y+1+tc.index, tcell.ButtonNone, tcell.ModNone))
+			cells := renderContextMenu(menu, 50, 15)
+			if menu.Submenu == nil {
+				t.Fatal("hover should open a submenu")
+			}
+			child := menu.Submenu.GetRect()
+			if child.Y+1 != tc.wantRow {
+				t.Fatalf("first submenu item row = %d, want %d", child.Y+1, tc.wantRow)
+			}
+			if got := cellRow(cells, tc.wantRow); !strings.Contains(got, "Child") {
+				t.Fatalf("submenu item missing from row %d: %q", tc.wantRow, got)
+			}
+			if child.Y < 0 || child.Y+child.H > 15 {
+				t.Fatalf("submenu bounds %+v escape surface", child)
+			}
+			menu.HandleEvent(tcell.NewEventMouse(child.X+2, tc.wantRow, tcell.Button1, tcell.ModNone))
+			menu.HandleEvent(tcell.NewEventMouse(child.X+2, tc.wantRow, tcell.ButtonNone, tcell.ModNone))
+			if executed != "child" {
+				t.Fatalf("click on first submenu item executed %q, want child", executed)
+			}
+		})
+	}
+}
+
 func TestContextMenuFullwidthSubmenuFlipsAndKeepsMouseBounds(t *testing.T) {
 	var executed string
 	menu := NewContextMenuWidget([]ContextMenuItem{{
@@ -284,7 +386,7 @@ func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
 		mode string
 		want rune
 	}{
-		{name: "plain", mode: config.IconsNone, want: '›'},
+		{name: "plain", mode: config.IconsNone, want: icons.PlainChevronRight},
 		{name: "nerd font", mode: config.IconsNerdFont, want: []rune(nerd)[0]},
 	}
 	for _, tc := range cases {
@@ -306,5 +408,68 @@ func TestContextMenuSubmenuChevronFollowsIconMode(t *testing.T) {
 				t.Fatalf("icon mode %q: want chevron %q in the rendered menu", tc.mode, tc.want)
 			}
 		})
+	}
+}
+
+func TestContextMenuClippedSubmenuLabelKeepsChevronPadding(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:   "Open With",
+		Submenu: []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	const w = 10
+	cells := renderContextMenu(menu, w, 5)
+	menuW := w
+	chevron := []rune(icons.Get(menu.Icons, icons.Submenu))[0]
+	if got := cells[1][menuW-3].Ch; got != chevron {
+		t.Fatalf("submenu chevron at col %d = %q, want %q", menuW-3, got, chevron)
+	}
+	if got := cells[1][menuW-2].Ch; got != ' ' {
+		t.Errorf("cell before right border = %q, want padding space; label overran the padding", got)
+	}
+}
+
+func TestContextMenuClippedShortcutDoesNotOverwriteLabel(t *testing.T) {
+	menu := NewContextMenuWidget([]ContextMenuItem{{
+		Label:    "Open With",
+		Shortcut: "ctrl+k o",
+		Submenu:  []ContextMenuItem{{Label: "Editor"}},
+	}}, 0, 0)
+
+	const w = 22
+	cells := renderContextMenu(menu, w, 5)
+	if got := gridRow(cells, 1, w); !strings.Contains(got, "Open With") {
+		t.Errorf("label overwritten by shortcut in clipped menu: %q", got)
+	}
+}
+
+func TestContextMenuDisabledItemsCannotBeSelectedOrExecuted(t *testing.T) {
+	var commands []string
+	menu := NewContextMenuWidget([]ContextMenuItem{
+		{Label: "Off", Command: "off", Disabled: true},
+		MenuSep(),
+		{Label: "On", Command: "on"},
+	}, 0, 0)
+	menu.OnExec = func(command string) { commands = append(commands, command) }
+	if menu.Selected != 2 {
+		t.Fatalf("initial selection = %d, want the first enabled item", menu.Selected)
+	}
+	menu.HandleEvent(tcell.NewEventKey(tcell.KeyUp, "", tcell.ModNone))
+	if menu.Selected != 2 {
+		t.Fatalf("keyboard moved onto a disabled item: selected = %d", menu.Selected)
+	}
+
+	cells := renderContextMenu(menu, 40, 10)
+	if got := cells[1][2].Style; got != term.StyleMuted {
+		t.Errorf("disabled label style = %v, want muted", got)
+	}
+	menu.firstEvent = false
+	menu.HandleEvent(tcell.NewEventMouse(3, 1, tcell.Button1, tcell.ModNone))
+	menu.HandleEvent(tcell.NewEventMouse(3, 1, tcell.ButtonNone, tcell.ModNone))
+	if len(commands) != 0 {
+		t.Fatalf("clicking a disabled item executed %v", commands)
+	}
+	if got := menu.PointerShapeAt(3, 1); got != term.PointerDefault {
+		t.Errorf("pointer over disabled item = %q, want default", got)
 	}
 }

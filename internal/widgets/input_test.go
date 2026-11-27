@@ -126,8 +126,8 @@ func TestInputClickFocus(t *testing.T) {
 	}
 
 	handled := inp.HandleEvent(click)
-	if handled != EventConsumed {
-		t.Error("input should handle click inside its rect")
+	if handled != EventCaptured {
+		t.Error("input should capture a click inside its rect")
 	}
 }
 
@@ -233,8 +233,8 @@ func TestTabbedTabSwitchFocus(t *testing.T) {
 	// Also verify handleMouse works
 	click := mouseClick(clickX, clickY)
 	handled := inp2.HandleEvent(click)
-	if handled != EventConsumed {
-		t.Errorf("inp2 should handle click at (%d, %d), rect=%+v", clickX, clickY, r2)
+	if handled != EventCaptured {
+		t.Errorf("inp2 should capture click at (%d, %d), rect=%+v", clickX, clickY, r2)
 	}
 }
 
@@ -293,7 +293,7 @@ func TestTabbedClickInputViaFocusManager(t *testing.T) {
 	t.Logf("tab click consumed by focus: %v", consumed)
 
 	// If focus didn't consume it, send through widget tree (like adapter does)
-	if consumed != EventConsumed {
+	if consumed == EventIgnored {
 		tabbed.HandleEvent(click)
 		// Need mouse release for wasPressed tracking
 		tabbed.HandleEvent(mouseRelease(tabX, tabY))
@@ -330,10 +330,10 @@ func TestTabbedClickInputViaFocusManager(t *testing.T) {
 	t.Logf("inp1 focus consumed: %v, inp1.focused=%v", consumed, inp1.IsFocused())
 
 	// Simulate adapter: if focus didn't consume, route through widget tree
-	if consumed != EventConsumed {
+	if consumed == EventIgnored {
 		wHandled := tabbed.HandleEvent(inputClick)
 		t.Logf("inp1 widget tree handled: %v", wHandled)
-		if wHandled != EventConsumed {
+		if wHandled == EventIgnored {
 			t.Error("widget tree should handle click on inp1")
 		}
 	}
@@ -341,6 +341,8 @@ func TestTabbedClickInputViaFocusManager(t *testing.T) {
 	if !inp1.IsFocused() {
 		t.Error("inp1 should be focused after click")
 	}
+
+	fm.HandleEvent(mouseRelease(cx, cy))
 
 	// Step 6: click on inp2
 	r2 := inp2.GetRect()
@@ -353,10 +355,10 @@ func TestTabbedClickInputViaFocusManager(t *testing.T) {
 	consumed = fm.HandleEvent(inputClick2)
 	t.Logf("inp2 focus consumed: %v, inp2.focused=%v", consumed, inp2.IsFocused())
 
-	if consumed != EventConsumed {
+	if consumed == EventIgnored {
 		wHandled := tabbed.HandleEvent(inputClick2)
 		t.Logf("inp2 widget tree handled: %v", wHandled)
-		if wHandled != EventConsumed {
+		if wHandled == EventIgnored {
 			t.Error("widget tree should handle click on inp2")
 		}
 	}

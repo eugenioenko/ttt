@@ -19,6 +19,7 @@ make bench-diff   # diff view benchmarks (BENCH_LANG=go or commit_detail)
 make bench-log    # open real 1, 128, and 256 MiB logs in the built binary, wrap off and on, plus a dirty edit in a repo: time and peak RSS
 make bench-log BENCH_LOG_SIZE=1024MiB # manual 1 GiB log benchmark
 make bench-code   # open, type, and press Enter in a 64 MiB Go file in the built binary: time and peak RSS
+make contributors # regenerate the About dialog's contributor and issue reporter lists from GitHub (needs gh, jq)
 go test ./internal/core/buffer/   # run tests for a single package
 
 # Open a multi-folder workspace
@@ -30,7 +31,7 @@ bin/ttt ~/projectA ~/projectB file.go
 
 ## Architecture
 
-[`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and the architecture convergence plan. The codebase uses dependency zones rather than a strict linear layer chain: domain, services, presentation kernel, product presentation, application, plugin host, and platform.
+[`ARCHITECTURE.md`](ARCHITECTURE.md) is the source of truth for package ownership and known boundary violations. The codebase uses dependency zones rather than a strict linear layer chain: domain, shared foundations, services, presentation kernel, product presentation, application, plugin host, and platform.
 
 Known boundary violations and explicit boundary decisions are documented there. Highlighting is presentation-owned at `internal/highlight`; grammar selection, caching, and TextMate scope to `term.Style` mapping stay together there. tcell events are intentionally used across `term`, `widgets`, `ui`, and narrow application/platform wiring. Do not create cosmetic wrappers merely to satisfy the old layer diagram.
 
@@ -51,10 +52,13 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 **Services**: external-process and external-state integration, exposing typed operations and results without owning widgets.
 
+- **`internal/scm/`**: source-control provider contracts (status, staging, baselines, history, revisions) implemented by `git` and `jj`.
 - **`internal/git/`**: git CLI wrapper (status, staging, commit, repo discovery).
+- **`internal/jj/`**: Jujutsu CLI adapter for the `internal/scm` provider contracts. `scm.Providers` tries jj before git, so colocated workspaces use jj.
 - **`internal/github/`**: `gh` CLI wrapper for pull requests.
 - **`internal/jsonrpc/`**: JSON-RPC 2.0 with Content-Length framing: `Codec` and a bidirectional `Conn` (calls, notifications, and peer requests). Transport-agnostic; used by LSP and the plugin `ttt.rpc` module.
 - **`internal/lsp/`**: language server client (see LSP Integration).
+- **`internal/search/`**: ripgrep argument building and JSON result parsing for global search and replace.
 - **`internal/terminal/`**: integrated terminal emulator. Wraps `eugenioenko/xterm-go` for VT parsing and `aymanbagabas/go-pty` for PTY lifecycle.
 - **`internal/watcher/`**: fsnotify-based reporting of on-disk changes to open files and watched directories.
 - **`internal/workspace/`**: multi-folder workspaces. `Folder` and `Workspace` track project roots, with `IsRepo` git detection, `FolderForFile` lookup (longest-prefix match), and JSON `.ttt` workspace files. Falls back to `cwd` when no folders are given.
@@ -64,10 +68,12 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - **`internal/term/`**: `Screen` interface. `TcellScreen` is the real implementation; `MockScreen` supports unit-level `Screen` and renderer tests; `SimScreen` implements tcell's screen contract for composed E2E and chaos tests. Also defines `DirectColor` and `CellAttr` for direct RGB rendering (used by the integrated terminal to bypass the style map for 256-color output).
 - **`internal/render/`**: diff-based renderer that compares prev/curr cell grids and emits minimal updates.
 - **`internal/textwidth/`**: display-width measurement (`Rune`, `String`, `Runes`), the single source of truth for how many terminal columns text occupies. Wraps `clipperhouse/displaywidth` with the same options tcell v3 uses internally, including the `RUNEWIDTH_EASTASIAN` toggle, so layout always matches what tcell draws.
-- **`internal/highlight/`**: presentation-owned syntax highlighting via [textmate-go](https://github.com/eugenioenko/textmate-go) (VS Code's TextMate engine, 124 embedded grammars). Owns grammar selection, the incremental document, caching, and mapping TextMate scopes to `term.Style` (the engine's token category, refined by the token's innermost scope). Full-buffer re-tokenizing is a known performance trap; the engine's `Document` avoids it. Lines far below what is tokenized are deferred: `HighlightLineAt` draws them with their last spans, or on their own, and the event loop runs `highlight.Step` between events until they catch up. Highlighters run only on the UI goroutine; there is no background worker.
+- **`internal/highlight/`**: presentation-owned syntax highlighting via [textmate-go](https://github.com/eugenioenko/textmate-go) (VS Code's TextMate engine, 125 embedded grammars). Owns grammar selection, the incremental document, caching, and mapping TextMate scopes to `term.Style` (the engine's token category, refined by the token's innermost scope). Full-buffer re-tokenizing is a known performance trap; the engine's `Document` avoids it. Lines far below what is tokenized are deferred: `HighlightLineAt` draws them with their last spans, or on their own, and the event loop runs `highlight.Step` between events until they catch up. Highlighters run only on the UI goroutine; there is no background worker.
 - **`internal/view/`**: viewport (scrolling, cursor-to-screen mapping) and the segment-based status bar.
 - **`internal/widgets/`**: reusable widget primitives backing both the Plugin Widget API and core panels (tree, table, list, input, dialog, dropdown, tabs, stacks, scrollview, markdown, and so on). `surface.go`/`virtual_surface.go` provide the drawing surface abstraction; `focus.go` handles focus traversal.
 - **`internal/markdown/`**: goldmark-based markdown to styled lines.
+- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
+- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
 
 **Product presentation**:
 
@@ -86,11 +92,10 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 
 - **`cmd/ttt/main.go`**: entry point. Parses flags (`--workspace`, `--exec`, `--size`, and so on), sets up the screen, logging, and panic handling, constructs `App`, and wires the plugin host APIs.
 
-**Not yet assigned a zone in ARCHITECTURE.md**:
+**Shared foundations**:
 
 - **`internal/config/`**: settings, keybindings (`DefaultKeybindings()`), themes (`theme.go`), and `.editorconfig` support.
-- **`internal/image/`**: image decoding and Kitty graphics protocol placement.
-- **`internal/icons/`**: named UI glyphs in Nerd Font or plain form. **`internal/fileicons/`**: file name to Nerd Font glyph mapping (generated from nvim-web-devicons).
+- **`internal/filewrite/`**: atomic file replacement shared by buffer and config saves.
 
 ### Design Principles
 
@@ -108,10 +113,11 @@ Packages are grouped by the dependency zones in [`ARCHITECTURE.md`](ARCHITECTURE
 - The renderer uses double-buffering (prev/curr cell grids) to minimize terminal writes.
 - `Screen` isolates terminal drawing and screen lifecycle. tcell events remain the shared presentation event model in `term`, `widgets`, `ui`, and narrow application/platform routing. Domain and service packages must not import tcell.
 - **Never hardcode colors.** All colors must go through the theme system (`internal/config/theme.go` → `StyleDef` → `term.Style` constants → `BuildStyleMap()` in `internal/app/theme.go`). Add a new `StyleDef` field to `ThemeConfig`, a `term.Style` constant, and wire it in `BuildStyleMap()`. Widgets reference `term.Style*` constants, never color values. The one exception is the integrated terminal, which uses direct RGB color rendering via `DirectColor`/`CellAttr` to support 256-color output.
+- **User-facing copy belongs in `internal/i18n/en.json`.** Use flat `area.name` keys with one dot and `general.` for labels shared with the same meaning. Read copy through `i18n.Text`, or `i18n.Format` with named placeholders (`{filename}`, `{count}`) and `i18n.Args`. Keep complete messages together so translators can reorder them; do not concatenate translated sentence fragments or use positional printf placeholders in the catalog. Preserve existing keys when changing wording. Keep icons and decorative glyphs in `internal/icons` and compose them with translated text in UI code; use named placeholders when a glyph appears inside a translated hint. Native language names, command IDs, config keys, protocol values, key notation, logs, and external error text are not translation keys. Run `go test ./internal/i18n` to validate catalog keys, references, and placeholders when changing copy.
 - **Terminal colors** are configured via the `terminal` field in `ThemeConfig` (`TerminalColors`), which holds 16 ANSI colors plus foreground/background defaults.
 - Diff tabs and each file in Commit Details use `DiffEditorWidget` (`internal/ui/diff_editor_widget.go`): editor panes over read-only buffers, with a `DiffOverlay` that tints changed lines and adds deleted, filler and gap rows. Syntax highlighting stays on top of the diff tint through `BgStyle` layering; a search match replaces the tint.
 - Editable diffs ("Open Changes" on a working-tree file) bind the same widget to the file tab's own editor pane (`editor_group_diff.go`, `diff_editor_live.go`). Deleted lines are non-buffer rows the cursor skips; in changes-only context unchanged runs hide behind a gap line (`DiffOverlay.Hidden`), separate from the user's folds, which diff panes never apply. Edits replay through `Buffer.ChangesSince` so the overlay, gaps and split alignment move with the text until the debounced recompute in `internal/app/gitgutter.go` replaces them.
-- **RawKeyConsumer interface**: when the integrated terminal is focused, all key events are routed directly to the PTY. Only force-keys (Ctrl+`) bypass this to allow toggling the terminal panel.
+- **RawKeyConsumer interface**: with the integrated terminal focused, reserved TTT shortcuts and global chords take priority unless `terminal.forwardShortcuts` is true. Editor-scoped chords are excluded from raw-key dispatch. `terminal.sendNextKey` (Ctrl+K by default) forwards the next modified key directly to the PTY; plain and Shift-only continuations still match global TTT chords. Other keys retain terminal-local handling and PTY routing.
 - Async PTY output wakes the event loop via `PostEvent`/`EventInterrupt`.
 - **Output panel** (`internal/app/output.go`) is a core surface, not a plugin console. Producers are plugin `ttt.log`, language servers (`lsp:<server>`), and every status bar notification (`notice`). Append via `App.LogOutput` on the main thread, or `App.LogOutputAsync` from a background goroutine — it routes through `OutputLineResult` on the event loop, because widget state must not be mutated off the main thread. `LogOutput` also mirrors to `slog`, so `ttt.log` (debug builds) stays a superset of the panel. The panel is capped at `outputMaxLines` and trims in chunks; append with `TreeWidget.AppendItem`, never by rebuilding the slice for `SetItems`.
 - **Global search** (`search_widget.go`) shells out to `rg` (ripgrep) with debounced input (`search.debounce` setting). Uses a generation counter and mutex to prevent concurrent searches from racing. Editor search highlights are tied to the search panel lifecycle — cleared when switching away, re-applied from existing results when switching back.
@@ -197,20 +203,29 @@ bin/ttt --size 120x40 --exec "wait-for Explore; screenshot /tmp/screen.txt; debu
 
 ### Implementation patterns
 
+- **Display language**: load the selected catalog before constructing the app. Initialize translated tables once in the startup text initialization (`initText` in app, `InitText` in ui); keep their normal string and widget types. Selection changes require a restart. Language packs contribute flat JSON catalogs through `languages` in the plugin manifest. Compare the shared English snapshot by message value; `sourceCommit` references the English catalog used by a pack so ttt can reject stale messages. The local incremental Codex CLI generator and common-language packs live in `eugenioenko/ttt-plugins` (`i18n/` for maintenance, `ttt-i18n-*` for packs); preserve translations whose English values have not changed.
+
 - **Undo contract**: all buffer mutations must go through the undo system via an `EditCommand` (in `internal/core/undo/`). Never modify `Buf.Lines` directly — create or reuse a command struct so undo/redo works.
 - **Command naming**: use `domain.verbNoun` — e.g. `editor.joinLines`, `fold.toggle`, `multicursor.selectAll`.
 - **Selection operations**: check `Selection.Active` first. Use `Selection.Range(cursor.Line, cursor.Col)` for bounds. Convention: if no selection, operate on all lines (for line-based commands) or no-op (for text transforms).
 - **Keybindings**: `ctrl+shift` combos are unreliable in terminals — avoid them. Use `ctrl+k <key>` chords for new commands. Check `DefaultKeybindings()` in `internal/config/keybindings.go` before assigning to avoid collisions. If no obvious binding exists, leave the command as command palette only — not every command needs a keybinding.
-- **Overlay stacking**: commands that open overlays via keybindings must guard against being called twice with `if a.Root.HasOverlay() { return }`. `ShowDialog`/`ShowConfirmDialog` themselves have no guard so legitimate stacking (e.g. quit confirm) still works.
+- **Overlay stacking**: dialog-opening commands that guard against stacking must use `if a.Root.HasModalOverlay() { return }`. Find and Replace are non-modal bars and must not block dialogs. Reserve `HasOverlay()` for checks that need to see the full overlay stack, such as rendering and search-bar lifecycle handling. `ShowDialog`/`ShowConfirmDialog` themselves have no guard so legitimate stacking (e.g. quit confirm) still works.
+- **Dialog button order**: when creating dialogs, place the negative or dismissive action on the left and the affirmative action on the right (e.g. `Cancel | Update`, `Cancel | Save`, `No | Yes`).
 - **Command handlers**: define handlers as named methods on `App` (e.g. `app.ExplorerRename`) and reference them in `reg.Register(...)`. Do not use inline closures for non-trivial handlers.
 - **Comments: only critical ones.** Add a comment only when missing it would cause a bug or misuse: a hidden constraint, a non-obvious invariant, or a workaround for a specific bug (the `textwidth`/fullwidth-rune notes above show the bar to clear). Never comment what the code does, restate an identifier, narrate the change, or add docstrings for coverage; well-named identifiers already do that.
 
 ### Opening a pull request
 
-- **Features need an accepted issue first.** Link it in the PR body (`Closes #123`). Bug fixes, docs, and small cleanups can go straight to a PR.
-- **Run it.** Reproduce a bug, or try a feature, in the real binary with `--exec` or `--listen` before and after the change.
-- **One concern per PR**, under roughly 600 changed lines. Note unrelated problems you find in the PR body instead of fixing them.
-- **Title** uses conventional commits: `type(scope): description`.
-- **Body** explains why, which test covers the change, and includes a `--exec` screenshot for visible changes.
-- **Before opening:** `make test` and `make lint` pass, and comments that describe what the code does are removed.
-- **AI-assisted PRs are welcome**, but the human submitting it must have run the change and be able to explain every line.
+- Features link an accepted issue (`Closes #123`).
+- One concern, under ~600 changed lines.
+- `make test` and `make lint` pass.
+- Title: `type(scope): description`. Body: why, which tests cover it, and before/after [screenshots](#screenshots) for visible changes.
+
+#### Screenshots
+
+- **Text:** `bin/ttt --exec '...; screenshot after.txt; quit'`.
+- **Image:** `--exec` is headless, so run a terminal in Xephyr, drive ttt with `--listen`, and grab with `ffmpeg -f x11grab`. VHS with `--listen` also works.
+
+### Following up on a pull request
+
+Until CodeRabbit has reviewed the latest commit and required CI passes, check every five minutes. Fix each finding or reply with why it does not apply. Merging needs the user's approval.

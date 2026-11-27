@@ -14,6 +14,7 @@ func TestReadCommitDetailPreservesContentWhenAuthoredDateIsUnavailable(t *testin
 	binDir := t.TempDir()
 	script := `#!/bin/sh
 case " $* " in
+  *" --show-toplevel "*) printf "/repo\n" ;;
   *" --format=%B "*) printf 'subject\n' ;;
   *" --format=%aI "*) printf 'date unavailable\n' >&2; exit 1 ;;
   *" --name-status "*) exit 0 ;;
@@ -25,7 +26,7 @@ esac
 	}
 	t.Setenv("PATH", binDir+":"+os.Getenv("PATH"))
 
-	result := readCommitDetail(context.Background(), 1, "/repo", strings.Repeat("a", 40), "aaaaaaa")
+	result := readCommitDetail(context.Background(), 1, testRevisionSource("/repo"), strings.Repeat("a", 40), "aaaaaaa")
 
 	if result.Canceled || result.Err != "" {
 		t.Fatalf("detail failed: canceled=%v err=%q", result.Canceled, result.Err)

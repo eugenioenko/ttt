@@ -415,10 +415,20 @@ func TestTerminalPermissions(t *testing.T) {
 	if err := (PermissionSet{}).Check("terminal.read"); err == nil {
 		t.Fatal("terminal.read must be denied without the grant")
 	}
+	if err := (PermissionSet{TerminalPalette: true}).Check("terminal.palette"); err != nil {
+		t.Fatalf("terminal.palette granted but Check failed: %v", err)
+	}
+	if err := (PermissionSet{}).Check("terminal.palette"); err == nil {
+		t.Fatal("terminal.palette must be denied without the grant")
+	}
 
 	diff := DiffPermissions(PermissionSet{}, PermissionSet{TerminalControl: true, TerminalRead: true})
 	if len(diff.Entries) != 2 {
 		t.Fatalf("expected two requested permissions, got %+v", diff.Entries)
+	}
+	palletteDiff := DiffPermissions(PermissionSet{}, PermissionSet{TerminalPalette: true})
+	if len(palletteDiff.Entries) != 1 || palletteDiff.Entries[0].Name != "terminal.palette" {
+		t.Fatalf("palette permission diff = %+v", palletteDiff.Entries)
 	}
 	granted := DiffPermissions(
 		PermissionSet{TerminalControl: true, TerminalRead: true},
@@ -432,10 +442,10 @@ func TestTerminalPermissions(t *testing.T) {
 	// user approved; terminal grants must survive that intersection (missed in
 	// the v1.8 rebase, which silently stripped them on every startup).
 	kept := IntersectPermissions(
-		PermissionSet{TerminalControl: true, TerminalRead: true, Commands: true},
-		PermissionSet{TerminalControl: true, TerminalRead: true, Commands: true},
+		PermissionSet{TerminalControl: true, TerminalRead: true, TerminalPalette: true, Commands: true},
+		PermissionSet{TerminalControl: true, TerminalRead: true, TerminalPalette: true, Commands: true},
 	)
-	if !kept.TerminalControl || !kept.TerminalRead || !kept.Commands {
+	if !kept.TerminalControl || !kept.TerminalRead || !kept.TerminalPalette || !kept.Commands {
 		t.Fatalf("terminal grants were dropped: %+v", kept)
 	}
 	dropped := IntersectPermissions(
@@ -445,9 +455,16 @@ func TestTerminalPermissions(t *testing.T) {
 	if dropped.TerminalRead {
 		t.Fatal("a permission no longer declared must not stay granted")
 	}
+	droppedPalette := IntersectPermissions(PermissionSet{TerminalPalette: true}, PermissionSet{})
+	if droppedPalette.TerminalPalette {
+		t.Fatal("undeclared palette permission must not remain granted")
+	}
 	labels := PermissionSet{TerminalControl: true, TerminalRead: true}.DisplayEntries()
 	if len(labels) != 2 {
 		t.Fatalf("display entries = %+v, want two terminal rows", labels)
+	}
+	if got := len((PermissionSet{TerminalPalette: true}).DisplayEntries()); got != 1 {
+		t.Fatalf("palette display entries = %d, want 1", got)
 	}
 }
 

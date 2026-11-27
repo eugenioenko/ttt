@@ -145,11 +145,12 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 			tw.RestoreExpandedSilent(expanded)
 			tw.SetSelectedIndex(savedIdx)
 			tw.Config.BadgeRight, tw.Config.Inset = desc.BadgeRight, desc.Inset
+			tw.SetActiveID(desc.ActiveID)
 			wireTreeCallbacks(tw, desc, p)
 		}
 	case WidgetButton:
 		if bw, ok := w.(*widgets.ButtonWidget); ok {
-			if bw.Config.Label != desc.Label {
+			if bw.Config.Label != desc.Label || !buttonSpansEqual(bw.Config.Spans, desc.Spans) {
 				r, focused := bw.GetRect(), bw.IsFocused()
 				*bw = *createButtonWidget(desc, p)
 				bw.SetRect(r)
@@ -252,6 +253,7 @@ func updateWidget(w widgets.Widget, desc WidgetDesc, p *Plugin) {
 	case WidgetMarkdown:
 		if sv, ok := w.(*widgets.ScrollViewWidget); ok {
 			if md, ok := sv.Child.(*widgets.MarkdownWidget); ok {
+				md.ControlModifiers = widgetModifiers(p)
 				maxWidth := 80
 				if p != nil && p.Markdown.WrapWidth > 0 {
 					maxWidth = p.Markdown.WrapWidth
@@ -449,6 +451,7 @@ func createTreeWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		TruncateLeft:  desc.TruncateLeft,
 		BadgeRight:    desc.BadgeRight,
 		Inset:         desc.Inset,
+		ActiveID:      desc.ActiveID,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
@@ -463,6 +466,7 @@ func createListWidget(desc WidgetDesc, p *Plugin) *widgets.TreeWidget {
 		TruncateLeft:  desc.TruncateLeft,
 		BadgeRight:    desc.BadgeRight,
 		Inset:         desc.Inset,
+		ActiveID:      desc.ActiveID,
 	})
 	wireTreeCallbacks(tw, desc, p)
 	applyBoxModel(&tw.Box, desc)
@@ -586,6 +590,7 @@ func wireTreeCallbacks(tw *widgets.TreeWidget, desc WidgetDesc, p *Plugin) {
 func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 	bw := widgets.NewButtonWidget(widgets.ButtonConfig{
 		Label: desc.Label,
+		Spans: desc.Spans,
 	})
 	wireButtonCallback(bw, desc, p)
 	applyBoxModel(&bw.Box, desc)
@@ -593,6 +598,18 @@ func createButtonWidget(desc WidgetDesc, p *Plugin) *widgets.ButtonWidget {
 		bw.Box.PaddingLeft, bw.Box.PaddingRight = 1, 1
 	}
 	return bw
+}
+
+func buttonSpansEqual(a, b []widgets.ButtonSpan) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func wireButtonCallback(bw *widgets.ButtonWidget, desc WidgetDesc, _ *Plugin) {
@@ -645,6 +662,7 @@ func syncInputValue(iw *widgets.InputWidget, desc WidgetDesc) {
 }
 
 func wireInputCallbacks(iw *widgets.InputWidget, desc WidgetDesc, p *Plugin) {
+	iw.ControlModifiers = widgetModifiers(p)
 	iw.Config.Bordered, iw.Config.Title, iw.Config.Mask = desc.Border, desc.BoxTitle, desc.Password
 	if desc.Border && p != nil && p.Borders != nil {
 		iw.Box.Borders = *p.Borders
@@ -684,6 +702,7 @@ func createProgressWidget(desc WidgetDesc) *widgets.ProgressWidget {
 
 func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget {
 	md := widgets.NewMarkdownWidget()
+	md.ControlModifiers = widgetModifiers(p)
 	md.FullWidthDividers = desc.FullWidthDividers
 	maxWidth := 80
 	if p != nil && p.Markdown.WrapWidth > 0 {
@@ -699,6 +718,13 @@ func createMarkdownWidget(desc WidgetDesc, p *Plugin) *widgets.ScrollViewWidget 
 	sv.Follow = desc.Follow
 	md.SetScrollParent(sv)
 	return sv
+}
+
+func widgetModifiers(p *Plugin) *tcell.ModMask {
+	if p == nil {
+		return nil
+	}
+	return p.ControlModifiers
 }
 
 func createTableWidget(desc WidgetDesc, p *Plugin) *widgets.TableWidget {

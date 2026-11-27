@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+func TestFileLineReWindowsDrive(t *testing.T) {
+	for _, path := range []string{`C:\src\main.go`, `C:/src/main.go`} {
+		match := fileLineRe.FindStringSubmatch("error: " + path + ":12:3")
+		if len(match) != 4 || match[1] != path || match[2] != "12" || match[3] != "3" {
+			t.Fatalf("Windows file reference %q parsed as %v", path, match)
+		}
+	}
+}
+
+func TestDetectLinkCandidatesPreservesUnresolvedFiles(t *testing.T) {
+	spans := detectLinkCandidates("界 missing.go:12:3 https://example.com:80/path")
+	if len(spans) != 2 || spans[0].IsFile || !spans[1].IsFile || spans[1].FilePath != "missing.go" ||
+		spans[1].StartCol != 2 || spans[1].EndCol != 17 || spans[1].Line != 12 || spans[1].Col != 3 {
+		t.Fatalf("candidates = %+v", spans)
+	}
+}
+
 func TestDetectLinks_URLs(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -84,15 +101,15 @@ func TestDetectLinks_URLs(t *testing.T) {
 func TestDetectLinks_FileReferences(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "main.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	subDir := filepath.Join(tmpDir, "internal")
-	os.MkdirAll(subDir, 0755)
+	requireNoError(t, os.MkdirAll(subDir, 0755))
 	subFile := filepath.Join(subDir, "util.go")
-	os.WriteFile(subFile, []byte("package internal\n"), 0644)
+	requireNoError(t, os.WriteFile(subFile, []byte("package internal\n"), 0644))
 
 	makeFile := filepath.Join(tmpDir, "Makefile")
-	os.WriteFile(makeFile, []byte("all:\n"), 0644)
+	requireNoError(t, os.WriteFile(makeFile, []byte("all:\n"), 0644))
 
 	tests := []struct {
 		name     string
@@ -219,7 +236,7 @@ func TestDetectLinks_URLSpanPositions(t *testing.T) {
 func TestDetectLinks_MixedURLAndFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "test.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	input := "See https://example.com and ./test.go:10"
 	spans := detectLinks(input, tmpDir)
@@ -252,14 +269,14 @@ func TestResolveFilePath_HomeTilde(t *testing.T) {
 	if err != nil {
 		t.Skip("cannot determine home directory")
 	}
-	result := resolveFilePath("~/", "")
+	result := ResolveFilePath("~/", "")
 	if result != home {
 		_ = result
 	}
 }
 
 func TestResolveFilePath_Empty(t *testing.T) {
-	result := resolveFilePath("", "/some/dir")
+	result := ResolveFilePath("", "/some/dir")
 	if result != "" {
 		t.Errorf("expected empty result for empty path, got %q", result)
 	}
@@ -268,7 +285,7 @@ func TestResolveFilePath_Empty(t *testing.T) {
 func TestLinksForLine_Memoizes(t *testing.T) {
 	tmpDir := t.TempDir()
 	testFile := filepath.Join(tmpDir, "main.go")
-	os.WriteFile(testFile, []byte("package main\n"), 0644)
+	requireNoError(t, os.WriteFile(testFile, []byte("package main\n"), 0644))
 
 	tw := &TerminalWidget{WorkDir: tmpDir}
 	line := "err at ./main.go:3"
@@ -283,7 +300,7 @@ func TestLinksForLine_Memoizes(t *testing.T) {
 
 	// Deleting the file must not affect the memoized result: detection is
 	// served from the memo, no re-stat.
-	os.Remove(testFile)
+	requireNoError(t, os.Remove(testFile))
 	second := tw.linksForLine(line)
 	if len(second) != 1 || second[0].FilePath != testFile {
 		t.Fatalf("expected memoized link, got %+v", second)

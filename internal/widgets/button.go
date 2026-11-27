@@ -1,9 +1,10 @@
 package widgets
 
 import (
-	"strings"
 	"unicode"
+	"unicode/utf8"
 
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
@@ -21,12 +22,25 @@ const (
 	ButtonMuted
 )
 
+// ButtonSpan is one styled run of a button's text. Style is a theme style
+// name resolved by the caller (plugin layer); zero keeps the button's own
+// style for that run.
+type ButtonSpan struct {
+	Text  string
+	Style term.Style
+}
+
 type ButtonConfig struct {
+	Icon    icons.Name    `json:"-"`
 	Label   string        `json:"label"`
 	Command string        `json:"command"`
 	Style   term.Style    `json:"-"`
 	Variant ButtonVariant `json:"-"`
-	Box     *BoxModel
+	// Spans, when non-empty, replaces the plain label with styled runs.
+	// Label stays as the plain-text fallback and is ignored while spans
+	// are set.
+	Spans []ButtonSpan `json:"-"`
+	Box   *BoxModel
 
 	OnClick   func()
 	OnCommand func(command string)
@@ -37,6 +51,7 @@ type ButtonWidget struct {
 	Config     ButtonConfig
 	Disabled   bool
 	label      string
+	spans      []ButtonSpan
 	accelIndex int
 	accelRune  rune
 	focused    bool
@@ -50,35 +65,76 @@ func NewButtonWidget(config ButtonConfig) *ButtonWidget {
 		b.Box.PaddingLeft = 1
 		b.Box.PaddingRight = 1
 	}
-	idx := strings.IndexByte(config.Label, '&')
-	if idx >= 0 && idx < len(config.Label)-1 {
-		runes := []rune(config.Label)
-		runeIdx := len([]rune(config.Label[:idx]))
-		b.label = string(runes[:runeIdx]) + string(runes[runeIdx+1:])
-		b.accelIndex = runeIdx
-		b.accelRune = runes[runeIdx+1]
-	} else {
-		b.label = config.Label
+	b.spans = append([]ButtonSpan(nil), config.Spans...)
+	b.label = config.Label
+	for i, ch := range config.Label {
+		if ch != '&' || i+1 == len(config.Label) {
+			continue
+		}
+		next, _ := utf8.DecodeRuneInString(config.Label[i+1:])
+		if unicode.IsSpace(next) {
+			continue
+		}
+		b.label = config.Label[:i] + config.Label[i+1:]
+		b.accelIndex = utf8.RuneCountInString(config.Label[:i])
+		b.accelRune = next
+		break
 	}
 	return b
 }
 
 func (b *ButtonWidget) SetLabel(label string) {
+	b.Config.Icon = ""
 	b.label = label
+	b.spans = nil
 	b.accelIndex = -1
 	b.accelRune = 0
 }
 
+// SetSpans replaces the styled runs and drops the plain label, keeping the
+// button focused state and callbacks untouched.
+func (b *ButtonWidget) SetSpans(spans []ButtonSpan) {
+	b.Config.Icon = ""
+	b.spans = append([]ButtonSpan(nil), spans...)
+	b.label = ""
+	b.accelIndex = -1
+	b.accelRune = 0
+}
+
+// HasSpans reports whether the button renders styled runs instead of the
+// plain label.
+func (b *ButtonWidget) HasSpans() bool { return len(b.spans) > 0 }
+
 func (b *ButtonWidget) Height() int { return 1 + b.BoxOverheadH() }
 func (b *ButtonWidget) Width() int {
+	if b.HasSpans() {
+		w := 0
+		for _, s := range b.spans {
+			w += textwidth.String(s.Text)
+		}
+		if b.Config.Variant == ButtonBracket {
+			w += 2
+		}
+		return w + b.BoxOverheadW()
+	}
 	return textwidth.String(b.text()) + b.BoxOverheadW()
 }
 
+func (b *ButtonWidget) showsAccelerator() bool {
+	return b.accelRune != 0 && !b.HasSpans() && icons.Active(b.Config.Icon) == ""
+}
+
 func (b *ButtonWidget) text() string {
-	if b.Config.Variant == ButtonBracket {
-		return "[" + b.label + "]"
+	label := b.label
+	if b.Config.Icon != "" {
+		if glyph := icons.Active(b.Config.Icon); glyph != "" {
+			label = glyph
+		}
 	}
-	return b.label
+	if b.Config.Variant == ButtonBracket {
+		return "[" + label + "]"
+	}
+	return label
 }
 
 func (b *ButtonWidget) style() term.Style {
@@ -123,10 +179,17 @@ func (b *ButtonWidget) Render(surface Surface) {
 		return
 	}
 
+	if b.HasSpans() {
+		b.renderSpans(inner, w)
+		return
+	}
+
 	x := 0
 	i := 0
 	accel := b.accelIndex
-	if accel >= 0 && b.Config.Variant == ButtonBracket {
+	if !b.showsAccelerator() {
+		accel = -1
+	} else if b.Config.Variant == ButtonBracket {
 		accel++
 	}
 	for _, ch := range b.text() {
@@ -148,6 +211,47 @@ func (b *ButtonWidget) Render(surface Surface) {
 	}
 }
 
+// renderSpans draws the styled runs. Focused and disabled buttons keep their
+// own background: span styles apply only to an unfocused, enabled button.
+func (b *ButtonWidget) renderSpans(inner Surface, w int) {
+	base := b.style()
+	spanStyle := func(s term.Style) term.Style {
+		if b.Disabled || b.focused || s == 0 {
+			return base
+		}
+		return s
+	}
+	reserve := 0
+	if b.Config.Variant == ButtonBracket {
+		reserve = 1
+	}
+	x := 0
+	if reserve == 1 && w > 0 {
+		inner.SetCell(0, 0, term.Cell{Ch: '[', Style: base})
+		x = 1
+	}
+	for _, span := range b.spans {
+		st := spanStyle(span.Style)
+		for _, ch := range span.Text {
+			rw := textwidth.Rune(ch)
+			if x+rw > w-reserve {
+				if x < w-reserve {
+					inner.SetCell(x, 0, term.Cell{Ch: ' ', Style: base})
+				}
+				if reserve == 1 && w > 0 {
+					inner.SetCell(w-1, 0, term.Cell{Ch: ']', Style: base})
+				}
+				return
+			}
+			inner.SetCell(x, 0, term.Cell{Ch: ch, Style: st})
+			x += rw
+		}
+	}
+	if reserve == 1 && x < w {
+		inner.SetCell(x, 0, term.Cell{Ch: ']', Style: base})
+	}
+}
+
 func (b *ButtonWidget) HandleEvent(ev tcell.Event) EventResult {
 	switch e := ev.(type) {
 	case *tcell.EventMouse:
@@ -166,7 +270,7 @@ func (b *ButtonWidget) HandleEvent(ev tcell.Event) EventResult {
 				return EventConsumed
 			}
 		}
-		if b.accelRune != 0 && e.Key() == tcell.KeyRune {
+		if e.Key() == tcell.KeyRune && b.showsAccelerator() {
 			if unicode.ToLower(term.KeyRune(e)) == unicode.ToLower(b.accelRune) {
 				b.trigger()
 				return EventConsumed

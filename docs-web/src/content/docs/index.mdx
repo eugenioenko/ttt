@@ -4,7 +4,7 @@ description: TTT Editor, a terminal text editor. A real alternative to VS Code, 
 template: splash
 hero:
   title: "TTT Editor <br> Terminal Text Tool"
-  tagline: The IDE that lives in your terminal.
+  tagline: "The IDE that lives in your terminal.<br>A TUI that feels like a GUI."
   actions:
     - text: Get Started
       link: /getting-started/installation/
@@ -15,9 +15,15 @@ hero:
       icon: external
 ---
 
-import { Card, CardGrid } from '@astrojs/starlight/components';
+import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
 
-<video src="/demo/demo.webm" autoplay loop muted playsinline style="width:100%;border-radius:8px;margin-bottom:2rem;"></video>
+<div class="demo-window">
+  <div class="demo-titlebar" aria-hidden="true">
+    <span class="demo-window-dots"></span>
+    ttt
+  </div>
+  <video src="/demo/demo.webm" aria-label="TTT editor demo" autoplay loop muted playsinline></video>
+</div>
 
 ## Features
 
@@ -31,14 +37,25 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
   <Card title="LSP Intelligence" icon="setting">
     Completions, diagnostics with inline squiggles, hover info, rename, references, and formatting for 23+ languages.
   </Card>
-  <Card title="Integrated Terminal" icon="seti:shell">
-    Full terminal emulator with VT escape sequence support, true color rendering, and multiple tabs.
+  <Card title="macOS Command Key" icon="laptop">
+    Enable Command (⌘) shortcuts in TTT to save with ⌘S, copy with ⌘C, and paste with ⌘V.<sup>*</sup>
+
+    <small>\* Depends on [terminal support](/guides/macos-command-key/).</small>
   </Card>
-  <Card title="Git Built In" icon="github">
-    Stage, commit, push, inline diff view (partial and full-file), blame, and review GitHub PRs directly from the terminal.
+  <Card title="Syntax Highlighting" icon="document">
+    TTT ships with TextMate grammars for 120+ languages. Highlighting works as soon as you open a file.
   </Card>
-  <Card title="Multi-Cursor & Search" icon="pencil">
-    Place cursors with Ctrl+D, Ctrl+K L, or Alt+Click. Ripgrep-powered workspace search with glob filters.
+  <Card title='<img class="terminal-card-icon" src="/favicon.svg" alt="" /> Integrated Terminal'>
+    Run tests or start a dev server in a terminal tab beside your code. Ctrl+click a file path in the output to jump straight to the source.
+  </Card>
+  <Card title="Git and Jujutsu Built In" icon="github">
+    Stage, commit, push, view diffs and blame, and review GitHub PRs directly from the terminal.
+  </Card>
+  <Card title="Multi-Cursor Editing" icon="pencil">
+    Edit several places at once. By default, Ctrl+D adds the next match and Ctrl+K L selects all matches. Both shortcuts can be changed in your keybindings.
+  </Card>
+  <Card title="Workspace Search" icon="magnifier">
+    Search across project folders with ripgrep. Include or exclude files with glob patterns, then open a match at its line.
   </Card>
   <Card title="Workspaces" icon="open-book">
     Multi-folder projects, file explorer, quick open, and tabs. Save and restore workspace layouts with .ttt files.
@@ -47,3 +64,20 @@ import { Card, CardGrid } from '@astrojs/starlight/components';
     Single binary, works out of the box. Customize keybindings, settings, and themes only when you want to.
   </Card>
 </CardGrid>
+
+<footer class="homepage-footer">
+  <div class="footer-install">
+    <div>
+      <h2>Open your first project</h2>
+      <p>Install TTT, then run <code>ttt</code> in your project folder.</p>
+    </div>
+    <LinkButton href="/getting-started/installation/" icon="right-arrow">Download TTT</LinkButton>
+  </div>
+  <div class="footer-links">
+    <strong><img src="/favicon.svg" alt="" width="20" height="20" /> TTT Editor</strong>
+    <nav aria-label="Footer links">
+      <a href="/getting-started/quick-start/">Quick start</a>
+      <a href="https://github.com/eugenioenko/ttt">GitHub</a>
+    </nav>
+  </div>
+</footer>

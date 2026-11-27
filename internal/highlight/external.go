@@ -3,6 +3,7 @@ package highlight
 import (
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 
@@ -20,12 +21,46 @@ type grammarRef struct {
 	scopeName  string
 	language   string
 	languageID string
+	// borrowedName marks a language name taken from the scope suffix that
+	// selects a different embedded grammar; it is shown but never looked up.
+	borrowedName bool
 }
 
 type grammarCatalog struct {
 	registry  *textmate.Registry
 	fileTypes map[string]grammarRef
 	languages map[string]grammarRef
+	external  []grammarRef
+}
+
+const PlainText = "plaintext"
+
+type Language struct {
+	// Scope names keep grammars with colliding names or aliases independently selectable.
+	ID   string
+	Name string
+}
+
+func Languages() []Language {
+	c := currentCatalog()
+	var result []Language
+	seen := map[string]bool{}
+	for _, ref := range c.external {
+		result = append(result, Language{ID: ref.scopeName, Name: ref.language})
+		seen[ref.scopeName] = true
+	}
+	for _, info := range grammars.Infos() {
+		if !seen[info.ScopeName] {
+			result = append(result, Language{ID: info.ScopeName, Name: info.DisplayName})
+		}
+	}
+	slices.SortFunc(result, func(a, b Language) int {
+		if order := strings.Compare(strings.ToLower(a.Name), strings.ToLower(b.Name)); order != 0 {
+			return order
+		}
+		return strings.Compare(a.ID, b.ID)
+	})
+	return result
 }
 
 var (
@@ -47,6 +82,7 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 	raw := map[string]*textmate.RawGrammar{}
 	fileTypes := map[string]grammarRef{}
 	languages := map[string]grammarRef{}
+	var external []grammarRef
 	var errs []error
 	for _, ext := range list {
 		data, err := os.ReadFile(ext.Path)
@@ -69,13 +105,16 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		if ref.language == "" {
 			ref.language = g.Name
 		}
+		suffixTaken := namesOtherEmbedded(shortName, g.ScopeName)
 		if ref.language == "" {
 			ref.language = shortName
+			ref.borrowedName = suffixTaken
 		}
 		ref.languageID = strings.ToLower(strings.TrimSpace(ref.language))
 		if info, ok := grammars.InfoForScope(g.ScopeName); ok && ext.Language == "" {
 			ref.languageID = info.ID
 		}
+		external = append(external, ref)
 		types := ext.FileTypes
 		if len(types) == 0 {
 			types = g.FileTypes
@@ -83,18 +122,52 @@ func SetExternalGrammars(list []ExternalGrammar) []error {
 		for _, ft := range types {
 			addRef(fileTypes, strings.TrimPrefix(ft, "."), ref)
 		}
-		addRef(languages, ref.language, ref)
-		addRef(languages, shortName, ref)
+		if !ref.borrowedName {
+			addRef(languages, ref.language, ref)
+		}
+		if !suffixTaken {
+			addRef(languages, shortName, ref)
+		}
 		for _, ft := range types {
 			addRef(languages, strings.TrimPrefix(ft, "."), ref)
 		}
 	}
 
 	next := newCatalog(raw, fileTypes, languages)
+	next.external = external
 	catalogMu.Lock()
 	catalog = next
 	catalogMu.Unlock()
 	return errs
+}
+
+// namesOtherEmbedded reports whether name selects a different embedded grammar.
+// A scope's last segment is only a guess at its language name: source.emacs.lisp
+// must not take "lisp" from Common Lisp.
+func namesOtherEmbedded(name, scopeName string) bool {
+	info, ok := grammars.InfoForID(name)
+	if !ok {
+		info, ok = grammars.InfoForAlias(name)
+	}
+	return ok && info.ScopeName != scopeName
+}
+
+// CanonicalLanguageID resolves a language ID, alias, display name or scope
+// name to the embedded grammar's canonical ID. External grammars can carry an
+// alias or scope as their language ID, so callers that switch on the ID need
+// this before comparing. Unknown names are returned lowercased and trimmed.
+func CanonicalLanguageID(lang string) string {
+	key := strings.ToLower(strings.TrimSpace(lang))
+	if info, ok := grammars.InfoForID(key); ok {
+		return info.ID
+	}
+	if info, ok := grammars.InfoForAlias(key); ok {
+		return info.ID
+	}
+	if info, ok := grammars.InfoForScope(key); ok {
+		return info.ID
+	}
+	return key
 }
 
 func addRef(m map[string]grammarRef, key string, ref grammarRef) {
@@ -115,7 +188,12 @@ func newCatalog(raw map[string]*textmate.RawGrammar, fileTypes, languages map[st
 		return grammars.Load(scopeName)
 	}
 	return &grammarCatalog{
-		registry:  textmate.NewRegistry(textmate.RegistryOptions{LoadGrammar: load}),
+		registry: textmate.NewRegistry(textmate.RegistryOptions{
+			LoadGrammar: load,
+			HasGrammar: func(scopeName string) bool {
+				return raw[scopeName] != nil || grammars.Has(scopeName)
+			},
+		}),
 		fileTypes: fileTypes,
 		languages: languages,
 	}
@@ -166,7 +244,21 @@ func (c *grammarCatalog) externalForFilename(name string) (grammarRef, bool) {
 }
 
 func (c *grammarCatalog) forLanguage(lang string) (grammarRef, bool) {
-	if ref, ok := c.languages[strings.ToLower(strings.TrimSpace(lang))]; ok {
+	key := strings.ToLower(strings.TrimSpace(lang))
+	for _, ref := range c.external {
+		if ref.scopeName == lang {
+			return ref, true
+		}
+	}
+	if info, ok := grammars.InfoForScope(lang); ok {
+		return refFromInfo(info), true
+	}
+	for _, ref := range c.external {
+		if ref.languageID == key && !ref.borrowedName {
+			return ref, true
+		}
+	}
+	if ref, ok := c.languages[key]; ok {
 		return ref, true
 	}
 	info, ok := grammars.InfoForID(lang)

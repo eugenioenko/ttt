@@ -2,6 +2,7 @@ package app
 
 import (
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,6 +14,22 @@ import (
 	"github.com/eugenioenko/ttt/internal/render"
 	"github.com/eugenioenko/ttt/internal/term"
 )
+
+func TestListenServerReleasesPortBeforeRestart(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	address := ln.Addr().String()
+	stop := serveExec(nil, ln)
+	defer stop()
+	stop()
+	next, err := net.Listen("tcp", address)
+	if err != nil {
+		t.Fatalf("listener retained restart port: %v", err)
+	}
+	requireNoError(t, next.Close())
+}
 
 func newListenTestApp(t *testing.T) *App {
 	t.Helper()
@@ -80,7 +97,7 @@ func execHandlerRequest(t *testing.T, a *App, method, path, body string) *http.R
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { resp.Body.Close() })
+	t.Cleanup(func() { _ = resp.Body.Close() })
 	return resp
 }
 

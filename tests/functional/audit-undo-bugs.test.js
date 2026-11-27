@@ -1,7 +1,6 @@
 // Repro tests for confirmed bugs from audit/2026-07-12-ux-bug-audit.md (branch audit/bug-hunt).
-// Each test asserts the CORRECT behavior and is declared with `it.fails`,
-// so it passes while the bug exists and goes red the moment the bug is
-// fixed — at that point remove the `.fails` marker and the audit entry.
+// Unfixed bugs use `it.fails`; remove the marker when fixing them so CI
+// continues to assert the correct behavior.
 import { describe, it, expect, afterEach } from "vitest";
 import * as tui from "./tui.js";
 import { createTempDir, createTempFile, cleanupDir, readFile } from "./helpers.js";
@@ -82,8 +81,8 @@ describe("BUG-022: Enter with auto-indent is not one undo step", () => {
   });
 });
 
-describe("BUG-023: viewport does not follow an off-screen undo", () => {
-  it.fails("undo scrolls the restored cursor line into view", () => {
+describe("BUG-023: viewport follows off-screen undo and redo", () => {
+  it("undo scrolls the restored cursor line into view", () => {
     dir = createTempDir();
     const lines = Array.from({ length: 100 }, (_, i) => `L${i + 1}`).join("\n");
     const file = createTempFile(dir, "far.txt", lines + "\n");
@@ -100,12 +99,15 @@ describe("BUG-023: viewport does not follow an off-screen undo", () => {
     tui.press("enter"); // back to the top
     tui.press("ctrl+z"); // undo the far-away edit
     const s = tui.snapshot();
+    tui.press("ctrl+g");
+    tui.type("1");
+    tui.press("enter");
+    tui.press("ctrl+y");
+    const redo = tui.snapshot();
     const { snapshots } = tui.run();
 
-    // Correct: cursor moves to line 90 AND the viewport scrolls there
-    // (Undo()/Redo() should call scrollViewport() like other cursor-moving
-    // paths). Buggy: cursor.line becomes 89 but top_line stays 0.
     expect(snapshots[s]).toContain("L90");
+    expect(snapshots[redo]).toContain("XL90");
   });
 });
 

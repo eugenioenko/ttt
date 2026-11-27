@@ -72,6 +72,16 @@ func bufColToVisualCol(line string, bufCol, tabW int) int {
 	return visCol
 }
 
+func runeByteOffset(text string, col int) int {
+	for offset := range text {
+		if col <= 0 {
+			return offset
+		}
+		col--
+	}
+	return len(text)
+}
+
 // visualColToBufCol converts a terminal column into a rune index. A column
 // inside a multi-column rune (a tab's whitespace or the second half of a
 // fullwidth rune) resolves to that rune's index, matching how a click lands on
