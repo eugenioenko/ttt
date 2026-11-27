@@ -28,7 +28,7 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 	}
 	defer peer.stopChildren()
 	options := dap.SessionOptions{RunInTerminal: func(ctx context.Context, req dap.TerminalRequest) (int, error) {
-		return a.runDebugTerminal(ctx, root, req, deliver)
+		return a.runDebugTerminal(ctx, root, peer, req, deliver)
 	}}
 	options.StartDebugging = func(requestCtx context.Context, request string, config map[string]any, connect dap.OpenChild) error {
 		mu.Lock()
@@ -39,7 +39,7 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 		children.Add(1)
 		mu.Unlock()
 		childCtx, cancel := context.WithCancel(childrenCtx)
-		child := &debugRun{ctx: childCtx, cancel: cancel, attached: root.attached, folder: root.folder, file: root.file, languages: root.languages, points: make(chan map[string][]int, 1)}
+		child := &debugRun{ctx: childCtx, cancel: cancel, attached: request == "attach", folder: root.folder, file: root.file, languages: root.languages, points: make(chan map[string][]int, 1)}
 		childTarget := dap.Target{Type: target.Type, Request: request, Folder: root.folder, Arguments: config}
 		started := make(chan error, 1)
 		deliver(func() {
@@ -117,18 +117,21 @@ func (a *App) removeDebugChild(child, parent *debugRun) {
 	if a.activeDebugPeer() != child {
 		return
 	}
-	next := parent
-	for _, other := range a.debugger.peers {
-		if other.thread != nil && other.ctx.Err() == nil {
-			next = other
-			break
+	if a.selectPausedPeer() {
+		return
+	}
+	a.debugger.selected = parent
+	a.clearDebugInspection()
+	a.refreshDebugControls()
+}
+
+func (a *App) selectPausedPeer() bool {
+	for _, other := range append([]*debugRun{a.debugger.run}, a.debugger.peers...) {
+		if other != nil && other.thread != nil && other.ctx.Err() == nil {
+			a.debugger.selected = other
+			a.showDebugStop(other, *other.thread, other.frames)
+			return true
 		}
 	}
-	a.debugger.selected = next
-	if next.thread != nil {
-		a.showDebugStop(next, *next.thread, next.frames)
-	} else {
-		a.clearDebugInspection()
-	}
-	a.refreshDebugControls()
+	return false
 }

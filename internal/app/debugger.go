@@ -215,6 +215,12 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 	if t.Request == "attach" {
 		for _, key := range []string{"pid", "processId"} {
 			if t.Arguments[key] == "${command:pickProcess}" {
+				if adapter.Provider == "generic" {
+					if _, err := adapter.Arguments(t); err != nil {
+						a.StatusError(err.Error())
+						return
+					}
+				}
 				a.pickDebugProcess(t, key)
 				return
 			}

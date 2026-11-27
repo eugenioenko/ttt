@@ -215,6 +215,9 @@ func (a *App) clearDebugInspection() {
 
 func (a *App) debugResumed(r *debugRun) {
 	r.thread = nil
+	if a.selectPausedPeer() {
+		return
+	}
 	if r.stepping {
 		a.beginDebugInspection()
 		a.debugger.file = ""
