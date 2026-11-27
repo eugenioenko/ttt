@@ -1,8 +1,10 @@
 package app
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"os"
 	"os/exec"
 	"strings"
@@ -13,12 +15,30 @@ import (
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
+type delayedContinueStream struct {
+	io.Reader
+	io.WriteCloser
+	processed chan struct{}
+	ctx       context.Context
+}
+
+func (s delayedContinueStream) Write(data []byte) (int, error) {
+	n, err := s.WriteCloser.Write(data)
+	if err == nil && bytes.Contains(data, []byte(`"command":"continue"`)) {
+		select {
+		case <-s.processed:
+		case <-s.ctx.Done():
+		}
+	}
+	return n, err
+}
+
 func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 	if mode := os.Getenv("TTT_TEST_DAP_CONFIGURE"); mode != "" {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event", "continue-new-stop", "continue-partial-new-stop"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event", "continue-new-stop", "continue-partial-new-stop", "continue-write-stop"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -35,6 +55,29 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			order := make(chan string, 2)
 			run.onBindings = func(_ string, _ []int, _ []debugBinding) { order <- "response" }
 			err := run.runSession(ctx, func(_ context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
+				if mode == "continue-write-stop" {
+					in, err := cmd.StdinPipe()
+					if err != nil {
+						return nil, err
+					}
+					out, err := cmd.StdoutPipe()
+					if err != nil {
+						return nil, err
+					}
+					if err = cmd.Start(); err != nil {
+						return nil, err
+					}
+					stream := delayedContinueStream{out, in, make(chan struct{}), ctx}
+					return dap.NewSession(stream, func(e dap.Event) {
+						if e.Name == "breakpoint" {
+							order <- "event"
+						}
+						onEvent(e)
+						if e.Name == "stopped" && bytes.Contains(e.Body, []byte(`"threadId":3`)) {
+							close(stream.processed)
+						}
+					}), nil
+				}
 				return dap.StartStdio(cmd, func(event dap.Event) {
 					if event.Name == "breakpoint" {
 						order <- "event"
@@ -80,6 +123,9 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			if len(order) != 2 || <-order != "response" || <-order != "event" {
 				t.Error("breakpoint event delivered before response")
 			}
+			if mode == "continue-write-stop" {
+				_ = cmd.Wait()
+			}
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}
@@ -120,7 +166,7 @@ func simulateConfiguringAdapter(mode string) {
 	if json.Unmarshal(bp.Arguments, &args) != nil || len(args.Breakpoints) != 1 || args.Breakpoints[0].Line != 7 {
 		fail()
 	}
-	reply(bp, nil)
+	send(map[string]any{"type": "response", "success": true, "request_seq": bp.Seq})
 	send(map[string]any{"type": "event", "event": "breakpoint"})
 	filter := read("setExceptionBreakpoints")
 	if string(filter.Arguments) != `{"filters":["raised"]}` {
@@ -168,6 +214,12 @@ func simulateConfiguringAdapter(mode string) {
 		case "continue-event":
 			send(map[string]any{"type": "event", "event": "continued", "body": map[string]int{"threadId": 2}})
 			reply(control, nil)
+		case "continue-write-stop":
+			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
+			pending := read("stackTrace")
+			reply(control, nil)
+			reply(pending, nil)
+			reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})
 		case "continue-new-stop", "continue-partial-new-stop":
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 			pending := read("stackTrace")
@@ -178,7 +230,7 @@ func simulateConfiguringAdapter(mode string) {
 		default:
 			reply(control, nil)
 		}
-		if mode != "continue-partial" && !strings.HasSuffix(mode, "new-stop") {
+		if mode != "continue-write-stop" && mode != "continue-partial" && !strings.HasSuffix(mode, "new-stop") {
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 		}
 		reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})

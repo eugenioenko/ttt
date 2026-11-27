@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 
 	"path/filepath"
 	"slices"
@@ -66,6 +67,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	stops := make(chan stopEvent, 1)
 	var pausedIDs []int
 	stopGeneration := make(map[int]uint64)
+	uncertain := make(map[int]bool)
 	var lastContinuation, lastAllStop uint64
 	queueStop := func(all bool, id *int, gen uint64) {
 		select {
@@ -84,10 +86,11 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			remove := stopGeneration[id] <= through && (tid == nil || all == nil || *all || id == *tid)
 			if remove {
 				delete(stopGeneration, id)
+				delete(uncertain, id)
 			}
 			return remove
 		})
-		if previous == len(pausedIDs) && previous > 0 {
+		if previous == len(pausedIDs) && previous > 0 && len(uncertain) == 0 {
 			return
 		}
 		generation++
@@ -105,6 +108,9 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		}
 	}
 	r.resumeControl = func(request context.Context, s *dap.Session, cmd string, id int) error {
+		eventMu.Lock()
+		started := generation
+		eventMu.Unlock()
 		var sentGeneration uint64
 		return s.CallWithResponse(request, cmd, map[string]int{"threadId": id}, func() {
 			eventMu.Lock()
@@ -117,7 +123,16 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			}
 			eventMu.Lock()
 			defer eventMu.Unlock()
-			applyContinuation(&id, result.AllThreadsContinued, sentGeneration)
+			if lastContinuation > started {
+				return
+			}
+			for _, pausedID := range pausedIDs {
+				g := stopGeneration[pausedID]
+				if g > started && g <= sentGeneration && (result.AllThreadsContinued == nil || *result.AllThreadsContinued || pausedID == id) {
+					uncertain[pausedID] = true
+				}
+			}
+			applyContinuation(&id, result.AllThreadsContinued, started)
 		})
 	}
 	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -149,6 +164,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 					lastAllStop = generation
 				}
 				if body.ThreadID != nil {
+					delete(uncertain, *body.ThreadID)
 					stopGeneration[*body.ThreadID] = generation
 				}
 				paused, pausedThread = true, body.ThreadID
@@ -282,6 +298,41 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			sent = next
 		case event := <-stops:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
+			// A stop received during the write can fall on either side of the adapter's resume.
+			eventMu.Lock()
+			candidates := slices.Sorted(maps.Keys(uncertain))
+			eventMu.Unlock()
+			for _, id := range candidates {
+				_, _, probeErr := stoppedFrames(request, session, &id)
+				eventMu.Lock()
+				if generation == event.generation && uncertain[id] {
+					delete(uncertain, id)
+					if probeErr != nil && request.Err() == nil {
+						pausedIDs = slices.DeleteFunc(pausedIDs, func(n int) bool { return n == id })
+						delete(stopGeneration, id)
+					}
+				}
+				eventMu.Unlock()
+			}
+			if len(candidates) > 0 {
+				eventMu.Lock()
+				if generation != event.generation || len(pausedIDs) == 0 {
+					if generation == event.generation {
+						paused = false
+						pausedThread = nil
+						resumed(false)
+					}
+					eventMu.Unlock()
+					finish()
+					continue
+				}
+				if event.threadID != nil && !slices.Contains(pausedIDs, *event.threadID) {
+					id := pausedIDs[0]
+					event.threadID = &id
+					pausedThread = &id
+				}
+				eventMu.Unlock()
+			}
 			tid, frames, err := stoppedFrames(request, session, event.threadID)
 			var listed struct{ Threads []debugThread }
 			if event.all && err == nil {
@@ -374,18 +425,16 @@ func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string]
 			list[i] = map[string]int{"line": line}
 		}
 		var result struct{ Breakpoints []debugBinding }
-		var decodeErr error
+
 		err := s.CallWithResponse(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": list}, nil, func(raw json.RawMessage) {
 			if apply != nil {
-				decodeErr = json.Unmarshal(raw, &result)
-				if decodeErr == nil {
-					apply(path, lines, result.Breakpoints)
+				if json.Unmarshal(raw, &result) != nil {
+					result.Breakpoints = nil
 				}
+				apply(path, lines, result.Breakpoints)
 			}
 		})
-		if err == nil {
-			err = decodeErr
-		}
+
 		if err != nil {
 			if apply != nil && ctx.Err() == nil && len(lines) > 0 {
 				bindings := make([]debugBinding, len(lines))

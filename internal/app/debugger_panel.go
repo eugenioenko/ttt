@@ -272,7 +272,7 @@ func (a *App) debugResumed(r *debugRun) {
 }
 
 // DAP frame and variable references expire as soon as execution resumes.
-func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(T)) {
+func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(T, error)) {
 	epoch := a.debugger.panel.epoch
 	post := a.tasks.post
 	go func() {
@@ -287,7 +287,7 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 			if err != nil {
 				a.StatusError(err.Error())
 			}
-			apply(result)
+			apply(result, err)
 		})
 	}()
 }
@@ -310,7 +310,7 @@ func (a *App) loadDebugFrame(r *debugRun, next *debugInspection, f debugFrame) {
 			VariablesReference int
 			Expensive          bool
 		}
-	}) {
+	}, _ error) {
 		// Count the scopes response as pending until every visible child request is scheduled.
 		pending := 1
 		done := func() {
@@ -347,7 +347,7 @@ func (a *App) loadDebugFrame(r *debugRun, next *debugInspection, f debugFrame) {
 
 func (a *App) loadDebugVariables(r *debugRun, inspection *debugInspection, n *widgets.TreeNode, done func()) {
 	ref := inspection.values[n].VariablesReference
-	debugQuery(a, r, "variables", map[string]int{"variablesReference": ref}, func(result struct{ Variables []debugVariable }) {
+	debugQuery(a, r, "variables", map[string]int{"variablesReference": ref}, func(result struct{ Variables []debugVariable }, _ error) {
 		n.Children = nil
 		for _, v := range result.Variables {
 			child := &widgets.TreeNode{ID: n.ID + "/" + strconv.Quote(v.Name), Label: v.Name + " = " + v.Value, Expandable: v.VariablesReference != 0}
@@ -422,9 +422,14 @@ func (a *App) selectDebugThread(tid int) {
 		return
 	}
 	generation := r.generation
+	previous := a.debugger.panel.debugInspection
 	a.beginDebugInspection()
-	debugQuery(a, r, "stackTrace", map[string]int{"threadId": tid, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
+	debugQuery(a, r, "stackTrace", map[string]int{"threadId": tid, "levels": 50}, func(result struct{ StackFrames []debugFrame }, err error) {
 		if r.generation != generation || r.busy || r.stepping {
+			return
+		}
+		if err != nil {
+			a.publishDebugInspection(&previous)
 			return
 		}
 		for i := range result.StackFrames {
