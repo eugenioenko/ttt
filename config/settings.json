@@ -12,7 +12,7 @@
     "scrollbarGlyphs": "blocks",
     "pointerShapes": true,
     "highlightActiveGroupBorder": true,
-    "highlightDividers": false
+    "highlightDividers": true
   },
   "editor": {
     "autoClosing": {

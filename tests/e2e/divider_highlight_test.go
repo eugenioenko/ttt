@@ -91,7 +91,7 @@ func assertNoHover(t *testing.T, cells [][]term.Cell) {
 	}
 }
 
-func TestSidebarDividerHighlightIsOptIn(t *testing.T) {
+func TestSidebarDividerHighlightIsOptOut(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	sp := h.app.SplitPanel
@@ -99,9 +99,6 @@ func TestSidebarDividerHighlightIsOptIn(t *testing.T) {
 	r := sp.GetRect()
 
 	h.mouseMove(divX, r.Y+10)
-	assertNoHover(t, h.frame())
-
-	h.setHighlightDividers(true)
 	assertHoverColumn(t, h.frame(), divX, r.Y, r.Y+r.H-1)
 
 	h.mouseMove(divX+10, r.Y+10)
@@ -109,6 +106,10 @@ func TestSidebarDividerHighlightIsOptIn(t *testing.T) {
 
 	h.mouseMove(divX, r.Y+10)
 	h.setHighlightDividers(false)
+	assertNoHover(t, h.frame())
+
+	h.mouseMove(divX+10, r.Y+10)
+	h.mouseMove(divX, r.Y+10)
 	assertNoHover(t, h.frame())
 }
 

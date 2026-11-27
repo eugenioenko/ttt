@@ -394,6 +394,7 @@ func DefaultAppearanceSettings() AppearanceSettings {
 		ScrollbarGlyphs:            ScrollbarGlyphsBlocks,
 		PointerShapes:              boolPtr(true),
 		HighlightActiveGroupBorder: true,
+		HighlightDividers:          true,
 	}
 }
 

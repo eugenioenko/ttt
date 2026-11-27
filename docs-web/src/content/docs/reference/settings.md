@@ -80,7 +80,7 @@ Lua plugin key hooks receive enabled Super/Cmd shortcuts as Ctrl shortcuts in `"
 | `appearance.scrollbarGlyphs` | string | `"blocks"` | Glyphs that draw git change marks on the editor scrollbar: `"blocks"` uses the half and eighth blocks every font has, which place a mark exactly near the top or bottom of a cell and stretch one in the middle to the nearer edge; `"legacy"` adds the Symbols for Legacy Computing thin bars, which place every mark to the exact eighth of a cell. Kitty, Ghostty, WezTerm and foot draw those themselves; elsewhere the font needs them or the marks show as boxes. |
 | `appearance.pointerShapes` | bool | `true` | Change the mouse pointer shape (I-beam, hand, resize divider, dragging hand) via terminal OSC 22 sequences. Set to `false` for compatibility with terminals or multiplexers that do not support OSC 22 or if you prefer a static pointer. Mouse clicks, selection, scrolling, drag gestures, and mouse reporting remain enabled when false. |
 | `appearance.highlightActiveGroupBorder` | bool | `true` | Highlight the active editor group’s border when editors are split. Changes apply immediately. Also in **Settings > Appearance > Window**. |
-| `appearance.highlightDividers` | bool | `false` | Highlight a resizable divider (sidebar, bottom or side panel, editor splits) once the pointer has stayed over it for 300 ms, and immediately while it is being dragged. Uses the theme's `borderHover` color. Changes apply immediately. Also in **Settings > Appearance > Window**. |
+| `appearance.highlightDividers` | bool | `true` | Highlight a resizable divider (sidebar, bottom or side panel, editor splits) once the pointer has stayed over it for 300 ms, and immediately while it is being dragged. Uses the theme's `borderHover` color. Changes apply immediately. Also in **Settings > Appearance > Window**. |
 
 ## Icon overrides
 
@@ -555,7 +555,7 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "scrollbarGlyphs": "blocks",
     "pointerShapes": true,
     "highlightActiveGroupBorder": true,
-    "highlightDividers": false
+    "highlightDividers": true
   },
   "editor": {
     "tabSize": 4,
