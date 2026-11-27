@@ -1,6 +1,7 @@
 package widgets
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/term"
@@ -107,5 +108,52 @@ func TestParagraphDefaultStyle(t *testing.T) {
 
 	if s.cells[0][0].Style != term.StyleDefault {
 		t.Errorf("expected StyleDefault (%d), got %d", term.StyleDefault, s.cells[0][0].Style)
+	}
+}
+
+func TestParagraphWrapDisplayWidth(t *testing.T) {
+	for _, tc := range []struct {
+		name, text string
+		width      int
+		want       []string
+	}{
+		{"lost suffix", "界界ab", 4, []string{"界界", "ab"}},
+		{"word break", "界a bc", 4, []string{"界a", "bc"}},
+		{"exact fit", "界ab", 4, []string{"界ab"}},
+		{"odd width", "界界ab", 3, []string{"界", "界a", "b"}},
+		{"one column", "界ab", 1, []string{"界", "a", "b"}},
+		{"ascii words", "hello world", 6, []string{"hello", "world"}},
+		{"ascii hard break", "abcdef", 4, []string{"abcd", "ef"}},
+		{"empty", "", 4, []string{""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := wrapText(tc.text, tc.width); !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("wrapText(%q, %d) = %q, want %q", tc.text, tc.width, got, tc.want)
+			}
+		})
+	}
+}
+
+func TestParagraphFullwidthHeightAndRender(t *testing.T) {
+	p := NewParagraphWidget("界界ab")
+	if got := p.HeightForWidth(4); got != 2 {
+		t.Errorf("HeightForWidth(4) = %d, want 2", got)
+	}
+	if got := p.HeightAtWidth(4); got != 2 {
+		t.Errorf("HeightAtWidth(4) = %d, want 2", got)
+	}
+	s := renderWidget(p, 0, 0, 4, 3)
+	if got := p.Height(); got != 2 {
+		t.Errorf("Height() = %d, want 2 after render", got)
+	}
+	for _, cell := range []struct {
+		x, y int
+		ch   rune
+	}{
+		{0, 0, '界'}, {2, 0, '界'}, {0, 1, 'a'}, {1, 1, 'b'},
+	} {
+		if got := s.cells[cell.y][cell.x].Ch; got != cell.ch {
+			t.Errorf("cell (%d, %d) = %q, want %q", cell.x, cell.y, got, cell.ch)
+		}
 	}
 }

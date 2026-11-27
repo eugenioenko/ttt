@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -74,12 +75,20 @@ func wrapText(text string, width int) []string {
 	start := 0
 
 	for start < len(runes) {
-		if start+width >= len(runes) {
+		end, columns := start, 0
+		for end < len(runes) {
+			w := textwidth.Rune(runes[end])
+			if columns+w > width && end > start {
+				break
+			}
+			columns += w
+			end++
+		}
+		if end == len(runes) {
 			lines = append(lines, string(runes[start:]))
 			break
 		}
 
-		end := start + width
 		lastSpace := -1
 		for i := end - 1; i > start; i-- {
 			if runes[i] == ' ' {
