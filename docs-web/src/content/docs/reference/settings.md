@@ -382,6 +382,19 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 
 Workspace targets come from `.ttt/launch.json`, with `.vscode/launch.json` as a fallback. The generic provider passes adapter-specific arguments through and expands `${workspaceFolder}`. Task execution and interactive input substitution are unsupported.
 
+For a GDB process picker, add the following entry to the launch file's `configurations` array. Use a numeric PID to select a known process directly. Adapters that name their PID argument `processId` accept the same picker placeholder in that field.
+
+```json
+{
+  "name": "Attach GDB",
+  "type": "gdb",
+  "request": "attach",
+  "pid": "${command:pickProcess}"
+}
+```
+
+To attach to a running gdbserver, replace `pid` with `"target": "127.0.0.1:2345"` and supply `program` for the local binary with debug symbols. The sidebar's Detach action requests that the adapter leave the target running. When the *DAP adapter itself* is already listening, configure its `debug.adapters` entry with `"transport": "tcp"` and `"address": "host:port"`.
+
 ## Search
 
 | Key | Type | Default | Description |

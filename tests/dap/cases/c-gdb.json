@@ -52,5 +52,41 @@
       "line": 8,
       "variable": "count = 42"
     }
-  ]
+  ],
+  "service": {
+    "source": "fixtures/c-attach/main.c",
+    "binary": "bin/linux-amd64/c-attach",
+    "command": [
+      "./c-attach"
+    ],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "pidAttach": {
+    "arguments": {
+      "pid": "${pid}",
+      "program": "${workspaceFolder}/c-attach"
+    },
+    "continueOnAttach": true
+  },
+  "addressAttach": {
+    "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
+      "gdbserver",
+      "--once",
+      "--attach",
+      "stdio",
+      "${pid}"
+    ],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/c-attach",
+      "target": "127.0.0.1:${port}"
+    },
+    "continueOnAttach": true
+  }
 }

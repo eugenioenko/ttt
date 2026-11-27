@@ -1,7 +1,10 @@
 package dap
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -28,4 +31,27 @@ func (a Adapter) Process(folder string) (*exec.Cmd, error) {
 		cmd.Env = append(cmd.Env, k+"="+expand(v))
 	}
 	return cmd, nil
+}
+
+func (a Adapter) Open(ctx context.Context, folder string, onEvent func(Event)) (*Session, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch a.Transport {
+	case "tcp":
+		var dialer net.Dialer
+		conn, err := dialer.DialContext(ctx, "tcp", a.Address)
+		if err != nil {
+			return nil, err
+		}
+		return NewSession(conn, onEvent), nil
+	case "", "stdio":
+		cmd, err := a.Process(folder)
+		if err != nil {
+			return nil, err
+		}
+		return StartStdio(cmd, onEvent)
+	default:
+		return nil, fmt.Errorf("unknown adapter transport %q", a.Transport)
+	}
 }

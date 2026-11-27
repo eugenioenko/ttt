@@ -14,6 +14,7 @@ type Name string
 const (
 	DebugContinue  Name = "debug-continue"
 	DebugPause     Name = "debug-pause"
+	DebugDetach    Name = "debug-detach"
 	DebugStop      Name = "debug-stop"
 	DebugStepOver  Name = "debug-step-over"
 	DebugStepIn    Name = "debug-step-in"
@@ -80,6 +81,7 @@ type glyphs struct {
 var table = map[Name]glyphs{
 	DebugContinue:  {Plain: "⏵", Nerd: "\ueacf"},
 	DebugPause:     {Plain: "⏸", Nerd: "\uf04c"},
+	DebugDetach:    {Plain: "⏏", Nerd: "\uf052"},
 	DebugStop:      {Plain: "∎", Nerd: "\uf04d"},
 	DebugStepOver:  {Plain: "↷", Nerd: "\uead6"},
 	DebugStepIn:    {Plain: "⤓", Nerd: "\uead4"},

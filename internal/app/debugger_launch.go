@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os/exec"
+
 	"path/filepath"
 	"slices"
 	"sync"
@@ -21,6 +21,7 @@ type debugRun struct {
 	lastThread     *int
 	generation     uint64
 	busy, stepping bool
+	attached       bool
 
 	file      string
 	folder    string
@@ -30,7 +31,7 @@ type debugRun struct {
 	cancel    context.CancelFunc
 }
 
-func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame), resumed func()) error {
+func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame), resumed func()) error {
 	initial := <-r.points
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
@@ -41,7 +42,9 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 	var eventMu sync.Mutex
 	var generation uint64
 	stops := make(chan stopEvent, 1)
-	session, err := dap.StartStdio(cmd, func(e dap.Event) {
+	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	session, err := open(startup, func(e dap.Event) {
 		switch e.Name {
 		case "initialized":
 			initOnce.Do(func() { close(initSignal) })
@@ -72,10 +75,8 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 	defer func() {
 		stop, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
-		_ = session.Disconnect(stop, true)
+		_ = session.Disconnect(stop, !r.attached)
 	}()
-	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
 	var caps struct {
 		SupportsConfigurationDoneRequest bool
 		ExceptionBreakpointFilters       []struct {
@@ -83,11 +84,11 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 			Default bool
 		}
 	}
-	if err = session.Call(startup, "initialize", map[string]any{"adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	if err = session.Call(startup, "initialize", map[string]any{"adapterID": target.Type, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launch := make(chan error, 1)
-	go func(result chan<- error) { result <- session.Call(startup, "launch", args, nil) }(launch)
+	go func(result chan<- error) { result <- session.Call(startup, target.Request, args, nil) }(launch)
 	// Some adapters acknowledge launch only after configurationDone.
 	initialized := initSignal
 	configured := false
