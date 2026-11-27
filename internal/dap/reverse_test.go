@@ -2,8 +2,10 @@ package dap
 
 import (
 	"context"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +17,13 @@ func TestReverseForegroundExitPreservesDiagnostic(t *testing.T) {
 		t.Skip("requires sh")
 	}
 	dir := t.TempDir()
+	if runtime.GOOS == "darwin" {
+		dir, err = os.MkdirTemp("/tmp", "dap-")
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { _ = os.RemoveAll(dir) })
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	var output strings.Builder

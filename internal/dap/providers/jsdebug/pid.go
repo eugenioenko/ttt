@@ -17,10 +17,10 @@ import (
 	"time"
 )
 
-func inspectorWebsocket(ctx context.Context, pid, port int) (string, error) {
+func inspectorWebsocket(ctx context.Context, pid, port int, address string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	host := net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
+	host := net.JoinHostPort(address, strconv.Itoa(port))
 	verify := func() error {
 		ok, err := ownsInspectorListener(ctx, pid, port, host)
 		if err != nil {

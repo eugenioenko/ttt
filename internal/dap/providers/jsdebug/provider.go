@@ -3,6 +3,7 @@ package jsdebug
 import (
 	"context"
 	"fmt"
+	"net"
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/dap"
@@ -69,7 +70,7 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 		if !valid || host == "" {
 			return nil, fmt.Errorf("%s: invalid inspector address", t.Name)
 		}
-		if out["processId"] != nil && host != "localhost" && host != "127.0.0.1" {
+		if out["processId"] != nil && host != "localhost" && !net.ParseIP(host).IsLoopback() {
 			return nil, fmt.Errorf("%s: PID attach requires a local inspector", t.Name)
 		}
 	}
@@ -125,7 +126,11 @@ func (p Provider) Open(ctx context.Context, t dap.Target, args map[string]any, o
 		if p, ok := args["port"].(int); ok {
 			port = p
 		}
-		ws, err := inspectorWebsocket(ctx, pid, port)
+		host, _ := args["address"].(string)
+		if host == "" || host == "localhost" {
+			host = "127.0.0.1"
+		}
+		ws, err := inspectorWebsocket(ctx, pid, port, host)
 		if err != nil {
 			s.Close()
 			return nil, err

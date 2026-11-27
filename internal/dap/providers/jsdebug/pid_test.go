@@ -20,7 +20,10 @@ func TestPIDMustOwnInspectorPort(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer listener.Close()
-	if ws, err := inspectorWebsocket(context.Background(), os.Getppid(), listener.Addr().(*net.TCPAddr).Port); err == nil || ws != "" {
-		t.Fatalf("accepted another process's port: %q", ws)
+	for pid, want := range map[int]bool{os.Getpid(): true, os.Getppid(): false} {
+		got, err := ownsInspectorListener(context.Background(), pid, listener.Addr().(*net.TCPAddr).Port, listener.Addr().String())
+		if err != nil || got != want {
+			t.Fatalf("pid %d: got %v, want %v: %v", pid, got, want, err)
+		}
 	}
 }

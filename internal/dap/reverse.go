@@ -51,6 +51,9 @@ func ReverseProcess(ctx context.Context, socket, folder string, command func(str
 			if launchErr != nil {
 				return nil, fmt.Errorf("external terminal: %w", launchErr)
 			}
+			if handoff && ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
 			return nil, fmt.Errorf("adapter launcher exited before connecting")
 		default:
 			killAdapter(cmd)

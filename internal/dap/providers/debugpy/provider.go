@@ -37,9 +37,11 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 				return nil, err
 			}
 			args["processId"] = pid
-			if s, ok := args["python"].(string); !ok || s == "" {
+			python, ok := args["python"].(string)
+			if !ok || python == "" {
 				return nil, fmt.Errorf("%s: invalid Python interpreter", t.Name)
 			}
+			args["python"] = workspacePython(t.Folder, python)
 			return args, nil
 		}
 		if _, err := endpoint(t); err != nil {
@@ -51,7 +53,7 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 		return nil, fmt.Errorf("%s: unsupported request %s", t.Name, t.Request)
 	}
 
-	out, err := t.Fields(map[string]any{"cwd": t.Folder, "python": defaultPython(t), "console": "internalConsole", "redirectOutput": true, "subProcess": false}, "cwd", "python", "program", "module", "args", "env", "justMyCode", "stopOnEntry", "console", "redirectOutput")
+	out, err := t.Fields(map[string]any{"cwd": t.Folder, "python": defaultPython(t), "console": "internalConsole", "subProcess": false}, "cwd", "python", "program", "module", "args", "env", "justMyCode", "stopOnEntry", "console", "redirectOutput")
 	if err != nil {
 		return nil, err
 	}
@@ -62,8 +64,9 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if !ok || interpreter == "" {
 		return nil, fmt.Errorf("%s: expected a Python interpreter path", t.Name)
 	}
-	if !filepath.IsAbs(interpreter) && filepath.Base(interpreter) != interpreter {
-		out["python"] = filepath.Join(t.Folder, interpreter)
+	out["python"] = workspacePython(t.Folder, interpreter)
+	if _, explicit := out["redirectOutput"]; !explicit {
+		out["redirectOutput"] = out["console"] == "internalConsole"
 	}
 	for _, key := range []string{"cwd", "program"} {
 		if v, exists := out[key]; exists {
@@ -89,6 +92,12 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	return out, nil
 }
 
+func workspacePython(folder, python string) string {
+	if !filepath.IsAbs(python) && filepath.Base(python) != python {
+		return filepath.Join(folder, python)
+	}
+	return python
+}
 func endpoint(t dap.Target) (string, error) {
 	fields, ok := t.Arguments["connect"].(map[string]any)
 	if !ok {

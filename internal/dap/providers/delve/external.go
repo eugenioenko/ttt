@@ -15,7 +15,7 @@ func terminalScript(child *exec.Cmd, dir string, configuredEnv map[string]string
 	script.WriteString("#!/bin/sh\ncd " + quote(child.Dir) + " || exit 1\nexec /usr/bin/env")
 	for _, entry := range child.Environ() {
 		name, _, _ := strings.Cut(entry, "=")
-		if _, configured := configuredEnv[name]; configured {
+		if _, configured := configuredEnv[name]; configured || name == "PATH" {
 			script.WriteString(" " + quote(entry))
 		}
 	}

@@ -28,11 +28,32 @@ func TestWorkspaceInterpreterAndExplicitOverride(t *testing.T) {
 	}{
 		{"launch", map[string]any{"program": "main.py"}, interpreter},
 		{"attach", map[string]any{"processId": 42}, interpreter},
+		{"attach", map[string]any{"processId": 42, "python": "tools/python"}, filepath.Join(folder, "tools", "python")},
 		{"launch", map[string]any{"module": "main", "python": "custom-python"}, "custom-python"},
 	} {
 		args, err := (Provider{}).Arguments(dap.Target{Folder: folder, Request: tc.request, Arguments: tc.args})
 		if err != nil || args["python"] != tc.want {
 			t.Fatalf("%s: python=%v err=%v", tc.request, args["python"], err)
+		}
+	}
+}
+
+func TestConsoleRedirect(t *testing.T) {
+	enabled, disabled := true, false
+	for _, tc := range []struct {
+		console  string
+		override *bool
+		want     bool
+	}{
+		{"internalConsole", nil, true}, {"integratedTerminal", nil, false}, {"integratedTerminal", &enabled, true}, {"internalConsole", &disabled, false},
+	} {
+		args := map[string]any{"program": "main.py", "console": tc.console}
+		if tc.override != nil {
+			args["redirectOutput"] = *tc.override
+		}
+		out, err := (Provider{}).Arguments(dap.Target{Request: "launch", Folder: t.TempDir(), Arguments: args})
+		if err != nil || out["redirectOutput"] != tc.want {
+			t.Fatal(tc, out, err)
 		}
 	}
 }

@@ -47,7 +47,7 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if t.Request != "launch" {
 		return nil, fmt.Errorf("%s: unsupported %s %s configuration", t.Name, t.Type, t.Request)
 	}
-	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote", "cwd": t.Folder}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry", "console", "output")
+	out, err := t.Fields(map[string]any{"mode": "debug", "outputMode": "remote"}, "program", "cwd", "mode", "args", "env", "buildFlags", "stopOnEntry", "console", "output")
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +63,13 @@ func (Provider) Arguments(t dap.Target) (map[string]any, error) {
 	if program == "" {
 		return nil, fmt.Errorf("%s: missing program", t.Name)
 	}
+	if _, explicit := out["cwd"]; !explicit && out["mode"] != "test" {
+		out["cwd"] = t.Folder
+	}
 	for _, key := range []string{"program", "cwd"} {
+		if _, set := out[key]; !set {
+			continue
+		}
 		path, ok := out[key].(string)
 		if !ok {
 			return nil, fmt.Errorf("%s: invalid %s", t.Name, key)
