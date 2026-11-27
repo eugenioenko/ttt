@@ -124,24 +124,11 @@ func (p *ProblemsWidget) renderLine(surface widgets.Surface, idx, y, w int, sele
 	x += 2
 
 	loc := fmt.Sprintf("%s:%d", filepath.Base(item.File), item.Line+1)
-	for _, ch := range loc {
-		if x >= w {
-			break
-		}
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: style})
-		x++
-	}
-	x++
+	x = surface.DrawText(x, y, loc, w, style) + 1
 
 	msgStyle := style
 	if !selected {
 		msgStyle = term.StyleMuted
 	}
-	for _, ch := range item.Message {
-		if x >= w {
-			break
-		}
-		surface.SetCell(x, y, term.Cell{Ch: ch, Style: msgStyle})
-		x++
-	}
+	surface.DrawText(x, y, item.Message, w, msgStyle)
 }

@@ -2,6 +2,7 @@ package widgets
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/gdamore/tcell/v3"
 )
 
@@ -136,12 +137,17 @@ func (d *DialogWidget) Render(surface Surface) {
 
 	if d.Title != "" {
 		tx := innerX + 1
+		titleRight := innerX + innerW - 1
 		for _, ch := range d.Title {
-			if tx >= innerX+innerW-1 {
+			if tx >= titleRight {
 				break
 			}
+			width := textwidth.Rune(ch)
+			if tx+width > titleRight {
+				ch = ' '
+			}
 			surface.SetCell(tx, y, term.Cell{Ch: ch, Style: term.StylePaletteItem, Bold: true})
-			tx++
+			tx += width
 		}
 		y += titleH
 	}

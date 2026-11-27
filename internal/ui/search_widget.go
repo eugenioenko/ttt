@@ -604,21 +604,13 @@ func (s *SearchWidget) Render(surface Surface) {
 
 	if s.Input.Text() != "" && len(s.FlatList) == 0 && !s.Searching && !s.debouncing {
 		msg := i18n.Text("search.noResults")
-		for i, ch := range msg {
-			if i < w {
-				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
-			}
-		}
+		surface.DrawText(0, startY, msg, w, term.StyleMuted)
 		return
 	}
 
 	if s.debouncing || s.Searching {
 		msg := i18n.Text("search.searching")
-		for i, ch := range msg {
-			if i < w {
-				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
-			}
-		}
+		surface.DrawText(0, startY, msg, w, term.StyleMuted)
 		if len(s.FlatList) == 0 {
 			return
 		}
@@ -631,11 +623,7 @@ func (s *SearchWidget) Render(surface Surface) {
 			totalMatches += len(g.Matches)
 		}
 		summary := i18n.Format("search.resultsInFiles", i18n.Args{"totalMatches": totalMatches, "groupsCount": len(s.Groups)})
-		for i, ch := range summary {
-			if i < w {
-				surface.SetCell(i, startY, term.Cell{Ch: ch, Style: term.StyleMuted})
-			}
-		}
+		surface.DrawText(0, startY, summary, w, term.StyleMuted)
 		startY++
 		for x := 0; x < w; x++ {
 			surface.SetCell(x, startY, term.Cell{Ch: '─', Style: term.StyleBorder})
@@ -668,6 +656,11 @@ func (s *SearchWidget) Render(surface Surface) {
 	s.scrollbar.Height = visibleH
 	s.scrollbar.TotalItems = len(s.FlatList)
 	s.scrollbar.TopItem = s.ScrollTop
+
+	matchRight := w
+	if s.scrollbar.Visible() {
+		matchRight--
+	}
 
 	for i := 0; i < visibleH; i++ {
 		idx := s.ScrollTop + i
@@ -748,18 +741,13 @@ func (s *SearchWidget) Render(surface Surface) {
 			if idx == s.Selected {
 				mutedStyle = style
 			}
-			for _, ch := range lineStr {
-				if x >= w {
-					break
-				}
-				surface.SetCell(x, y, term.Cell{Ch: ch, Style: mutedStyle})
-				x++
-			}
+			x = surface.DrawText(x, y, lineStr, matchRight, mutedStyle)
 
 			trimmed := strings.TrimLeft(m.LineText, " \t")
 			trimOff := len(m.LineText) - len(trimmed)
 			for ci, ch := range trimmed {
-				if x >= w {
+				width := textwidth.Rune(ch)
+				if x+width > matchRight {
 					break
 				}
 				cs := style
@@ -768,7 +756,7 @@ func (s *SearchWidget) Render(surface Surface) {
 					cs = term.StyleSearchMatch
 				}
 				surface.SetCell(x, y, term.Cell{Ch: ch, Style: cs})
-				x++
+				x += width
 			}
 		}
 	}
