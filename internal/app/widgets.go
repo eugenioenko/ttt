@@ -287,11 +287,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	changes.SetIcons(cfg.Settings.Appearance.Icons)
 	state, stateErr := config.ReadState()
 	if h := state.CommitHistoryHeight; h > 0 {
-		changes.Split.BottomH = h
-		changes.Split.BottomRatio = 0
+		changes.SetHistoryHeight(h)
 	} else if h := cfg.Settings.Sidebar.CommitHistoryHeight; h > 0 {
-		changes.Split.BottomH = h
-		changes.Split.BottomRatio = 0
+		changes.SetHistoryHeight(h)
 	}
 	symbols := NewSymbolsPanel()
 	symbols.SetIcons(cfg.Settings.Appearance.Icons)

@@ -106,8 +106,9 @@ const (
 )
 
 const (
+	changesCommitRows           = 2 // input and divider above the history title
 	changesHistoryMinHeight     = 4 // title plus three usable log rows
-	changesWorkingTreeMinHeight = 5 // input, divider, and three tree rows
+	changesWorkingTreeMinHeight = 3
 )
 
 type changesGroup struct {
@@ -162,8 +163,17 @@ type prGroup struct {
 	PRHeadSHA string
 }
 
+func (cp *ChangesPanel) HistoryHeight() int {
+	return max(cp.Split.BottomH-changesCommitRows, 0)
+}
+
+func (cp *ChangesPanel) SetHistoryHeight(height int) {
+	cp.Split.BottomH = height + changesCommitRows
+	cp.Split.BottomRatio = 0
+}
+
 func (a *App) persistCommitHistoryHeight() {
-	height := a.Changes.Split.BottomH
+	height := a.Changes.HistoryHeight()
 	if height == a.State.CommitHistoryHeight {
 		return
 	}
@@ -265,18 +275,17 @@ func NewChangesPanelWithProvider(provider scm.Provider, dirs ...string) *Changes
 	logBox := &widgets.BoxWidget{}
 	logBox.Child = cp.CommitLog
 
-	divTop := widgets.NewDividerWidget(widgets.DividerConfig{})
+	divHistory := widgets.NewDividerWidget(widgets.DividerConfig{})
 
-	top := widgets.NewVStackWidget(cp.Tree, divTop, cp.Input)
-	bottom := widgets.NewVStackWidget(logTitle, logBox)
+	bottom := widgets.NewVStackWidget(cp.Input, divHistory, logTitle, logBox)
 
 	cp.Split = ui.NewContentSplitWidget()
-	cp.Split.Top = top
+	cp.Split.Top = cp.Tree
 	cp.Split.Bottom = bottom
 	cp.Split.ShowBottom = true
 	cp.Split.BottomH = 0
 	cp.Split.BottomRatio = 0.5
-	cp.Split.MinBottomH = changesHistoryMinHeight
+	cp.Split.MinBottomH = changesCommitRows + changesHistoryMinHeight
 	cp.Split.MinTopH = changesWorkingTreeMinHeight
 	cp.Split.OnResize = func(height int) {
 		cp.Split.BottomH = height
