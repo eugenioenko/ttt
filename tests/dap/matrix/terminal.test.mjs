@@ -33,7 +33,7 @@ for (const request of ["launch", "attach"]) {
       assert.deepEqual(terminals.map(t => t.label), request === "launch" ? [] : ["Debug target"]);
       const pid = Number(readFileSync(join(cwd, "adapter-pid"), "utf8"));
       assert.ok(pid > 0);
-      assert.deepEqual(JSON.parse(readFileSync(join(cwd, "target.json"), "utf8")), [pid, cwd, "one arg $HOME", "set", null]);
+      assert.deepEqual(JSON.parse(readFileSync(join(cwd, "target.json"), "utf8")), [pid, cwd, "one arg $HOME", "set", null, request === "launch" ? "dumb" : null]);
       if (request === "launch") assert.throws(() => process.kill(pid, 0), {code: "ESRCH"});
     } finally {
       rmSync(dir, {recursive: true, force: true});

@@ -36,7 +36,7 @@ function handle(p) {
         kind: "integrated", title: "Debug target", cwd: launch.arguments.cwd,
         args: [process.execPath, "-e",
           `const fs = require("node:fs");
-           fs.writeFileSync("target.json", JSON.stringify([process.pid, process.cwd(), process.argv[1], process.env.DAP_VALUE, process.env.DAP_REMOVED ?? null]));
+           fs.writeFileSync("target.json", JSON.stringify([process.pid, process.cwd(), process.argv[1], process.env.DAP_VALUE, process.env.DAP_REMOVED ?? null, process.env.TERM ?? null]));
            const timer = setInterval(() => {
              if (fs.existsSync("adapter-pid")) {
                clearInterval(timer);
@@ -45,7 +45,7 @@ function handle(p) {
            }, 10);
            process.stdin.resume();`,
           "one arg $HOME"],
-        env: {DAP_VALUE: "set", DAP_REMOVED: null}
+        env: {DAP_VALUE: "set", DAP_REMOVED: null, TERM: p.command === "launch" ? "dumb" : null}
       }});
       return;
     case "disconnect":
