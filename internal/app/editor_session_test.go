@@ -87,6 +87,42 @@ func TestEditorSessionRestoresTabsPositionsAndPins(t *testing.T) {
 	}
 }
 
+func TestExplicitFilesPreserveSavedEditorSession(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	dir := t.TempDir()
+	left, right, explicit := filepath.Join(dir, "left.txt"), filepath.Join(dir, "right.txt"), filepath.Join(dir, "explicit.txt")
+	for _, path := range []string{left, right, explicit} {
+		if err := os.WriteFile(path, []byte("content\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	saved := sessionTestApp(t, dir, true)
+	if err := saved.EditorGroup.OpenFile(left); err != nil {
+		t.Fatal(err)
+	}
+	saved.SplitEditor()
+	if err := saved.EditorGroup.OpenFile(right); err != nil {
+		t.Fatal(err)
+	}
+	saved.forceQuit()
+
+	oneOff := sessionTestApp(t, dir, true, FileTarget{Path: explicit})
+	if groups := oneOff.editorGroups(); len(groups) != 1 || groups[0].ActiveFilePath() != explicit {
+		t.Fatal("explicit launch did not open only the requested file")
+	}
+	oneOff.forceQuit()
+
+	restored := sessionTestApp(t, dir, true)
+	groups := restored.editorGroups()
+	if len(groups) != 2 || groups[0].ActiveFilePath() != left || groups[1].ActiveFilePath() != right {
+		t.Fatalf("the next launch restored %d group(s), want the original two groups and tabs", len(groups))
+	}
+	if restored.EditorGroup != groups[1] {
+		t.Fatal("the next launch did not restore the focused group")
+	}
+}
+
 func TestEditorSessionCollectsMountedGroupsAndPrefersActiveView(t *testing.T) {
 	config.OverrideConfigDir = t.TempDir()
 	t.Cleanup(func() { config.OverrideConfigDir = "" })

@@ -5,9 +5,9 @@ description: Core editing features in TTT.
 
 ## Workspace tabs
 
-To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Explicit file arguments take precedence over restoration. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
+To reopen your file tabs next time, enable **Restore workspace tabs** under **Settings > General > Startup** (`editor.restoreTabs`). This also restores the split arrangement, divider sizes, focused group, and each group’s tabs and view positions. Saving happens on exit and before changing workspaces. Launching with explicit file arguments leaves the initial workspace’s saved session intact. Untitled contents, terminal sessions, plugin tabs, and undo history are not saved; files reopen from disk.
 
-On exit, the current text-file tab list replaces the remembered list for that workspace, including when you started with explicit file arguments. Closing all text-file tabs clears that workspace's saved list, so closed tabs do not return on the next launch.
+When session saving is active for the current workspace, quitting saves its current text-file tabs. Closing all text-file tabs before quitting clears that workspace’s saved list. With restoration enabled, a launch with explicit file arguments starts saving after you switch to a different workspace.
 
 Sessions are kept outside the project under the config directory's `sessions/` folder, with at most 128 tabs per session and 32 sessions. Turning off **Restore workspace tabs** pauses saving and restoration. Turning it back on can restore the last session saved while the setting was enabled. Sessions unused for 30 days are removed, and missing or non-regular files are skipped during restoration. **Session: Clear Saved Tabs** removes saved sessions without closing open files and pauses session saving until the next launch.
 
