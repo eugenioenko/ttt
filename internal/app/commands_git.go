@@ -546,3 +546,28 @@ func registerPRCommands(app *App) {
 		},
 	})
 }
+
+func (a *App) openSelectedDiff(extended bool) { a.Changes.OpenSelectedDiff(extended) }
+
+func (a *App) CommitChanges(dir string, message string) {
+	a.RunRepoTask(RepoTask{
+		Progress: i18n.Text("git.committing"),
+		Done:     i18n.Format("git.committed", i18n.Args{"message": message}),
+		Dirs:     []string{dir},
+		Ops:      []RepoOp{a.Changes.commitOp(dir, message)},
+		OnDone:   func() { a.Changes.ClearInput(dir) },
+	})
+}
+
+func (a *App) ConfirmDiscard(message string, onConfirm func()) {
+	a.ShowConfirmDialogEx(i18n.Text("dialog.discardChanges"), message,
+		[]string{i18n.Text("general.cancel"), i18n.Text("general.discard")},
+		[]func(){
+			func() { a.DismissDialog() },
+			func() {
+				a.DismissDialog()
+				onConfirm()
+			},
+		},
+	)
+}

@@ -264,3 +264,16 @@ func (a *App) isInlineDiffPath(path string) bool {
 	}
 	return false
 }
+
+func (app *App) editorTabChanged() {
+	app.updateDebugSource(app.EditorGroup.ActiveFilePath(), app.EditorGroup.ActiveBuffer())
+	app.refreshDebugControls()
+	app.Root.ClearEditorLinkHover()
+	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
+		findBar.OnEditorTabChange()
+	}
+	if bar := app.findBar(); bar != nil && bar.Query() != "" {
+		return
+	}
+	app.applySearchHighlights()
+}

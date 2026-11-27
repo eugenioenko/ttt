@@ -18,3 +18,14 @@ func (a *App) editorGroupMenu() []ui.ContextMenuItem {
 	}
 	return items
 }
+
+func (a *App) tabMoreMenu() []ui.ContextMenuItem {
+	items := []ui.ContextMenuItem{
+		{Label: i18n.Text("menu.reopenClosedTab"), Shortcut: a.KeyFor("tab.reopenClosed"), Command: "tab.reopenClosed", Disabled: !a.EditorGroup.HasClosedTabs()},
+		ui.MenuSep(),
+		{Label: i18n.Text("menu.closeAll"), Command: "tab.closeAll"},
+		{Label: i18n.Text("menu.closeAllSaved"), Command: "tab.closeAllSaved"},
+		ui.MenuSep(),
+	}
+	return append(items, a.editorGroupMenu()...)
+}
