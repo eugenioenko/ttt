@@ -2,6 +2,7 @@ package ui
 
 import (
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -33,11 +34,9 @@ func (s *SignatureHelpWidget) Render(surface Surface) {
 	sw, sh := surface.Size()
 
 	runes := []rune(s.Label)
-	contentW := len(runes) + 2
-	menuW := contentW + 2
+	menuW := textwidth.Runes(runes) + 4
 	if menuW > sw {
 		menuW = sw
-		contentW = menuW - 2
 	}
 	menuH := 3
 
@@ -74,12 +73,18 @@ func (s *SignatureHelpWidget) Render(surface Surface) {
 	paramStartRune := s.runeOffset(s.ActiveParamStart)
 	paramEndRune := s.runeOffset(s.ActiveParamEnd)
 
-	for i := 0; i < contentW && i < len(runes); i++ {
-		style := st
-		if paramStartRune < paramEndRune && i >= paramStartRune && i < paramEndRune {
-			style = stHighlight
-		}
-		surface.SetCell(x+1+i, row, term.Cell{Ch: runes[i], Style: style})
+	// Draw by display width so fullwidth runes advance two columns and a wide
+	// rune that would straddle the right border is dropped rather than bled
+	// across it. The active-parameter span is a separate highlighted segment,
+	// which keeps the highlight on the parameter's own columns.
+	limit := x + menuW - 1
+	tx := x + 1
+	if paramStartRune < paramEndRune {
+		tx = surface.DrawText(tx, row, string(runes[:paramStartRune]), limit, st)
+		tx = surface.DrawText(tx, row, string(runes[paramStartRune:paramEndRune]), limit, stHighlight)
+		surface.DrawText(tx, row, string(runes[paramEndRune:]), limit, st)
+	} else {
+		surface.DrawText(tx, row, s.Label, limit, st)
 	}
 
 	s.SetRect(Rect{X: x, Y: y, W: menuW, H: menuH})
