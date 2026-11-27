@@ -76,17 +76,11 @@ func (a *App) ensureDebugPanel() {
 			a.revealDebugLocation(b.path, b.line)
 		}
 	}}
-	section := func(id, label string) *widgets.TreeWidget {
-		tree := widgets.NewTreeWidget(config)
-		tree.SetItems([]*widgets.TreeNode{{ID: id, Label: label, Expanded: true, LabelStyle: term.StyleHoverBold}})
-		return tree
-	}
-	p.variables = section("vars", i18n.Text("debug.variables"))
+	p.variables = widgets.NewTreeWidget(config)
 	p.variables.Config.OnMenu = a.showDebugVariableMenu
-	p.stack = section("stack", i18n.Text("debug.stack"))
+	p.stack = widgets.NewTreeWidget(config)
 	p.points = widgets.NewTreeWidget(config)
-	title := widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.breakpoints"), Style: term.StyleHoverBold})
-	title.Box.PaddingLeft = 1
+	title := debugHeading(i18n.Text("debug.breakpoints"))
 	more := widgets.NewDropdownWidget(widgets.DropdownConfig{
 		Entries: []widgets.MenuEntry{{Label: i18n.Text("debug.clearBreakpoints"), Command: "debug.clearBreakpoints"}},
 		OnMenu: func(entries []widgets.MenuEntry, x, y int) {
@@ -99,12 +93,23 @@ func (a *App) ensureDebugPanel() {
 	p.toolbar.Box.PaddingLeft, p.toolbar.Box.PaddingRight = 1, 1
 	p.toolbar.FixedHeight = 1
 	p.toolbar.Gap = 1
-	inspection := debugSectionSplit(p.variables, p.stack, 1.0/3, 2)
-	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, widgets.NewDividerWidget(widgets.DividerConfig{}), p.points), 0.25, 5)
+	section := func(heading ui.Widget, tree *widgets.TreeWidget) *widgets.VStackWidget {
+		return widgets.NewVStackWidget(heading, widgets.NewDividerWidget(widgets.DividerConfig{}), tree)
+	}
+	variables := section(debugHeading(i18n.Text("debug.variables")), p.variables)
+	stack := section(debugHeading(i18n.Text("debug.stack")), p.stack)
+	inspection := debugSectionSplit(variables, stack, 1.0/3, 2)
+	sections := debugSectionSplit(inspection, section(header, p.points), 0.25, 5)
 	a.refreshDebugConfiguration()
 	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
 	a.refreshDebugPanel()
+}
+
+func debugHeading(text string) *widgets.LabelWidget {
+	label := widgets.NewLabelWidget(widgets.LabelConfig{Text: text, Style: term.StyleHoverBold})
+	label.Box.PaddingLeft = 1
+	return label
 }
 
 func debugSectionSplit(top, bottom ui.Widget, ratio float64, minTop int) *ui.ContentSplitWidget {
@@ -177,24 +182,23 @@ func (a *App) refreshDebugPanel() {
 		return
 	}
 	a.refreshDebugControls()
-	stack := p.stack.Config.Items[0]
-	stack.Children = nil
+	var stack []*widgets.TreeNode
 	p.frameNodes = make(map[*widgets.TreeNode]debugFrame)
-	parent := stack
+	frames := &stack
 	p.threadNodes = make(map[*widgets.TreeNode]int)
 	if r := a.activeDebugPeer(); r != nil && r.thread != nil && len(r.threads) > 1 {
 		for _, t := range r.threads {
 			node := &widgets.TreeNode{ID: fmt.Sprintf("thread:%d", t.ID), Label: t.Name, Expanded: t.ID == *r.thread}
-			stack.Children = append(stack.Children, node)
+			stack = append(stack, node)
 			p.threadNodes[node] = t.ID
 			if node.Expanded {
-				parent = node
+				frames = &node.Children
 			}
 		}
 	}
 	for _, f := range p.frames {
 		node := &widgets.TreeNode{ID: fmt.Sprintf("frame:%d", f.ID), Label: f.Name + "  " + filepath.Base(f.Source.Path) + ":" + strconv.Itoa(f.Line)}
-		parent.Children = append(parent.Children, node)
+		*frames = append(*frames, node)
 		p.frameNodes[node] = f
 	}
 	var points []*widgets.TreeNode
@@ -227,10 +231,8 @@ func (a *App) refreshDebugPanel() {
 		}
 	}
 	p.points.SetItems(points)
-	p.variables.Config.Items[0].Children = p.scopes
-	for _, tree := range []*widgets.TreeWidget{p.variables, p.stack} {
-		tree.SetItems(tree.Config.Items)
-	}
+	p.variables.SetItems(p.scopes)
+	p.stack.SetItems(stack)
 }
 
 func (a *App) beginDebugInspection() {

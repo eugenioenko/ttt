@@ -15,7 +15,7 @@ for (const spec of cases.filter(c => c.name === "cpp-codelldb")) {
       tui.exec("Toggle Breakpoint");
       tui.exec("Start Debugging");
       tui.waitFor("› this = {total:1}");
-      tui.click(5, 8);
+      tui.click(3, 9);
       tui.waitFor("total = 1");
       tui.exec("Debug: Step Over");
       tui.waitFor("this = {total:43}");
