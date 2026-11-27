@@ -71,7 +71,7 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 
 func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	wantLabels := []string{"Appearance", "Editor", "Explorer", "Code Assist", "Diff Views", "Git Files", "Markdown", "Terminal", "", "Settings", "Theme"}
+	wantLabels := []string{"Appearance", "Editor", "Explorer", "Code Assist", "Diff Views", "Git Files", "Markdown", "Terminal", "", "Theme", "Settings"}
 	var labels []string
 	for _, item := range items {
 		labels = append(labels, item.Label)
@@ -84,8 +84,8 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 			t.Errorf("category should only open a submenu: %+v", item)
 		}
 	}
-	if !items[8].IsSep || items[9].Command != "settings.openUI" || items[10].Command != "theme.switch" {
-		t.Fatal("Settings and Theme should follow the final separator")
+	if !items[8].IsSep || items[9].Command != "theme.switch" || items[10].Command != "settings.openUI" {
+		t.Fatal("Theme and Settings should follow the final separator")
 	}
 	wantCommands := map[int][]string{
 		2: {"options.toggleExplorerShowHiddenFiles", "options.toggleExplorerShowGitIgnoredFiles", "options.toggleExplorerCompactFolders", "options.toggleExplorerAutoReveal", "", "options.toggleExplorerGitStatusColors", "options.toggleExplorerDimStagedGitColors"},

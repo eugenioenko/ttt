@@ -564,8 +564,8 @@ func (a *App) BuildOptionsMenu() []ui.ContextMenuItem {
 			{Label: i18n.Text("menu.selectionStyle"), Command: "options.terminalSelectionStyle"},
 		}},
 		ui.MenuSep(),
-		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 		{Label: i18n.Text("menu.theme"), Command: "theme.switch"},
+		{Label: i18n.Text("general.settings"), Command: "settings.openUI"},
 	}
 	return items
 }
