@@ -177,12 +177,7 @@ func (e *EditorPaneWidget) GutterWidth() int {
 	}
 }
 
-func (e *EditorPaneWidget) bookmarkColumn() int {
-	if e.GutterStyle == "extended" {
-		return 1
-	}
-	return 0
-}
+const bookmarkColumn = 0
 
 func (e *EditorPaneWidget) validBookmarkLine(line int) bool {
 	return e.Buf != nil && line >= 0 && line < len(e.Buf.Lines)
