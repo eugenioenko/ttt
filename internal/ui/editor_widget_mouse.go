@@ -8,7 +8,7 @@ import (
 )
 
 func (e *EditorPaneWidget) OwnsPointerCapture() bool {
-	return e.mouseDown || e.scrollbar.IsDragging() || e.hscrollbar.IsDragging()
+	return e.mouseDown || e.conflictPress || e.scrollbar.IsDragging() || e.hscrollbar.IsDragging()
 }
 
 func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
@@ -17,6 +17,14 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		return EventConsumed
 	}
 	btn := mev.Buttons()
+
+	if e.conflictPress {
+		if btn == tcell.ButtonNone {
+			e.conflictPress = false
+		} else {
+			return EventConsumed
+		}
+	}
 
 	if !e.mouseDown {
 		if result, handled := e.handleScrollbarMouse(mev); handled {
@@ -92,7 +100,9 @@ func (e *EditorPaneWidget) handleMouse(mev *tcell.EventMouse) EventResult {
 		if !e.mouseDown {
 			if row := e.rowAt(my - r.Y); row.conflict {
 				if action := e.conflictActionAt(row, mx-r.X-gutterW); action >= 0 {
-					e.resolveConflict(row.bufLine, action)
+					if e.resolveConflict(row.bufLine, action) {
+						e.conflictPress = true
+					}
 				}
 				return EventConsumed
 			}

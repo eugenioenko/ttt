@@ -123,6 +123,7 @@ type EditorPaneWidget struct {
 	conflictData            *string
 	conflictGen             uint64
 	conflictHover           [2]int
+	conflictPress           bool
 	DiffOverlay             *DiffOverlay
 	diffNumDigits           int
 	// Passive panes draw no active line or bracket match: a diff pane that
