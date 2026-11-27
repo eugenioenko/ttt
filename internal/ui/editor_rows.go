@@ -11,8 +11,9 @@ import (
 )
 
 type editorRow struct {
-	bufLine  int
-	startCol int
+	bookmarkWidth int
+	bufLine       int
+	startCol      int
 	// nextCol is where the following wrapped row of the same line starts, or 0
 	// on a line's last row: a word-wrapped row ends before the edge, so drawing
 	// must stop there rather than fill the width.

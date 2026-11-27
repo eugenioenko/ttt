@@ -59,7 +59,7 @@ func TestPluginThemeLifecycle(t *testing.T) {
 	other := &plugin.Plugin{Name: "another", Dir: p.Dir, Manifest: p.Manifest}
 	a.installPluginThemes(other)
 	manual := filepath.Join(config.OverrideConfigDir, "themes", "dark.json")
-	os.WriteFile(manual, []byte(`{}`), 0644)
+	requireNoError(t, os.WriteFile(manual, []byte(`{}`), 0644))
 	a.uninstallPluginThemes(p.Name)
 	if a.Settings.Theme != "" || config.LoadSettings().Theme != "" {
 		t.Fatal("uninstall did not save the default theme selection")
@@ -88,7 +88,7 @@ func TestPluginThemeDestinationIsolation(t *testing.T) {
 	}
 	outside := t.TempDir()
 	sentinel := filepath.Join(outside, "keep.json")
-	os.WriteFile(sentinel, []byte(`{}`), 0644)
+	requireNoError(t, os.WriteFile(sentinel, []byte(`{}`), 0644))
 	if err := os.Symlink(outside, filepath.Join(config.OverrideConfigDir, "themes")); err != nil {
 		t.Skip(err)
 	}

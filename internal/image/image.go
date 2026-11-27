@@ -68,7 +68,7 @@ func ReadFile(path string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("image: read %s: %w", path, err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	data, err := io.ReadAll(io.LimitReader(f, maxImageFileBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("image: read %s: %w", path, err)

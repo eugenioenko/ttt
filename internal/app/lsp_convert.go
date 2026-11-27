@@ -14,8 +14,11 @@ type LocationResult struct {
 }
 
 type DiagnosticsResult struct {
-	Server      string
-	Path        string
+	Server string
+	Path   string
+	// Root is the root of the client that published. A document that moved
+	// roots after this result was sent must not have it applied.
+	Root        string
 	Diagnostics []lsp.Diagnostic
 }
 

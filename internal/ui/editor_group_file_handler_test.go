@@ -17,14 +17,14 @@ func TestFileHandlerClaimsBinaryFiles(t *testing.T) {
 	var gotPath string
 	var gotHead []byte
 	calls := 0
-	claimed := NewBinaryFileWidget("claimed")
+	claimed := NewBinaryFileWidget(pdf)
 	g.FileHandler = func(path string, head []byte) Widget {
 		calls++
 		gotPath, gotHead = path, head
 		return claimed
 	}
 
-	g.OpenFile(pdf)
+	requireNoError(t, g.OpenFile(pdf))
 	if tab := g.activeTab(); tab == nil || tab.Content != claimed || tab.FilePath != pdf {
 		t.Fatalf("active tab = %+v, want the handler's widget bound to %s", tab, pdf)
 	}
@@ -32,7 +32,7 @@ func TestFileHandlerClaimsBinaryFiles(t *testing.T) {
 		t.Errorf("handler got path %q head %q", gotPath, gotHead)
 	}
 
-	g.OpenFile(pdf)
+	requireNoError(t, g.OpenFile(pdf))
 	if calls != 1 {
 		t.Errorf("reopening an open file called the handler %d times, want 1", calls)
 	}
@@ -47,7 +47,7 @@ func TestFileHandlerDeclineKeepsBinaryCard(t *testing.T) {
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
 	g.FileHandler = func(string, []byte) Widget { return nil }
 
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	if _, ok := g.activeTab().Content.(*BinaryFileWidget); !ok {
 		t.Fatalf("content = %T, want *BinaryFileWidget", g.activeTab().Content)
 	}
@@ -67,11 +67,11 @@ func TestFileHandlerNotConsultedForTextOrImages(t *testing.T) {
 		t.Fatal("handler consulted for a text or image file")
 		return nil
 	}
-	g.OpenFile(txt)
+	requireNoError(t, g.OpenFile(txt))
 	if g.activeTab().Buf == nil {
 		t.Fatal("text file should open as a buffer")
 	}
-	g.OpenFile(img)
+	requireNoError(t, g.OpenFile(img))
 	if _, ok := g.activeTab().Content.(*ImageViewWidget); !ok {
 		t.Fatalf("image file content = %T, want *ImageViewWidget", g.activeTab().Content)
 	}
@@ -89,14 +89,14 @@ func TestRetryFileHandlersClaimsOpenBinaryTabs(t *testing.T) {
 	}
 
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(pdf)
-	g.OpenFile(pdf)
-	g.OpenFile(txt)
+	requireNoError(t, g.OpenFile(pdf))
+	requireNoError(t, g.OpenFile(pdf))
+	requireNoError(t, g.OpenFile(txt))
 	if _, ok := g.tabs[tabAt(g, pdf)].Content.(*BinaryFileWidget); !ok {
 		t.Fatal("without a handler the PDF should open as the binary card")
 	}
 
-	claimed := NewBinaryFileWidget("claimed")
+	claimed := NewBinaryFileWidget(pdf)
 	g.FileHandler = func(path string, head []byte) Widget {
 		if path != pdf {
 			t.Errorf("handler offered %s", path)
@@ -139,7 +139,7 @@ func TestFileHandledFiresAfterTabIsActive(t *testing.T) {
 	var activeAtEvent string
 	g.OnFileHandled = func(string) { activeAtEvent = g.ActiveFilePath() }
 
-	g.OpenFile(pdf)
+	requireNoError(t, g.OpenFile(pdf))
 	if activeAtEvent != pdf {
 		t.Errorf("active file at OnFileHandled = %q, want %q", activeAtEvent, pdf)
 	}
@@ -152,7 +152,7 @@ func TestReplacedContentTakesFocus(t *testing.T) {
 		t.Fatal(err)
 	}
 	g := NewEditorGroupWidget(nil, 4, true, "relative")
-	g.OpenFile(pdf)
+	requireNoError(t, g.OpenFile(pdf))
 	g.SetFocused(true)
 
 	probe := &focusProbe{BinaryFileWidget: NewBinaryFileWidget(pdf)}

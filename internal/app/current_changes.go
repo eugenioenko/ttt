@@ -13,6 +13,7 @@ import (
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/i18n"
+	"github.com/eugenioenko/ttt/internal/jj"
 	"github.com/eugenioenko/ttt/internal/scm"
 	"github.com/eugenioenko/ttt/internal/ui"
 )
@@ -130,6 +131,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 		result.Err = errors.ErrUnsupported
 		return result
 	}
+	workingCopy := jj.IsRepository(repo)
 	seenConflicts := make(map[string]struct{})
 	for _, change := range changes {
 		if err := ctx.Err(); err != nil {
@@ -165,6 +167,9 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 			boundary = ui.CommitDetailBoundaryHeadToIndex
 			staged++
 		} else {
+			if workingCopy {
+				stage = ui.CommitDetailStageWorkingCopy
+			}
 			if change.Group == "" || change.Group == scm.WorkingTree {
 				boundary = ui.CommitDetailBoundaryIndexToWorktree
 			}
@@ -245,7 +250,7 @@ func readCurrentChanges(ctx context.Context, source repositorySource, revision, 
 		result.Files = append(result.Files, file)
 	}
 	result.Fingerprint = fmt.Sprintf("%x", fingerprint.Sum(nil))
-	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, conflicts)
+	result.Summary = currentChangesSummary(len(paths), additions, deletions, staged, unstaged, conflicts, workingCopy)
 	return result
 }
 
@@ -291,7 +296,7 @@ func splitCurrentChangesLines(content []byte) []string {
 	return lines
 }
 
-func currentChangesSummary(files, additions, deletions, staged, unstaged, conflicts int) string {
+func currentChangesSummary(files, additions, deletions, staged, unstaged, conflicts int, workingCopy bool) string {
 	if files == 0 {
 		return i18n.Text("changes.workingTreeClean")
 	}
@@ -304,7 +309,11 @@ func currentChangesSummary(files, additions, deletions, staged, unstaged, confli
 		parts = append(parts, i18n.Format("changes.stagedCount", i18n.Args{"staged": staged}))
 	}
 	if unstaged > 0 {
-		parts = append(parts, i18n.Format("changes.unstagedCount", i18n.Args{"unstaged": unstaged}))
+		if workingCopy {
+			parts = append(parts, i18n.Format("changes.workingCopyCount", i18n.Args{"count": unstaged}))
+		} else {
+			parts = append(parts, i18n.Format("changes.unstagedCount", i18n.Args{"unstaged": unstaged}))
+		}
 	}
 	if conflicts > 0 {
 		label := i18n.Format("changes.conflictCount", i18n.Args{"count": conflicts})

@@ -285,7 +285,7 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	changes := NewChangesPanel(ws.Paths()...)
 	changes.SetFileView(cfg.Settings.Git.FileView)
 	changes.SetIcons(cfg.Settings.Appearance.Icons)
-	state := config.LoadState()
+	state, stateErr := config.ReadState()
 	if h := state.CommitHistoryHeight; h > 0 {
 		changes.Split.BottomH = h
 		changes.Split.BottomRatio = 0
@@ -426,6 +426,9 @@ func BuildAppFromConfig(cfg *config.AppConfig, borders *term.BorderSet, ws *work
 	editorGroup.FoldTask = NewTask[[]fold.Range](app, asynctask.TaskOptions{})
 	editorGroup.FoldDelay = NewTask[struct{}](app, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	app.appliedSettings.Terminal.ForwardShortcuts = cfg.Settings.Terminal.ForwardShortcuts
+	if stateErr != nil {
+		app.StatusWarn(i18n.Format("state.loadFailed", i18n.Args{"error": stateErr.Error()}))
+	}
 	if cfg.SettingsError != nil {
 		app.StatusWarn(i18n.Format("settings.loadFailed", i18n.Args{"error": cfg.SettingsError.Error()}))
 	}
@@ -477,11 +480,14 @@ func openFileTargets(g *ui.EditorGroupWidget, targets []FileTarget) ([]FileTarge
 
 func newEditorGroup(s *config.Settings, borders *term.BorderSet, bracketStyles []term.Style) *ui.EditorGroupWidget {
 	editorGroup := ui.NewEditorGroupWidget(borders, s.Editor.TabSize, s.Editor.LineNumbers, s.Editor.GutterStyle)
+	editorGroup.NativeLinks = s.Links.Native
+	editorGroup.Editor.NativeLinks = s.Links.Native
 	editorGroup.TabBar.SetStyle(s.Editor.TabBarStyle)
 	editorGroup.HighlightActiveBorder = s.Appearance.HighlightActiveGroupBorder
 	editorGroup.SetFileIconMode(s.Appearance.Icons)
 	editorGroup.InsertSpaces = s.Editor.InsertSpaces
 	editorGroup.SetIndentGuides(s.Editor.IndentGuides)
+	editorGroup.SetFullLineSelection(s.Editor.FullLineSelection)
 	editorGroup.InsertFinalNewline = s.Editor.InsertFinalNewline
 	editorGroup.PreviewTabs = s.Editor.PreviewTabsEnabled()
 	editorGroup.ShowTrailingNewline = s.Editor.IsShowTrailingNewlineEnabled()

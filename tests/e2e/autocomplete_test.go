@@ -15,8 +15,8 @@ func setupAutocompleteTest(t *testing.T, content string) *testHarness {
 	t.Helper()
 	h := newTestHarness(t, 80, 24)
 	f := filepath.Join(h.dir, "ac.txt")
-	os.WriteFile(f, []byte(content), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte(content), 0644))
+	h.openFile(f)
 	h.redraw()
 	return h
 }

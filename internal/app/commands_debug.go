@@ -74,9 +74,9 @@ func (a *App) debugSimulateClick() {
 			return
 		}
 		go func() {
-			a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
+			_ = a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.Button1, tcell.ModNone))
 			time.Sleep(50 * time.Millisecond)
-			a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
+			_ = a.Screen.PostEvent(tcell.NewEventMouse(x, y, tcell.ButtonNone, tcell.ModNone))
 		}()
 	}
 
@@ -190,14 +190,14 @@ func (a *App) debugRunPlugin() {
 func (a *App) debugScreenshot() {
 	a.DismissDialog()
 	time.AfterFunc(50*time.Millisecond, func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "screenshot", Path: "screenshot.txt"}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "screenshot", Path: "screenshot.txt"}))
 	})
 }
 
 func (a *App) debugDumpState() {
 	a.DismissDialog()
 	time.AfterFunc(50*time.Millisecond, func() {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "state", Path: "debug-state.json"}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&DebugWriteRequest{Kind: "state", Path: "debug-state.json"}))
 	})
 }
 

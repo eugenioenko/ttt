@@ -274,7 +274,7 @@ func TestSaveDoesNotFollowSwappedTempPath(t *testing.T) {
 	chown = func(f *os.File, uid, gid int) error {
 		swapped = true
 		err := f.Chown(uid, gid)
-		os.Remove(f.Name())
+		requireNoError(t, os.Remove(f.Name()))
 		if linkErr := os.Symlink(victim, f.Name()); linkErr != nil {
 			t.Fatal(linkErr)
 		}
@@ -309,7 +309,7 @@ func TestCheckSameFileDetectsReplacement(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := checkSameFile(f, fname); err != nil {
 		t.Fatalf("unreplaced file: %v", err)
 	}
@@ -355,7 +355,7 @@ func TestInPlaceSaveKeepsTempFilePrivate(t *testing.T) {
 	if temp == nil {
 		t.Fatal("the save never tried to change the temp file's owner")
 	}
-	defer temp.Close()
+	defer func() { _ = temp.Close() }()
 	info, err := temp.Stat()
 	if err != nil {
 		t.Fatal(err)

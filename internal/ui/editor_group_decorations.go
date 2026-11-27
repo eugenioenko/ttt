@@ -3,6 +3,7 @@ package ui
 import (
 	"math"
 	"slices"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/term"
@@ -19,6 +20,8 @@ type Decoration struct {
 	EndLine, EndCol     int
 	Text                bool
 	Note                string
+	GhostText           string
+	GhostAtCol          bool
 	Style               term.Style
 }
 
@@ -98,6 +101,17 @@ func decorationOverlay(decos []Decoration, lines []string, tabSize int) *DiffOve
 			continue
 		}
 		endLine := min(d.EndLine, n-1)
+		if d.GhostText != "" {
+			col := utf8.RuneCountInString(lines[d.StartLine])
+			if d.GhostAtCol {
+				if d.StartCol < 0 || d.StartCol > col {
+					continue
+				}
+				col = d.StartCol
+			}
+			o.GhostText[d.StartLine] = ghostText{col: col, text: d.GhostText}
+			continue
+		}
 		if d.Note != "" {
 			o.NoteTexts[d.StartLine] = append(o.NoteTexts[d.StartLine], NoteText{
 				Text:     d.Note,
@@ -183,6 +197,9 @@ func (g *EditorGroupWidget) mergedDecorations(path string, buf *buffer.Buffer, t
 		for line, spans := range part.Spans {
 			merged.Spans[line] = append(merged.Spans[line], spans...)
 		}
+		for line, text := range part.GhostText {
+			merged.GhostText[line] = text
+		}
 		for line, notes := range part.NoteTexts {
 			merged.NoteTexts[line] = append(merged.NoteTexts[line], notes...)
 		}
@@ -238,6 +255,7 @@ func (o *DiffOverlay) syncParts() {
 		clear(o.LineBg)
 		clear(o.Spans)
 		clear(o.NoteTexts)
+		clear(o.GhostText)
 		o.notesMoved = len(o.Notes) > 0
 	}
 	for _, part := range o.parts {

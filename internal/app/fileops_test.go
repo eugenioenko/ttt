@@ -2,12 +2,15 @@ package app
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/config"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/widgets"
 )
@@ -173,5 +176,216 @@ func TestFileDeleteConfirmation(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNextDuplicatePath(t *testing.T) {
+	dir := t.TempDir()
+	for _, tc := range []struct {
+		name     string
+		src      string
+		existing []string
+		want     string
+	}{
+		{name: "file", want: "note copy.txt"},
+		{name: "second", existing: []string{"note copy.txt"}, want: "note copy 2.txt"},
+		{name: "third", existing: []string{"note copy.txt", "note copy 2.txt"}, want: "note copy 3.txt"},
+		{name: "dotfile", src: ".env", want: ".env copy"},
+		{name: "double extension", src: "archive.tar.gz", want: "archive.tar copy.gz"},
+		{name: "no extension", src: "README", want: "README copy"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			srcName := tc.src
+			if srcName == "" {
+				srcName = "note.txt"
+			}
+			src := filepath.Join(dir, srcName)
+			if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for _, existing := range tc.existing {
+				if err := os.WriteFile(filepath.Join(dir, existing), []byte("x"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			got, err := nextDuplicatePath(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := filepath.Join(dir, tc.want); got != want {
+				t.Fatalf("nextDuplicatePath(%q) = %q, want %q", srcName, got, want)
+			}
+		})
+	}
+}
+
+func TestCopyTreeRecursive(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "folder")
+	dst := filepath.Join(dir, "folder copy")
+	if err := os.MkdirAll(filepath.Join(src, "nested", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "top.txt"), []byte("top"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "nested", "child.txt"), []byte("child"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "nested", "deep", "leaf.txt"), []byte("leaf"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join("nested", "child.txt")
+	if err := os.Symlink(target, filepath.Join(src, "link.txt")); err != nil {
+		if runtime.GOOS == "windows" {
+			t.Skip("symlink creation requires elevated privileges on Windows")
+		}
+		t.Fatal(err)
+	}
+
+	if err := copyTree(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	for rel, want := range map[string]string{
+		"top.txt":              "top",
+		"nested/child.txt":     "child",
+		"nested/deep/leaf.txt": "leaf",
+	} {
+		data, err := os.ReadFile(filepath.Join(dst, filepath.FromSlash(rel)))
+		if err != nil || string(data) != want {
+			t.Errorf("copy %s = %q (%v), want %q", rel, data, err, want)
+		}
+	}
+	srcInfo, err := os.Stat(filepath.Join(src, "nested", "child.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Lstat(filepath.Join(dst, "nested", "child.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := info.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("nested file mode = %v, want %v (source mode)", got, want)
+	}
+	if got, err := os.Readlink(filepath.Join(dst, "link.txt")); err != nil || got != target {
+		t.Errorf("symlink target = %q (%v), want %q", got, err, target)
+	}
+}
+
+func TestCopyRegularFilePreservesMode(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "source.txt")
+	dst := filepath.Join(dir, "copy.txt")
+	if err := os.WriteFile(src, []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src, 0o664); err != nil {
+		t.Fatal(err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := copyRegularFile(src, dst, srcInfo.Mode()); err != nil {
+		t.Fatal(err)
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("copied mode = %v, want %v (source mode)", got, want)
+	}
+}
+
+func TestCopyTreeReadOnlySourceDirectory(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "locked")
+	if err := os.Mkdir(src, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(src, "child.txt"), []byte("child"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(src, 0o555); err != nil {
+		t.Fatal(err)
+	}
+	srcInfo, err := os.Stat(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if srcInfo.Mode().Perm()&0o200 != 0 {
+		t.Fatalf("source directory is writable: %v", srcInfo.Mode().Perm())
+	}
+	dst := filepath.Join(dir, "locked copy")
+	t.Cleanup(func() {
+		_ = os.Chmod(src, 0o700)
+		_ = os.Chmod(dst, 0o700)
+	})
+
+	if err := copyTree(src, dst); err != nil {
+		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(dst, "child.txt")); err != nil || string(data) != "child" {
+		t.Fatalf("copy = %q (%v), want %q", data, err, "child")
+	}
+	dstInfo, err := os.Stat(dst)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := dstInfo.Mode().Perm(), srcInfo.Mode().Perm(); got != want {
+		t.Errorf("directory mode = %v, want %v (source mode)", got, want)
+	}
+}
+
+func TestFileOpDuplicateDoesNotOpenTab(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+
+	dir := t.TempDir()
+	src := filepath.Join(dir, "note.txt")
+	if err := os.WriteFile(src, []byte("original"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before := len(a.EditorGroup.TabBar.Tabs)
+	reloaded := false
+	a.FileOpDuplicate(src, func() { reloaded = true })
+	if got := len(a.EditorGroup.TabBar.Tabs); got != before {
+		t.Fatalf("duplicate opened %d tab(s)", got-before)
+	}
+	if !reloaded {
+		t.Fatal("duplicate did not reload the explorer")
+	}
+	dup := filepath.Join(dir, "note copy.txt")
+	if data, err := os.ReadFile(dup); err != nil || string(data) != "original" {
+		t.Fatalf("duplicate = %q (%v), want %q", data, err, "original")
+	}
+}
+
+func TestFileOpDuplicateMessageReportsJoinedCleanupError(t *testing.T) {
+	src := filepath.Join("folder", "pipe")
+	dst := filepath.Join("tmp", "folder copy")
+	unsupported := unsupportedFileTypeError{path: src}
+	cleanup := errors.New(i18n.Format("files.duplicateCleanupFailed", i18n.Args{
+		"path":  dst,
+		"error": "permission denied",
+	}))
+
+	got := fileOpDuplicateMessage(unsupported)
+	wantUnsupported := i18n.Format("files.unsupportedType", i18n.Args{"path": src})
+	if got != wantUnsupported {
+		t.Errorf("unsupported only: got %q, want %q", got, wantUnsupported)
+	}
+
+	got = fileOpDuplicateMessage(errors.Join(unsupported, cleanup))
+	if want := wantUnsupported + "\n" + cleanup.Error(); got != want {
+		t.Errorf("joined: got %q, want %q", got, want)
+	}
+	var as unsupportedFileTypeError
+	if !errors.As(errors.Join(unsupported, cleanup), &as) {
+		t.Fatal("joined error should still match unsupportedFileTypeError")
 	}
 }

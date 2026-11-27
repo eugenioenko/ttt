@@ -203,7 +203,9 @@ func TestExecOutputChunksStayWithinChunkMax(t *testing.T) {
 			var chunks []string
 			o := &execOutput{deliver: func(c string) { chunks = append(chunks, c) }}
 			for _, w := range tc.writes {
-				o.Write([]byte(w))
+				if _, err := o.Write([]byte(w)); err != nil {
+					t.Fatal(err)
+				}
 			}
 			o.flush()
 			if len(chunks) != tc.want {

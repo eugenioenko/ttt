@@ -22,7 +22,7 @@ func openScrollFile(t *testing.T, h *testHarness) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("editor.focus")
 	h.redraw()
 }
@@ -119,7 +119,7 @@ func TestScrollRestoresGoalColumn(t *testing.T) {
 	if err := os.WriteFile(path, []byte("0123456789abcdefghij\nxx\nthird line\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Settings.Editor.ScrollLines = 1
 
 	editor := h.app.EditorGroup.Editor
@@ -150,7 +150,7 @@ func TestScrollGoalColumnAcrossShortLines(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.Settings.Editor.ScrollLines = 1
 
 	editor := h.app.EditorGroup.Editor
@@ -196,7 +196,7 @@ func TestScrollUsesVisibleRowsWithFold(t *testing.T) {
 	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("fold.collapseAll")
 	editor := h.app.EditorGroup.Editor
 	editor.Cursor.Line, editor.Cursor.Col = 0, 0
@@ -360,7 +360,7 @@ func TestScrollLineKeepsCursorAcrossFold(t *testing.T) {
 	if err := os.WriteFile(path, []byte(b.String()), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.exec("fold.collapseAll")
 	editor := h.app.EditorGroup.Editor
 	editor.Viewport.TopLine = 2
@@ -407,7 +407,7 @@ func TestScrollLineHidesCursorOnHorizontalScrollbar(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	editor := h.app.EditorGroup.Editor
 	h.redraw()
 

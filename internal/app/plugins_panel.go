@@ -303,6 +303,15 @@ func termMatches(entry plugin.RemoteRegistryEntry, t string) bool {
 	return false
 }
 
+// setRegistryStatus clears the search and featured lists and shows text in
+// both while the registry is loading or after it failed.
+func (pp *PluginsPanel) setRegistryStatus(text string) {
+	for _, tree := range []*widgets.TreeWidget{pp.SearchTree, pp.FeaturedTree} {
+		tree.Config.EmptyText = text
+		tree.SetItems(nil)
+	}
+}
+
 func (pp *PluginsPanel) SetAvailable(entries []plugin.RemoteRegistryEntry) {
 	pp.available = entries
 	pp.SearchTree.Config.EmptyText = i18n.Text("plugins.typeToSearchPlugins")

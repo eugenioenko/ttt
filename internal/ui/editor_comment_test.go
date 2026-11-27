@@ -1,15 +1,19 @@
 package ui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/cursor"
 	"github.com/eugenioenko/ttt/internal/core/selection"
+	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 )
 
@@ -320,5 +324,188 @@ func TestToggleLineCommentMatchesWordPrefixCaseInsensitively(t *testing.T) {
 				t.Fatalf("toggled line = %q, want %q", got, tt.want)
 			}
 		})
+	}
+}
+
+// A block is commented at its shallowest indentation, as VS Code does, so the
+// markers line up and each line keeps its indentation inside the comment.
+func TestToggleLineCommentAlignsMarkersAtTheShallowestIndent(t *testing.T) {
+	original := []string{
+		"function showOutdated() {",
+		"    sync(vendorOptions, {",
+		"        shouldUpdate: true,",
+		"",
+		"    });",
+		"}",
+	}
+	e := newCommentEditor(t, "a.js", append([]string(nil), original...), 5, 1)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{
+		"// function showOutdated() {",
+		"//     sync(vendorOptions, {",
+		"//         shouldUpdate: true,",
+		"",
+		"//     });",
+		"// }",
+	}
+	for i := range want {
+		if e.Buf.Lines[i] != want[i] {
+			t.Fatalf("commented line %d = %q, want %q", i, e.Buf.Lines[i], want[i])
+		}
+	}
+
+	e.ToggleLineComment()
+	for i := range original {
+		if e.Buf.Lines[i] != original[i] {
+			t.Fatalf("uncommented line %d = %q, want %q", i, e.Buf.Lines[i], original[i])
+		}
+	}
+}
+
+// An indented block is commented at its own shallowest indentation, not at
+// column zero.
+func TestToggleLineCommentKeepsTheBlockIndentation(t *testing.T) {
+	original := []string{"    if ok {", "        run()", "    }"}
+	e := newCommentEditor(t, "a.go", append([]string(nil), original...), 2, 5)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 4)
+
+	e.ToggleLineComment()
+	want := []string{"    // if ok {", "    //     run()", "    // }"}
+	for i := range want {
+		if e.Buf.Lines[i] != want[i] {
+			t.Fatalf("commented line %d = %q, want %q", i, e.Buf.Lines[i], want[i])
+		}
+	}
+
+	e.ToggleLineComment()
+	for i := range original {
+		if e.Buf.Lines[i] != original[i] {
+			t.Fatalf("uncommented line %d = %q, want %q", i, e.Buf.Lines[i], original[i])
+		}
+	}
+}
+
+func TestToggleLineCommentTracksSelectionEndpoints(t *testing.T) {
+	for _, tc := range []struct {
+		name, file         string
+		lines              []string
+		start, end         selection.Position
+		wantStart, wantEnd selection.Position
+	}{
+		{"whole block", "a.js", []string{"function f() {", "    run();", "}"}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 2, Col: 1}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 2, Col: 4}},
+		{"partial unicode", "a.go", []string{"    界foo()", "        bar()"}, selection.Position{Line: 0, Col: 5}, selection.Position{Line: 1, Col: 11}, selection.Position{Line: 0, Col: 8}, selection.Position{Line: 1, Col: 14}},
+		{"next line excluded", "a.go", []string{"foo()", "bar()", "next()"}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 2, Col: 0}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 2, Col: 0}},
+		{"blank endpoint", "a.go", []string{"", "foo()"}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 1, Col: 5}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 1, Col: 8}},
+		{"wrapped escaping", "a.xml", []string{"a--b", "<x/>"}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 1, Col: 4}, selection.Position{Line: 0, Col: 0}, selection.Position{Line: 1, Col: 13}},
+		{"partial escaping", "a.xml", []string{"a--b"}, selection.Position{Line: 0, Col: 2}, selection.Position{Line: 0, Col: 4}, selection.Position{Line: 0, Col: 11}, selection.Position{Line: 0, Col: 21}},
+	} {
+		for _, backward := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/backward=%v", tc.name, backward), func(t *testing.T) {
+				anchor, cur := tc.start, tc.end
+				if backward {
+					anchor, cur = cur, anchor
+				}
+				e := newCommentEditor(t, tc.file, slices.Clone(tc.lines), cur.Line, cur.Col)
+				e.Selection = &selection.Selection{}
+				e.Selection.Start(anchor.Line, anchor.Col)
+				e.ToggleLineComment()
+				start, end := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+				if start != tc.wantStart || end != tc.wantEnd {
+					t.Fatalf("selection = %v..%v, want %v..%v", start, end, tc.wantStart, tc.wantEnd)
+				}
+				if tc.name == "whole block" {
+					e.SetRect(Rect{W: 80, H: 10})
+					grid := renderGrid(e)
+					for x := e.GutterWidth(); x < e.GutterWidth()+2; x++ {
+						if cell := grid[0][x]; cell.Ch != '/' || cell.BgStyle != term.StyleSelection {
+							t.Fatalf("first comment marker lost selection highlighting: %+v", cell)
+						}
+					}
+				}
+				e.ToggleLineComment()
+				if !slices.Equal(e.Buf.Lines, tc.lines) || e.Selection.Anchor != anchor || e.Cursor.Line != cur.Line || e.Cursor.Col != cur.Col {
+					t.Fatalf("round trip: lines=%q anchor=%v cursor=%d:%d", e.Buf.Lines, e.Selection.Anchor, e.Cursor.Line, e.Cursor.Col)
+				}
+			})
+		}
+	}
+}
+
+func TestToggleLineCommentAlignsMixedIndentation(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		lines, want []string
+	}{
+		{"equal display indent", []string{"\tfoo()", "    bar()", "\t"}, []string{"\t// foo()", "    // bar()", "\t"}},
+		{"nested tabs", []string{"\tfoo()", "\t\tbar()", "        baz()"}, []string{"\t// foo()", "\t// \tbar()", "    //     baz()"}},
+		{"inside tab", []string{"  foo()", "\tbar()"}, []string{"//   foo()", "// \tbar()"}},
+		{"inside offset tabs", []string{"\t   foo()", "\t  \tbar()", "\t \tbaz()", ""}, []string{"\t //   foo()", "\t //  \tbar()", "\t // \tbaz()", ""}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			e := newCommentEditor(t, "a.go", slices.Clone(tc.lines), len(tc.lines)-1, len([]rune(tc.lines[len(tc.lines)-1])))
+			e.TabSize = 4
+			e.Undo = &undo.UndoStack{}
+			e.Selection = &selection.Selection{}
+			e.Selection.Start(0, 0)
+			e.ToggleLineComment()
+			if !slices.Equal(e.Buf.Lines, tc.want) {
+				t.Fatalf("lines = %q, want %q", e.Buf.Lines, tc.want)
+			}
+			e.Undo.Undo(e.Buf)
+			if !slices.Equal(e.Buf.Lines, tc.lines) {
+				t.Fatalf("undo = %q, want %q", e.Buf.Lines, tc.lines)
+			}
+			e.Undo.Redo(e.Buf)
+			if !slices.Equal(e.Buf.Lines, tc.want) {
+				t.Fatalf("redo = %q, want %q", e.Buf.Lines, tc.want)
+			}
+			e.ToggleLineComment()
+			if !slices.Equal(e.Buf.Lines, tc.lines) {
+				t.Fatalf("uncomment = %q, want %q", e.Buf.Lines, tc.lines)
+			}
+		})
+	}
+}
+
+func TestToggleLineCommentLeavesCursorBeforeIndent(t *testing.T) {
+	e := newCommentEditor(t, "a.go", []string{"    foo()"}, 0, 1)
+	e.ToggleLineComment()
+	if e.Cursor.Col != 1 {
+		t.Fatalf("cursor moved to %d", e.Cursor.Col)
+	}
+	e.ToggleLineComment()
+	if e.Cursor.Col != 1 {
+		t.Fatalf("cursor moved to %d", e.Cursor.Col)
+	}
+}
+
+func TestToggleLineCommentMapsSelectionsInsideXMLEntities(t *testing.T) {
+	for _, entity := range []string{"&amp;", "&#45;"} {
+		for offset := 1; offset < len(entity); offset++ {
+			for _, backward := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%d/backward=%v", entity, offset, backward), func(t *testing.T) {
+					line := "<!-- " + entity + " -->"
+					anchor, cur := 5+offset, len(line)
+					if backward {
+						anchor, cur = cur, anchor
+					}
+					e := newCommentEditor(t, "a.xml", []string{line}, 0, cur)
+					e.Selection = &selection.Selection{}
+					e.Selection.Start(0, anchor)
+					e.ToggleLineComment()
+					start, end := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+					if start.Col != 0 || end.Col != 1 {
+						t.Fatalf("decoded selection = %v..%v, want 0..1", start, end)
+					}
+					if got := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col); got != unescapeXMLCommentText(entity) {
+						t.Fatalf("selected text = %q", got)
+					}
+				})
+			}
+		}
 	}
 }

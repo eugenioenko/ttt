@@ -314,7 +314,7 @@ func (a *App) launchApp(name, file string, explicit bool) {
 	}
 	if id, ok := a.appTerminals[key]; ok {
 		if tt := a.terminalByID(id); tt != nil && !tt.Term.Exited() {
-			a.FocusTerminal(id)
+			_ = a.FocusTerminal(id)
 			return
 		}
 	}

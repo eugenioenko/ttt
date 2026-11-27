@@ -63,6 +63,9 @@ type Highlighter struct {
 	stepping  bool
 	sync      bool
 	syncLines int
+	// stopWoke limits the redraw requested for a time-limited line to one per
+	// edit; a line that keeps exceeding the limit would otherwise redraw forever.
+	stopWoke bool
 }
 
 // Conventional extensionless names the grammar catalog does not declare.
@@ -164,6 +167,7 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	h.syncTokenTheme()
 	if h.dirty || h.doc.Len() != len(lines) {
 		h.dirty = false
+		h.stopWoke = false
 		h.doc.SetLines(lines)
 		// An edit can lower what is materialized below an old target; steps
 		// work only toward lines rendered since.
@@ -182,6 +186,9 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 		}
 	}
 	res, ok := h.doc.Line(idx)
+	if res.StoppedReason == textmate.StopReasonTimeLimit {
+		h.wakeAfterTimeLimit()
+	}
 	if !ok || len(res.Tokens) == 0 {
 		return nil
 	}
@@ -197,6 +204,18 @@ func (h *Highlighter) HighlightLineAt(lines []string, idx int) []Span {
 	h.lineSpans[key] = cachedSpans{n: len(res.Tokens), spans: spans}
 	h.remember(idx, lines[idx], spans)
 	return spans
+}
+
+// wakeAfterTimeLimit asks for one more frame: the document retries a line cut
+// off by the time limit only when the line is drawn again, which on a still
+// screen would wait for the next key press. A synchronous highlighter is
+// rebuilt on each render, so its latch would not hold across frames.
+func (h *Highlighter) wakeAfterTimeLimit() {
+	if h.sync || h.stopWoke || wake == nil {
+		return
+	}
+	h.stopWoke = true
+	wake()
 }
 
 type cachedSpans struct {

@@ -75,7 +75,7 @@ func (w *ImageViewWidget) Refresh() {
 		w.Err = i18n.Format("imageView.cannotReadFile", i18n.Args{"error": err})
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	cfg, format, err := image.DecodeConfig(f)
 	if err != nil {
 		w.Err = i18n.Format("imageView.notAReadableImage", i18n.Args{"error": err})

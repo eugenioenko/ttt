@@ -19,6 +19,10 @@ type topBorderProvider interface {
 	TopBorder() (offset int, corner bool)
 }
 
+type leftTopBorderProvider interface {
+	LeftTopBorder() (offset int, corner bool)
+}
+
 type SplitPanelWidget struct {
 	BaseWidget
 	Left                      Widget
@@ -125,13 +129,16 @@ func (s *SplitPanelWidget) Render(surface Surface) {
 	}
 
 	// Right border — starts at RightBorderStartY to skip tab bar area
+	if leftStart, corner := s.leftBorder(); corner && leftStart == 0 {
+		surface.SetCell(divX, 0, term.Cell{Ch: b.TopTee, Style: bs})
+	} else if corner && leftStart > 0 && leftStart < h-1 {
+		surface.SetCell(divX, leftStart, term.Cell{Ch: b.LeftTee, Style: bs})
+	}
 	rbStart, corner := s.rightBorder()
 	if corner && rbStart == 0 {
-		surface.SetCell(divX, 0, term.Cell{Ch: b.TopTee, Style: bs})
 		surface.SetCell(w-1, 0, term.Cell{Ch: b.TopRight, Style: bs})
 		rbStart = 1
 	} else if corner && rbStart > 0 && rbStart < h-1 {
-		surface.SetCell(divX, rbStart, term.Cell{Ch: b.LeftTee, Style: bs})
 		surface.SetCell(w-1, rbStart, term.Cell{Ch: b.TopRight, Style: bs})
 		rbStart++
 	}
@@ -161,22 +168,21 @@ func (s *SplitPanelWidget) renderSinglePanel(surface Surface, w, h int, b term.B
 		s.renderBottomJunction(surface, r.X, w, h, b, bs)
 	}
 
-	// Side borders — start at RightBorderStartY
-	borderStart, corner := s.rightBorder()
-	if corner && borderStart == 0 {
-		surface.SetCell(0, 0, term.Cell{Ch: b.TopLeft, Style: bs})
-		surface.SetCell(w-1, 0, term.Cell{Ch: b.TopRight, Style: bs})
-		borderStart = 1
-	} else if corner && borderStart > 0 && borderStart < h-1 {
-		surface.SetCell(0, borderStart, term.Cell{Ch: b.TopLeft, Style: bs})
-		surface.SetCell(w-1, borderStart, term.Cell{Ch: b.TopRight, Style: bs})
-		borderStart++
-	}
-	for y := borderStart; y < h-1; y++ {
-		surface.SetCell(0, y, term.Cell{Ch: b.Vertical, Style: bs})
-		surface.SetCell(w-1, y, term.Cell{Ch: b.Vertical, Style: bs})
-	}
+	leftStart, leftCorner := s.leftBorder()
+	renderSideBorder(surface, 0, h, leftStart, leftCorner, b.TopLeft, b, bs)
+	rightStart, rightCorner := s.rightBorder()
+	renderSideBorder(surface, w-1, h, rightStart, rightCorner, b.TopRight, b, bs)
 	s.renderRightBorderJunction(surface, r, w, h, b, bs)
+}
+
+func renderSideBorder(surface Surface, x, h, start int, corner bool, top rune, b term.BorderSet, bs term.Style) {
+	if corner && start >= 0 && start < h-1 {
+		surface.SetCell(x, start, term.Cell{Ch: top, Style: bs})
+		start++
+	}
+	for y := start; y < h-1; y++ {
+		surface.SetCell(x, y, term.Cell{Ch: b.Vertical, Style: bs})
+	}
 }
 
 func (s *SplitPanelWidget) rightBorder() (int, bool) {
@@ -184,6 +190,13 @@ func (s *SplitPanelWidget) rightBorder() (int, bool) {
 		return provider.TopBorder()
 	}
 	return s.RightBorderStartY, true
+}
+
+func (s *SplitPanelWidget) leftBorder() (int, bool) {
+	if provider, ok := s.Right.(leftTopBorderProvider); ok {
+		return provider.LeftTopBorder()
+	}
+	return s.rightBorder()
 }
 
 func (s *SplitPanelWidget) renderBottomJunction(surface Surface, screenX, w, h int, b term.BorderSet, bs term.Style) {

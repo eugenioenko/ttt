@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve, join } from "node:path";
 import { describe, it, expect, afterEach } from "vitest";
 import * as tui from "./tui.js";
@@ -34,6 +34,18 @@ end)
     const { snapshots } = tui.run();
 
     expect(snapshots[screen]).toContain("ASYNC READY");
+  });
+
+  it("opens a relative file and writes a state dump under the run directory", () => {
+    dir = createTempDir();
+    createTempFile(dir, "sample.txt", "per-run workspace");
+    tui.start("sample.txt");
+    tui.setCwd(dir);
+    tui.waitFor("per-run workspace", 2000);
+    tui.dumpState("sample state.json");
+    tui.run();
+    const state = JSON.parse(readFileSync(join(dir, "sample state.json"), "utf8"));
+    expect(state.buffer.path).toBe(join(dir, "sample.txt"));
   });
 
   it("returns a nonzero exit and stderr for an invalid action", () => {

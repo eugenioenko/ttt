@@ -1,0 +1,27 @@
+name: Debug adapter compatibility
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+jobs:
+  launch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DAP_TOOLS: /tmp/ttt-dap-tools
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: make build
+      - name: Install adapters and exercise launch and attach through the editor
+        run: |
+          mkdir -p "$DAP_TOOLS/bin"
+          for script in $(jq -r '.requires[]' tests/dap/cases/*.json | sort -u); do
+            bash "tests/dap/$script"
+          done
+          PATH="$DAP_TOOLS/bin:$PATH" node --test tests/dap/matrix/*.test.mjs

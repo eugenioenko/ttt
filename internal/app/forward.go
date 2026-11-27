@@ -122,7 +122,7 @@ func dialForward(path string) (net.Conn, error) {
 }
 
 func sendForwardRequest(conn net.Conn, files []FileTarget, folders []string) (int, error) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	rpc := jsonrpc.NewConn(conn, conn, jsonrpc.Options{MaxMessageSize: maxExecBodySize})
 	wire := make([]forwardTarget, len(files))
 	for i, target := range files {
@@ -182,7 +182,7 @@ func StartForward(a *App) (stop func()) {
 	a.forwardSocket = path
 	go serveForward(a, ln)
 	return func() {
-		ln.Close()
+		_ = ln.Close()
 		if a.forwardSocket == path {
 			a.forwardSocket = ""
 		}
@@ -198,7 +198,7 @@ func serveForward(a *App, ln net.Listener) {
 		_ = conn.SetReadDeadline(time.Now().Add(execRequestTimeout))
 		jsonrpc.NewConn(conn, conn, jsonrpc.Options{
 			MaxMessageSize: maxExecBodySize,
-			OnClose:        func(error) { conn.Close() },
+			OnClose:        func(error) { _ = conn.Close() },
 			OnRequest: func(method string, params json.RawMessage) (any, error) {
 				_ = conn.SetReadDeadline(time.Time{})
 				var request forwardRequest

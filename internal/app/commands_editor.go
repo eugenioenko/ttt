@@ -175,7 +175,9 @@ func (a *App) CloseAllTabs() {
 func (a *App) OpenFile() {
 	a.ShowFilePicker(i18n.Text("general.openFile"), i18n.Text("general.open"), "", func(path string) {
 		// Not validating the path here: ShowFilePicker already checks that it exists and is a regular file. OpenFile treats a missing path as a new file.
-		a.EditorGroup.OpenFile(path)
+		if err := a.EditorGroup.OpenFile(path); err != nil {
+			return
+		}
 		a.Root.SetFocus(a.EditorGroup)
 	})
 }
@@ -396,6 +398,9 @@ func (a *App) doSaveFile(onSaved func()) {
 }
 
 func (a *App) afterFileSave(path, lang string) {
+	if filepath.Base(path) == "launch.json" {
+		a.refreshDebugConfiguration()
+	}
 	if lang != "" {
 		a.NotifyLSPSave(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.ScheduleDiagnosticPull(true)

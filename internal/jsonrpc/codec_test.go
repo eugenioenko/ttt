@@ -120,20 +120,25 @@ func TestCodecRoundTrip(t *testing.T) {
 	sender := NewCodec(nil, pw)
 	receiver := NewCodec(pr, nil)
 
+	sent := make(chan error, 1)
 	go func() {
 		id := 42
-		sender.Send(Request{
+		err := sender.Send(Request{
 			JSONRPC: "2.0",
 			ID:      &id,
 			Method:  "textDocument/completion",
 		})
-		pw.Close()
+		if closeErr := pw.Close(); err == nil {
+			err = closeErr
+		}
+		sent <- err
 	}()
 
 	resp, err := receiver.Receive()
 	if err != nil {
 		t.Fatal(err)
 	}
+	requireNoError(t, <-sent)
 	if resp.Method != "textDocument/completion" {
 		t.Fatalf("got method %q", resp.Method)
 	}
@@ -218,5 +223,15 @@ func TestCodecHeaderLimitsAndLegacyCompatibility(t *testing.T) {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestRepeatedContentLength(t *testing.T) {
+	for _, second := range []string{"  2 ", "3", "-1"} {
+		var out map[string]any
+		err := NewCodec(strings.NewReader("Content-Length: 2\r\ncontent-length:"+second+"\r\n\r\n{}"), nil).ReceiveInto(&out)
+		if (err == nil) != (second == "  2 ") {
+			t.Fatalf("second length %q: %v", second, err)
+		}
 	}
 }

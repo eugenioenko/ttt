@@ -221,7 +221,7 @@ func TestBlameTargetChangesDropQueuedRead(t *testing.T) {
 				if err := os.WriteFile(path, []byte("other\n"), 0o644); err != nil {
 					t.Fatal(err)
 				}
-				a.EditorGroup.OpenFile(path)
+				requireNoError(t, a.EditorGroup.OpenFile(path))
 			}
 			a.SyncBlame()
 			stale()

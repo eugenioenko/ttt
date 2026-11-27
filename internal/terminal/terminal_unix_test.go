@@ -398,3 +398,25 @@ func TestCloseHangsUpJobsTheShellDoesNotForwardHangupTo(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 }
+
+func TestChildEnvironmentAndPID(t *testing.T) {
+	t.Setenv("TTT_REMOVED", "inherited")
+	t.Setenv("TTT_EMPTY", "inherited")
+	term, err := New("/bin/sh", 80, 24, 0, []string{"TTT_REMOVED=override", "TTT_REMOVED", "TTT_EMPTY="}, "", "-c", `printf '%s:%s:%s:%s' "$$" "${TTT_REMOVED-unset}" "${TTT_EMPTY-unset}" "$TERM"`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer term.Close()
+	exited := make(chan string, 1)
+	term.OnExit = func() { exited <- string(term.RawTail()) }
+	want := strconv.Itoa(term.PID()) + ":unset::xterm-256color"
+	term.Run()
+	select {
+	case got := <-exited:
+		if got != want {
+			t.Fatalf("child reported %q, want %q", got, want)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("child did not exit")
+	}
+}

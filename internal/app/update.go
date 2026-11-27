@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/update"
@@ -46,6 +48,10 @@ func (a *App) CheckForUpdates() {
 	if a.Root.HasModalOverlay() {
 		return
 	}
+	if a.updateStartupTask != nil {
+		a.releaseTask(a.updateStartupTask)
+		a.updateStartupTask = nil
+	}
 	s := &updateDialogState{dialog: widgets.NewDialogWidget(76), service: a.Updates}
 	if s.service == nil {
 		s.service = update.Service{}
@@ -65,6 +71,9 @@ func (a *App) closeUpdateDialog() {
 	s := a.updateDialog
 	if s == nil || s.updating {
 		return
+	}
+	if s.task == a.updateStartupTask {
+		a.updateStartupTask = nil
 	}
 	a.releaseTask(s.task)
 	a.Root.RemoveOverlay(s.adapter)
@@ -145,16 +154,7 @@ func (a *App) checkLatestUpdate() {
 			return
 		}
 		s.release = release
-		message := i18n.Format("update.available", i18n.Args{"latest": displayVersion(release.Tag), "current": displayVersion(version)})
-		buttons := []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))}
-		switch s.method.Kind {
-		case update.Dev:
-			message += "\n" + i18n.Text("update.devBuild")
-		case update.Nix:
-			message += "\n" + i18n.Text("update.nix")
-		default:
-			buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
-		}
+		message, buttons := a.availableUpdatePrompt(release, s.method, version)
 		a.showUpdateState(message, release.Notes, buttons)
 	})
 }
@@ -215,4 +215,113 @@ func displayVersion(version string) string {
 		return version
 	}
 	return "v" + strings.TrimPrefix(version, "v")
+}
+
+func (a *App) CheckForUpdatesOnStartup(now time.Time) {
+	if a.Settings == nil || !a.Settings.Update.StartupCheckDue(a.startupUpdateLastCheck(), now) {
+		return
+	}
+	if a.Root != nil && a.Root.HasModalOverlay() {
+		return
+	}
+	service := a.Updates
+	if service == nil {
+		service = update.Service{}
+	}
+	if a.updateStartupTask == nil {
+		a.updateStartupTask = NewTask[update.Release](a, asynctask.TaskOptions{})
+	}
+	version, method := a.Version, a.UpdateMethod
+	var detected update.Method
+	if method != nil {
+		detected = *method
+	}
+	a.updateStartupTask.Schedule(func(ctx context.Context) (update.Release, error) {
+		if method == nil {
+			var err error
+			detected, err = update.CurrentMethod(version)
+			if err != nil {
+				return update.Release{}, err
+			}
+		}
+		return service.Latest(ctx)
+	}, func(release update.Release, err error) {
+		if a.updateDialog != nil {
+			return
+		}
+		if err != nil {
+			a.rememberStartupUpdateCheck(now)
+			return
+		}
+		current := version
+		if update.IsDevelopmentVersion(version) {
+			detected.Kind = update.Dev
+			current = "dev"
+		}
+		cmp, cmpErr := update.CompareVersions(current, release.Tag)
+		if cmpErr != nil || cmp >= 0 {
+			a.rememberStartupUpdateCheck(now)
+			return
+		}
+		if a.Root != nil && a.Root.HasModalOverlay() {
+			return
+		}
+		if a.showStartupUpdate(release, detected) {
+			a.rememberStartupUpdateCheck(now)
+		}
+	})
+}
+
+func (a *App) startupUpdateLastCheck() time.Time {
+	if t := config.LoadState().LastUpdateCheckTime(); !t.IsZero() {
+		return t
+	}
+	return a.State.LastUpdateCheckTime()
+}
+
+func (a *App) rememberStartupUpdateCheck(now time.Time) {
+	disk := config.LoadState()
+	disk.SetLastUpdateCheckTime(now)
+	if err := config.SaveState(disk); err != nil {
+		return
+	}
+	a.State.SetLastUpdateCheckTime(now)
+}
+
+func (a *App) availableUpdatePrompt(release update.Release, method update.Method, version string) (string, []widgets.DialogButton) {
+	message := i18n.Format("update.available", i18n.Args{"latest": displayVersion(release.Tag), "current": displayVersion(version)})
+	buttons := []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.closeButton"))}
+	switch method.Kind {
+	case update.Dev:
+		message += "\n" + i18n.Text("update.devBuild")
+	case update.Nix:
+		message += "\n" + i18n.Text("update.nix")
+	default:
+		buttons = []widgets.DialogButton{a.updateCloseButton(i18n.Text("general.cancelButton")), {Label: i18n.Text("update.updateButton"), Handler: a.applyUpdate}}
+	}
+	return message, buttons
+}
+
+func (a *App) showStartupUpdate(release update.Release, method update.Method) bool {
+	if a.Root == nil || a.Root.HasModalOverlay() {
+		return false
+	}
+	s := &updateDialogState{dialog: widgets.NewDialogWidget(76), service: a.Updates, method: method, release: release}
+	if s.service == nil {
+		s.service = update.Service{}
+	}
+	s.dialog.Title = i18n.Text("update.checkForUpdates")
+	s.dialog.Borders = *a.Borders
+	s.dialog.OnDismiss = a.closeUpdateDialog
+	s.adapter = ui.NewWidgetAdapter(&updateDialogWidget{DialogWidget: s.dialog})
+	if a.updateStartupTask != nil {
+		s.task = a.updateStartupTask
+	} else {
+		s.task = NewTask[update.Release](a, asynctask.TaskOptions{})
+	}
+	a.updateDialog = s
+	message, buttons := a.availableUpdatePrompt(release, method, a.Version)
+	a.showUpdateState(message, release.Notes, buttons)
+	a.ShowDialog(s.adapter)
+	return true
 }

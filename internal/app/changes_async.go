@@ -447,7 +447,7 @@ func (cp *ChangesPanel) fetchCommitFiles(dir, ref, short, nodeID string) {
 	go func() {
 		result := readCommitFiles(ctx, requestID, source, ref, short, nodeID)
 		cancel()
-		screen.PostEvent(tcell.NewEventInterrupt(result))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 	}()
 }
 
@@ -594,7 +594,7 @@ func (a *App) OpenCommitDetail(dir, ref, short string) {
 	}
 	screen := a.Screen
 	go func() {
-		screen.PostEvent(tcell.NewEventInterrupt(read()))
+		_ = screen.PostEvent(tcell.NewEventInterrupt(read()))
 	}()
 }
 

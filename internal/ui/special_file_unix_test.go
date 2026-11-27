@@ -19,14 +19,16 @@ func TestOpenFileRefusesNamedPipe(t *testing.T) {
 	g.OnError = func(msg string) { reported = msg }
 	before := len(g.tabs)
 
-	done := make(chan struct{})
+	done := make(chan error, 1)
 	go func() {
-		g.OpenFile(pipe)
-		close(done)
+		done <- g.OpenFile(pipe)
 	}()
 
 	select {
-	case <-done:
+	case err := <-done:
+		if err == nil {
+			t.Error("OpenFile succeeded for a named pipe")
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("OpenFile blocked on a named pipe")
 	}

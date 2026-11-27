@@ -443,6 +443,12 @@ func (d *DiffEditorWidget) SetIndentGuides(enabled bool) {
 	}
 }
 
+func (d *DiffEditorWidget) SetFullLineSelection(enabled bool) {
+	for _, p := range d.viewPanes() {
+		p.FullLineSelection = enabled
+	}
+}
+
 func (d *DiffEditorWidget) SetDiffCollapsedEmphasis(enabled bool) {
 	d.emphasizeGaps = enabled
 	d.applyOverlayOptions()

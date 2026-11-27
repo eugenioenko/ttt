@@ -78,8 +78,8 @@ func (a *App) restoreEditorGroupTabs(group *ui.EditorGroupWidget, tabs []config.
 		}
 		group.CommitActiveTab()
 		group.GoToLineCol(max(tab.Line, 0)+1, max(tab.Col, 0)+1)
-		if buf := group.ActiveBuffer(); buf != nil {
-			group.Editor.Viewport.TopLine = max(0, min(tab.TopLine, len(buf.Lines)-1))
+		if group.ActiveBuffer() != nil {
+			group.Editor.Viewport.TopLine = max(tab.TopLine, 0)
 			group.Editor.Viewport.LeftCol = max(tab.LeftCol, 0)
 		}
 		if tab.Pinned != group.IsActiveTabPinned() {

@@ -12,10 +12,19 @@ import (
 type Name string
 
 const (
-	Branch Name = "branch"
-	Commit Name = "commit"
-	Lock   Name = "lock"
-	Pinned Name = "pinned"
+	DebugContinue  Name = "debug-continue"
+	DebugPause     Name = "debug-pause"
+	DebugDetach    Name = "debug-detach"
+	DebugStop      Name = "debug-stop"
+	DebugStepOver  Name = "debug-step-over"
+	DebugStepIn    Name = "debug-step-in"
+	DebugStepOut   Name = "debug-step-out"
+	Breakpoint     Name = "breakpoint"
+	DebugExecution Name = "debug-execution"
+	Branch         Name = "branch"
+	Commit         Name = "commit"
+	Lock           Name = "lock"
+	Pinned         Name = "pinned"
 
 	ChevronRight Name = "chevron-right"
 	ChevronLeft  Name = "chevron-left"
@@ -70,10 +79,19 @@ type glyphs struct {
 }
 
 var table = map[Name]glyphs{
-	Branch: {Plain: "⎇", Nerd: "\ue702"},
-	Commit: {Plain: "●", Nerd: "\ueafc"},
-	Lock:   {Plain: "⚿", Nerd: ""},
-	Pinned: {Plain: "♦", Nerd: ""},
+	DebugContinue:  {Plain: "⏵", Nerd: "\ueacf"},
+	DebugPause:     {Plain: "⏸", Nerd: "\uf04c"},
+	DebugDetach:    {Plain: "⏏", Nerd: "\uf052"},
+	DebugStop:      {Plain: "∎", Nerd: "\uf04d"},
+	DebugStepOver:  {Plain: "↷", Nerd: "\uead6"},
+	DebugStepIn:    {Plain: "⤓", Nerd: "\uead4"},
+	DebugStepOut:   {Plain: "⤒", Nerd: "\uead5"},
+	Breakpoint:     {Plain: "⦁", Nerd: "\U000f0765"},
+	DebugExecution: {Plain: "▶", Nerd: "\uf04b"},
+	Branch:         {Plain: "⎇", Nerd: "\ue702"},
+	Commit:         {Plain: "●", Nerd: "\ueafc"},
+	Lock:           {Plain: "⚿", Nerd: ""},
+	Pinned:         {Plain: "♦", Nerd: ""},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
 	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
@@ -146,11 +164,18 @@ func Get(mode string, name Name) string {
 		return o
 	}
 	g := table[name]
-	if mode == config.IconsNerdFont {
-		return g.Nerd
+	if mode == config.IconsNerdFont && g.Nerd != "" {
+		if (name != DebugExecution && name != Breakpoint) || textwidth.String(g.Nerd) == 1 {
+			return g.Nerd
+		}
+	}
+	if name == DebugExecution && textwidth.Rune('▶') > 1 {
+		return ">"
 	}
 	return g.Plain
 }
+
+func Active(name Name) string { return Get(activeMode, name) }
 
 // Rune returns name's glyph for the configured icon mode.
 func Rune(name Name) rune {

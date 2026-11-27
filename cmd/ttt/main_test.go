@@ -26,3 +26,20 @@ func TestParseFlagsForwardEligibility(t *testing.T) {
 		}
 	}
 }
+
+func TestMalformedSizeDoesNotMixPartialDimensions(t *testing.T) {
+	previous := os.Args
+	t.Cleanup(func() { os.Args = previous })
+	for _, tc := range []struct {
+		size string
+		w, h int
+	}{
+		{"120x40", 120, 40}, {"120x", 0, 0}, {"invalid", 0, 0},
+	} {
+		os.Args = []string{"ttt", "--size", "80x24", "--size", tc.size}
+		got := parseFlags()
+		if got.sizeW != tc.w || got.sizeH != tc.h {
+			t.Errorf("size %q: %dx%d, want %dx%d", tc.size, got.sizeW, got.sizeH, tc.w, tc.h)
+		}
+	}
+}

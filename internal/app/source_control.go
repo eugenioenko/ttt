@@ -34,6 +34,10 @@ func (cp *ChangesPanel) supportsStaging(dir string) bool {
 	return ok
 }
 
+func (cp *ChangesPanel) isJujutsu(dir string) bool {
+	return jj.IsRepository(cp.repository(dir))
+}
+
 // discardChanges reverts working-copy changes through the repository's
 // provider when it supports discarding, otherwise through Git.
 func (cp *ChangesPanel) discardChanges(dir string, files []scm.Change) error {

@@ -289,7 +289,7 @@ func TestRPCPeerCallsPluginAndNotifiesInOrder(t *testing.T) {
 func TestRPCCloseCallbacks(t *testing.T) {
 	h := newRPCHarness(t, rpcPerms)
 	h.connectPeer(jsonrpc.Options{})
-	h.peer.Close()
+	requireNoError(t, h.peer.Close())
 	h.pumpUntil(func() bool { return h.global("closed") != lua.LNil })
 	if got := h.global("closed").String(); got != "clean" {
 		t.Fatalf("peer hang-up reported %q", got)

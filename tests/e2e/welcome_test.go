@@ -252,7 +252,7 @@ func TestCloseWorkspaceKeepsOpenFiles(t *testing.T) {
 	}
 	// Opening a file twice pins its tab, so the second one does not replace it.
 	for _, p := range []string{first, first, file, file} {
-		h.app.EditorGroup.OpenFile(p)
+		h.openFile(p)
 	}
 	if n := h.app.EditorGroup.TabCount(); n < 2 {
 		t.Fatalf("%d tabs open, want both files", n)

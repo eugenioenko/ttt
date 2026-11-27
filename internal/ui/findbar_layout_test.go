@@ -102,3 +102,95 @@ func TestReplaceBarConsumesMatchCounterClick(t *testing.T) {
 		t.Fatal("match counter click did not focus the search row")
 	}
 }
+
+func TestFindBarAnchorsToRect(t *testing.T) {
+	cases := []struct {
+		name     string
+		surface  Rect
+		anchor   Rect
+		expanded bool
+		want     Rect
+	}{
+		{
+			name:    "left split",
+			surface: Rect{W: 120, H: 30},
+			anchor:  Rect{X: 32, Y: 4, W: 43, H: 24},
+			want:    Rect{X: 35, Y: 4, W: 40, H: 3},
+		},
+		{
+			name:     "bottom split replace",
+			surface:  Rect{W: 120, H: 30},
+			anchor:   Rect{X: 32, Y: 18, W: 87, H: 10},
+			expanded: true,
+			want:     Rect{X: 79, Y: 18, W: 40, H: 4},
+		},
+		{
+			name:    "narrow split fits inside group",
+			surface: Rect{W: 120, H: 30},
+			anchor:  Rect{X: 10, Y: 4, W: 28, H: 20},
+			want:    Rect{X: 10, Y: 4, W: 28, H: 3},
+		},
+		{
+			name:    "very narrow split keeps minimum width",
+			surface: Rect{W: 80, H: 24},
+			anchor:  Rect{X: 70, Y: 4, W: 8, H: 18},
+			want:    Rect{X: 54, Y: 4, W: 24, H: 3},
+		},
+		{
+			name:    "very narrow left-edge split clamps to surface",
+			surface: Rect{W: 80, H: 24},
+			anchor:  Rect{X: 2, Y: 4, W: 8, H: 18},
+			want:    Rect{X: 0, Y: 4, W: 24, H: 3},
+		},
+		{
+			name:     "cramped bottom clamps to surface height",
+			surface:  Rect{W: 120, H: 30},
+			anchor:   Rect{X: 32, Y: 28, W: 50, H: 2},
+			expanded: true,
+			want:     Rect{X: 42, Y: 26, W: 40, H: 4},
+		},
+		{
+			name:    "non-zero surface origin",
+			surface: Rect{X: 7, Y: 3, W: 80, H: 24},
+			anchor:  Rect{X: 12, Y: 7, W: 43, H: 18},
+			want:    Rect{X: 8, Y: 4, W: 40, H: 3},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var bar Widget
+			var layout *findBarLayout
+			toggled, dismissed := false, false
+			anchor := tc.anchor
+			if tc.expanded {
+				replace := NewReplaceBarWidget()
+				replace.AnchorRect = func() Rect { return anchor }
+				replace.OnToggleFind = func() { toggled = true }
+				replace.OnDismiss = func() { dismissed = true }
+				bar, layout = replace, &replace.findBarLayout
+			} else {
+				find := NewFindBarWidget()
+				find.AnchorRect = func() Rect { return anchor }
+				find.OnToggleReplace = func() { toggled = true }
+				find.OnDismiss = func() { dismissed = true }
+				bar, layout = find, &find.findBarLayout
+			}
+			bar.SetRect(tc.surface)
+			gridW := tc.surface.X + tc.surface.W
+			gridH := tc.surface.Y + tc.surface.H
+			bar.Render(NewRenderSurface(makeGrid(gridW, gridH), tc.surface))
+			if layout.barRect != tc.want {
+				t.Fatalf("barRect = %+v, want %+v", layout.barRect, tc.want)
+			}
+			for _, hit := range []HitRegion{layout.btnToggle, layout.btnClose} {
+				if result := bar.HandleEvent(tcell.NewEventMouse(hit.X, hit.Y, tcell.Button1, tcell.ModNone)); result != EventConsumed {
+					t.Fatalf("button hit %+v was ignored", hit)
+				}
+			}
+			if !toggled || !dismissed {
+				t.Fatalf("toggled=%v dismissed=%v, want both true", toggled, dismissed)
+			}
+		})
+	}
+}

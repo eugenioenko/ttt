@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/multicursor"
@@ -24,6 +25,19 @@ func assertCursor(t *testing.T, e *EditorPaneWidget, line, col int) {
 	t.Helper()
 	if e.Cursor.Line != line || e.Cursor.Col != col {
 		t.Fatalf("cursor = (%d,%d), want (%d,%d)", e.Cursor.Line, e.Cursor.Col, line, col)
+	}
+}
+
+func TestWrapRenderKeepsCaretVisibleWhenRestoredTopLineIsOutOfRange(t *testing.T) {
+	e := newWrapEditor(8, "caret", strings.Repeat("x", 120))
+	e.SetRect(Rect{W: 12, H: 4})
+	e.Cursor.Col = 2
+	e.Viewport.TopLine = 150
+
+	renderGrid(e)
+
+	if got := e.Viewport.TopLine; got != 0 {
+		t.Fatalf("restored top line = %d, want the caret's line at 0", got)
 	}
 }
 

@@ -1201,7 +1201,12 @@ func (cp *ChangesPanel) confirmDiscardFolder(node *widgets.TreeNode) {
 	if len(files) == 0 {
 		return
 	}
-	msg := i18n.Format("changes.discardFolderChangesThisIsIrreversible", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	var msg string
+	if cp.isJujutsu(ref.Dir) {
+		msg = i18n.Format("changes.jjDiscardFolder", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	} else {
+		msg = i18n.Format("changes.discardFolderChangesThisIsIrreversible", i18n.Args{"changeCount": len(files), "folder": ref.Path})
+	}
 	cp.OnConfirmDiscard(msg, func() {
 		cp.applied(cp.discardChanges(ref.Dir, files))
 	})
@@ -1265,9 +1270,14 @@ func (cp *ChangesPanel) confirmDiscard(dir string, f scm.Change) {
 	if cp.OnConfirmDiscard == nil {
 		return
 	}
-	msg := i18n.Format("changes.discardChangesToThisIsIrreversible", i18n.Args{"path": f.Path})
-	if f.Kind == scm.Untracked {
+	var msg string
+	switch {
+	case cp.isJujutsu(dir):
+		msg = i18n.Format("changes.jjDiscardFile", i18n.Args{"path": f.Path})
+	case f.Kind == scm.Untracked:
 		msg = i18n.Format("changes.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": f.Path})
+	default:
+		msg = i18n.Format("changes.discardChangesToThisIsIrreversible", i18n.Args{"path": f.Path})
 	}
 	cp.OnConfirmDiscard(msg, func() {
 		cp.applied(cp.discardChanges(dir, []scm.Change{f}))
@@ -1279,9 +1289,15 @@ func (cp *ChangesPanel) confirmDiscardAll(gi int) {
 		return
 	}
 	g := cp.groups[gi]
-	msg := i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(g.filesIn(scm.WorkingTree))})
+	files := g.filesIn(scm.WorkingTree)
+	var msg string
+	if cp.isJujutsu(g.Dir) {
+		msg = i18n.Format("changes.jjDiscardAll", i18n.Args{"unstagedCount": len(files)})
+	} else {
+		msg = i18n.Format("changes.discardAllChangesThisIsIrreversible", i18n.Args{"unstagedCount": len(files)})
+	}
 	cp.OnConfirmDiscard(msg, func() {
-		cp.applied(cp.discardChanges(g.Dir, g.filesIn(scm.WorkingTree)))
+		cp.applied(cp.discardChanges(g.Dir, files))
 	})
 }
 

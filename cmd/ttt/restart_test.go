@@ -180,7 +180,7 @@ func TestRestartReplacementHelper(t *testing.T) {
 	if err := os.Remove(target.launch + ".old"); err != nil && runtime.GOOS != "windows" {
 		t.Fatal(err)
 	}
-	os.Setenv("TTT_REPLACE_STAGE", "restarted")
+	t.Setenv("TTT_REPLACE_STAGE", "restarted")
 	code, err := target.restart(update.Binary)
 	if err != nil {
 		t.Fatal(err)
@@ -214,8 +214,8 @@ func TestRestartHelper(t *testing.T) {
 		return
 	}
 	if stage == "launch" {
-		os.Setenv("TTT_RESTART_STAGE", "restarted")
-		os.Setenv("TTT_RESTART_PID", strconv.Itoa(os.Getpid()))
+		t.Setenv("TTT_RESTART_STAGE", "restarted")
+		t.Setenv("TTT_RESTART_PID", strconv.Itoa(os.Getpid()))
 		code, err := restartProcess(os.Args[0], os.Args, os.Environ())
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -232,7 +232,9 @@ func TestRestartHelper(t *testing.T) {
 	if runtime.GOOS != "windows" && strconv.Itoa(os.Getpid()) != os.Getenv("TTT_RESTART_PID") {
 		os.Exit(97)
 	}
-	fmt.Fprintln(os.Stdout, "restarted stdout")
+	if _, err := fmt.Fprintln(os.Stdout, "restarted stdout"); err != nil {
+		t.Fatal(err)
+	}
 	fmt.Fprintln(os.Stderr, "restarted stderr")
 	os.Exit(23)
 }

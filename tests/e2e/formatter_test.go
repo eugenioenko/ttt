@@ -16,9 +16,9 @@ func TestExternalFormatterGofmt(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
 	unformatted := "package main\n\nimport (\n\"fmt\"\n)\n\nfunc    main()    {\nfmt.Println(   \"hello\"   )\n}"
-	os.WriteFile(filepath.Join(h.dir, "test.go"), []byte(unformatted), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, "test.go"), []byte(unformatted), 0644))
 	h.app.Settings.Formatters = map[string]string{"go": "gofmt"}
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "test.go"))
+	h.openFile(filepath.Join(h.dir, "test.go"))
 	h.redraw()
 
 	h.exec("editor.formatExternal")
@@ -43,8 +43,8 @@ func TestExternalFormatterGofmt(t *testing.T) {
 func TestExternalFormatterNoConfig(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
-	os.WriteFile(filepath.Join(h.dir, "test.txt"), []byte("hello world"), 0644)
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "test.txt"))
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, "test.txt"), []byte("hello world"), 0644))
+	h.openFile(filepath.Join(h.dir, "test.txt"))
 	h.redraw()
 
 	h.exec("editor.formatExternal")
@@ -63,10 +63,10 @@ func TestExternalFormatterOnSavePriority(t *testing.T) {
 	h := newTestHarness(t, 80, 24)
 
 	unformatted := "package main\n\nfunc    main()    {\n}"
-	os.WriteFile(filepath.Join(h.dir, "test.go"), []byte(unformatted), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(h.dir, "test.go"), []byte(unformatted), 0644))
 	h.app.Settings.Formatters = map[string]string{"go": "gofmt"}
 	h.app.Settings.Editor.FormatOnSave = true
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "test.go"))
+	h.openFile(filepath.Join(h.dir, "test.go"))
 	h.redraw()
 
 	h.exec("file.save")

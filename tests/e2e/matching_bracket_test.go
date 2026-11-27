@@ -10,8 +10,8 @@ func TestGoToMatchingBracket_Forward(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	defer h.stop()
 	f := filepath.Join(h.dir, "test.go")
-	os.WriteFile(f, []byte("func main() {\n\tx()\n}\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("func main() {\n\tx()\n}\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 	// Position cursor at the opening brace on line 0
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -28,8 +28,8 @@ func TestGoToMatchingBracket_Backward(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	defer h.stop()
 	f := filepath.Join(h.dir, "test.go")
-	os.WriteFile(f, []byte("func main() {\n\tx()\n}\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("func main() {\n\tx()\n}\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 	// Position cursor at the closing brace
 	h.app.EditorGroup.Editor.Cursor.Line = 2
@@ -47,8 +47,8 @@ func TestGoToMatchingBracket_ExpandsFold(t *testing.T) {
 	defer h.stop()
 	f := filepath.Join(h.dir, "test.go")
 	// Closing paren is on an indented line, so it gets hidden when line 0 is folded
-	os.WriteFile(f, []byte("result := calc(\n\ta,\n\tb)\nnext := 0\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("result := calc(\n\ta,\n\tb)\nnext := 0\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 	// Fold at line 0 hides lines 1-2 (indented)
 	h.app.EditorGroup.Editor.Cursor.Line = 0
@@ -71,8 +71,8 @@ func TestGoToMatchingBracket_NoMatch(t *testing.T) {
 	h := newTestHarness(t, 80, 30)
 	defer h.stop()
 	f := filepath.Join(h.dir, "test.txt")
-	os.WriteFile(f, []byte("no brackets here\n"), 0644)
-	h.app.EditorGroup.OpenFile(f)
+	requireNoError(t, os.WriteFile(f, []byte("no brackets here\n"), 0644))
+	h.openFile(f)
 	h.redraw()
 	h.app.EditorGroup.Editor.Cursor.Line = 0
 	h.app.EditorGroup.Editor.Cursor.Col = 0

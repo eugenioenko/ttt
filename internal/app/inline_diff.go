@@ -34,7 +34,9 @@ func (a *App) openInlineDiff(path, repoDir, relPath string) (opened, conflict bo
 	if err != nil {
 		return false, false, err
 	}
-	a.EditorGroup.OpenFile(path)
+	if err := a.EditorGroup.OpenFile(path); err != nil {
+		return false, false, err
+	}
 	if a.EditorGroup.ActiveFilePath() != path || !a.EditorGroup.IsEditorActive() {
 		return false, false, nil
 	}

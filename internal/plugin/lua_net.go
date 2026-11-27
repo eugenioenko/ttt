@@ -138,7 +138,7 @@ func netGetAsync(p *Plugin) lua.LGFunction {
 				if p.State == nil {
 					return
 				}
-				p.CallLuaFunc(callback, httpResultToLua(p.State, 0, "", nil, err))
+				_ = p.CallLuaFunc(callback, httpResultToLua(p.State, 0, "", nil, err))
 			}})
 			return 0
 		}
@@ -185,7 +185,7 @@ func netPostAsync(p *Plugin) lua.LGFunction {
 				if p.State == nil {
 					return
 				}
-				p.CallLuaFunc(callback, httpResultToLua(p.State, 0, "", nil, err))
+				_ = p.CallLuaFunc(callback, httpResultToLua(p.State, 0, "", nil, err))
 			}})
 			return 0
 		}

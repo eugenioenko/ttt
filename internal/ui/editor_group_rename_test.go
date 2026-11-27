@@ -11,13 +11,13 @@ import (
 // newRenameGroup returns a group with one tab open on a real file at path.
 func newRenameGroup(t *testing.T, path, contents string) *EditorGroupWidget {
 	t.Helper()
-	os.MkdirAll(filepath.Dir(path), 0755)
+	requireNoError(t, os.MkdirAll(filepath.Dir(path), 0755))
 	if err := os.WriteFile(path, []byte(contents), 0644); err != nil {
 		t.Fatalf("write %s: %v", path, err)
 	}
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
 	g.SyntaxHighlight = true
-	g.OpenFile(path)
+	requireNoError(t, g.OpenFile(path))
 	return g
 }
 
@@ -94,7 +94,7 @@ func TestRenamePathUpdatesImageViewerContent(t *testing.T) {
 	old := filepath.Join(tmp, "image.png")
 	writeTestPNG(t, old, 4, 4)
 	g := NewEditorGroupWidget(nil, 4, false, "extended")
-	g.OpenFile(old)
+	requireNoError(t, g.OpenFile(old))
 
 	newPath := filepath.Join(tmp, "renamed.png")
 	if err := os.Rename(old, newPath); err != nil {

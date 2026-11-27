@@ -1,12 +1,15 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
 	"log/slog"
 	"os"
+	"os/signal"
 	"runtime/debug"
+	"syscall"
 	"time"
 
 	"path/filepath"
@@ -57,8 +60,11 @@ func handlePanic(screen *term.TcellScreen) {
 	crashMsg := fmt.Sprintf("ttt crashed: %v\n\n%s", r, stack)
 	crashPath := config.ConfigFilePath("crash.log")
 	header := fmt.Sprintf("ttt crash report — %s\nVersion: %s\n\n", time.Now().Format(time.RFC3339), version)
-	os.WriteFile(crashPath, []byte(header+crashMsg), 0644)
-	fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	if err := os.WriteFile(crashPath, []byte(header+crashMsg), 0644); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	} else {
+		fmt.Fprintf(os.Stderr, "ttt crashed. Crash log saved to %s\n", crashPath)
+	}
 	fmt.Fprintln(os.Stderr, crashMsg)
 	os.Exit(1)
 }
@@ -110,7 +116,9 @@ func parseFlags() cliFlags {
 		case "--size":
 			f.noForward = true
 			if i+1 < len(args) {
-				fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH)
+				if _, err := fmt.Sscanf(args[i+1], "%dx%d", &f.sizeW, &f.sizeH); err != nil {
+					f.sizeW, f.sizeH = 0, 0
+				}
 				i++
 			}
 		case "--debug":
@@ -280,7 +288,9 @@ Docs: https://tttedit.dev
 			}
 		}
 	}
-	config.ParseKeyBindings(cfg.Keybindings)
+	if err := config.ParseKeyBindings(cfg.Keybindings); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
 	if flags.debug {
 		cfg.Settings.DebugMode = true
@@ -288,7 +298,7 @@ Docs: https://tttedit.dev
 
 	logFile := initLogger(cfg.Settings.DebugMode)
 	if logFile != nil {
-		defer logFile.Close()
+		defer func() { _ = logFile.Close() }()
 	}
 	slog.Info("starting", "debugMode", cfg.Settings.DebugMode)
 
@@ -378,7 +388,7 @@ Docs: https://tttedit.dev
 		pluginManager.SetLogFactory(func(pluginName string) func(string, string) {
 			return func(level, message string) {
 				editor.LogOutput(level, pluginName, message)
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 		})
 		// Before LoadAll, so ttt.version() is available during plugin init.
@@ -404,10 +414,10 @@ Docs: https://tttedit.dev
 
 		for _, p := range pluginManager.Plugins() {
 			p.RequestRedraw = func() {
-				screen.PostEvent(tcell.NewEventInterrupt(nil))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(nil))
 			}
 			p.SetPostAsync(func(result *plugin.PluginAsyncResult) {
-				screen.PostEvent(tcell.NewEventInterrupt(result))
+				_ = screen.PostEvent(tcell.NewEventInterrupt(result))
 			})
 		}
 		editor.RegisterStartupPluginCommands()
@@ -415,11 +425,6 @@ Docs: https://tttedit.dev
 		pluginsPanel := app.NewPluginsPanel(pluginManager)
 		editor.Sidebar.AddPanel("plugins", i18n.Text("plugins.plugins"), pluginsPanel.Adapter)
 		editor.WirePluginsPanel(pluginsPanel)
-
-		go func() {
-			entries, err := plugin.FetchRemoteRegistry(plugin.DefaultRegistryURL)
-			screen.PostEvent(tcell.NewEventInterrupt(&app.RemoteRegistryResult{Entries: entries, Err: err}))
-		}()
 
 		if len(pendingApprovals) > 0 {
 			editor.PendingPluginApprovals = pendingApprovals
@@ -480,6 +485,16 @@ Docs: https://tttedit.dev
 	}
 
 	editor.CheckLanguagePackUpdates()
+	if flags.exec == "" {
+		editor.CheckForUpdatesOnStartup(time.Now())
+	}
+	shutdown, stopSignals := signal.NotifyContext(context.Background(), syscall.SIGHUP, syscall.SIGTERM)
+	defer stopSignals()
+	stopShutdown := context.AfterFunc(shutdown, func() {
+		stopSignals()
+		_ = app.StopExecLoop(editor)
+	})
+	defer stopShutdown()
 	app.RunEventLoop(screen, renderer, editor, &running, editor.CloseTerminal, func() {
 		if cfg.Settings.ReuseWindow && flags.exec == "" {
 			stopForward = app.StartForward(editor)

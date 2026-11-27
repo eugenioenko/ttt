@@ -47,7 +47,7 @@ func TestNerdGlyphsAreSingleRune(t *testing.T) {
 // ambiguousDefaults may render two columns in East Asian locales; they are
 // kept because no narrow glyph reads as well.
 var ambiguousDefaults = map[Name]bool{
-	Commit: true, Lock: true, Dirty: true,
+	Commit: true, Lock: true, Dirty: true, DebugExecution: true,
 	ArrowUp: true, ArrowDown: true,
 	Class: true, Interface: true, Module: true, Constant: true, Variable: true,
 	String: true, Keyword: true, Snippet: true, Symbol: true,
@@ -88,5 +88,15 @@ func TestOverrideWins(t *testing.T) {
 	}
 	if got := Rune(ChevronDown); got != '' {
 		t.Errorf("chevron-down = %q, want the nerd default", got)
+	}
+}
+
+func TestDebugMarkersFitGutter(t *testing.T) {
+	for _, mode := range []string{"", config.IconsNerdFont} {
+		for _, name := range []Name{Breakpoint, DebugExecution} {
+			if glyph := Get(mode, name); textwidth.String(glyph) != 1 {
+				t.Fatalf("%s in %q mode uses more than one column: %q", name, mode, glyph)
+			}
+		}
 	}
 }

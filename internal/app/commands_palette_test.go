@@ -1,17 +1,22 @@
 package app
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/term"
+	"github.com/eugenioenko/ttt/internal/widgets"
 )
 
 var paletteHiddenExplorerCommands = []string{
 	"explorer.delete",
 	"explorer.rename",
+	"explorer.duplicate",
 	"explorer.open",
 	"explorer.reveal",
 	"explorer.copyAbsolutePath",
@@ -82,5 +87,32 @@ func TestVisibleExplorerCommandsStayInThePalette(t *testing.T) {
 		if !slices.Contains(paletteIDs, id) {
 			t.Errorf("%s should stay in the command palette", id)
 		}
+	}
+}
+
+func TestExplorerDuplicateRejectsWorkspaceRoot(t *testing.T) {
+	for _, source := range []string{"selection", "context menu"} {
+		t.Run(source, func(t *testing.T) {
+			a := explorerCommandApp(t)
+			root := filepath.Join(t.TempDir(), "project")
+			if err := os.Mkdir(root, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			a.Explorer.SetRoots([]string{root})
+			a.Explorer.Tree.SelectByID(root)
+			if selected := a.Explorer.Tree.Selected(); selected == nil || selected.ID != root {
+				t.Fatal("workspace root is not selected")
+			}
+			if source == "context menu" {
+				a.ExplorerContextNode = &widgets.TreeNode{ID: root}
+			}
+			a.Reg.Execute("explorer.duplicate")
+			if _, err := os.Stat(root + " copy"); !errors.Is(err, os.ErrNotExist) {
+				t.Fatalf("looking up a duplicate workspace root returned %v, want file not found", err)
+			}
+			if a.ExplorerContextNode != nil {
+				t.Fatal("duplicate kept the context-menu target")
+			}
+		})
 	}
 }

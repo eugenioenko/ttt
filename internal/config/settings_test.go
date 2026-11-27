@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -54,7 +55,7 @@ func TestKeyboardModifierSettings(t *testing.T) {
 
 func TestSettingsPartialJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{"editor": {"tabSize": 2}}`), &s))
 
 	if s.Editor.TabSize != 2 {
 		t.Fatalf("expected TabSize 2, got %d", s.Editor.TabSize)
@@ -66,7 +67,7 @@ func TestSettingsPartialJSON(t *testing.T) {
 
 func TestSettingsEmptyJSON(t *testing.T) {
 	s := DefaultSettings()
-	json.Unmarshal([]byte(`{}`), &s)
+	requireNoError(t, json.Unmarshal([]byte(`{}`), &s))
 
 	if s.Editor.TabSize != 4 {
 		t.Fatalf("expected TabSize 4, got %d", s.Editor.TabSize)
@@ -685,5 +686,52 @@ func TestSystemPluginDirectorySetting(t *testing.T) {
 	}
 	if got := LoadSettings().Plugins.SystemDir; got != s.Plugins.SystemDir {
 		t.Fatalf("systemDir = %q, want %q", got, s.Plugins.SystemDir)
+	}
+}
+
+func TestFullLineSelectionSetting(t *testing.T) {
+	dir := withTempConfigDir(t)
+	if DefaultSettings().Editor.FullLineSelection {
+		t.Fatal("expected FullLineSelection false by default")
+	}
+	for _, tc := range []struct {
+		json string
+		want bool
+	}{
+		{`{"editor":{}}`, false},
+		{`{"editor":{"fullLineSelection":false}}`, false},
+		{`{"editor":{"fullLineSelection":true}}`, true},
+	} {
+		if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(tc.json), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if got := LoadSettings().Editor.FullLineSelection; got != tc.want {
+			t.Errorf("%s: FullLineSelection = %v, want %v", tc.json, got, tc.want)
+		}
+	}
+
+	s := DefaultSettings()
+	s.Editor.FullLineSelection = true
+	if err := SaveSettings(s); err != nil {
+		t.Fatal(err)
+	}
+	if !LoadSettings().Editor.FullLineSelection {
+		t.Fatal("FullLineSelection did not survive save and load")
+	}
+}
+
+func TestDebugRecipeNumberRoundTrip(t *testing.T) {
+	const number = "9007199254740993"
+	input := `{"debug":{"adapters":{"custom":{"fileLaunch":{"id":` + number + `},"fileLaunchOverrides":[{"pattern":"*.c","arguments":{"id":` + number + `}}]}}}}`
+	var settings Settings
+	if err := json.Unmarshal([]byte(input), &settings); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(encoded, []byte(`"id":`+number)) != 2 {
+		t.Fatal("lost precision in adapter recipes")
 	}
 }

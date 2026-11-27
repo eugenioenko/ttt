@@ -103,7 +103,7 @@ func openChangesFromGit(h *testHarness, path, index string) {
 	if len(base) > 0 && base[len(base)-1] == "" {
 		base = base[:len(base)-1]
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.app.EditorGroup.EnableInlineDiff(path, base)
 	h.app.FocusEditorIfEnabled()
 }

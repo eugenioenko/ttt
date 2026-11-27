@@ -299,6 +299,27 @@ func TestStopExecLoopReturnsAfterEventLoopStopped(t *testing.T) {
 	}
 }
 
+func TestStopExecLoopDuringUnfinishedBracketedPaste(t *testing.T) {
+	a := newListenTestApp(t)
+	if err := a.Screen.PostEvent(tcell.NewEventPaste(true)); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- StopExecLoop(a)
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		_ = a.Screen.PostEvent(tcell.NewEventPaste(false))
+		t.Fatal("shutdown waited for the paste to end")
+	}
+}
+
 func TestConcurrentStopExecLoopReturnsForEveryCaller(t *testing.T) {
 	a := newListenTestApp(t)
 	release, blockerDone := holdExecEventLoop(t, a)

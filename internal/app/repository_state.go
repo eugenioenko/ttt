@@ -1030,7 +1030,7 @@ func (a *App) postRepositoryInvalidation(path string, resources RepositoryResour
 		}
 		return
 	}
-	a.Screen.PostEvent(tcell.NewEventInterrupt(&RepositoryInvalidationRequest{Path: path, Resources: resources}))
+	_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&RepositoryInvalidationRequest{Path: path, Resources: resources}))
 }
 
 func (a *App) handleRepositoryInvalidation(request *RepositoryInvalidationRequest) {

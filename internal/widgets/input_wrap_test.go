@@ -188,6 +188,17 @@ func TestWrapInputRowsNeverExceedTheWidth(t *testing.T) {
 	}
 }
 
+func TestEmptyInputPasteKeepsSelection(t *testing.T) {
+	input := NewInputWidget(InputConfig{})
+	input.SetText("keep selected text")
+	input.SelectAll()
+	input.PasteText("")
+	start, end := input.selRange()
+	if input.Text() != "keep selected text" || start != 0 || end != len("keep selected text") {
+		t.Fatalf("empty paste left text %q with selection %d..%d", input.Text(), start, end)
+	}
+}
+
 func TestPasteResetsTheGoalColumn(t *testing.T) {
 	inp := NewInputWidget(InputConfig{Prefix: "> ", Wrap: true})
 	inp.SetFocused(true)

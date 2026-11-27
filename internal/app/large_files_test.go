@@ -18,7 +18,7 @@ func reloadLimitApp(t *testing.T, limit int) (*App, string) {
 	a := buildTestApp(t, s)
 	path := filepath.Join(t.TempDir(), "watched.txt")
 	writeReloadFixture(t, path, "original\n")
-	a.EditorGroup.OpenFile(path)
+	requireNoError(t, a.EditorGroup.OpenFile(path))
 	a.EditorGroup.CommitActiveTab()
 	return a, path
 }
@@ -80,7 +80,7 @@ func TestStaleReloadActionTracksTabsAndReloads(t *testing.T) {
 	}
 	other := filepath.Join(t.TempDir(), "other.txt")
 	writeReloadFixture(t, other, "other\n")
-	a.EditorGroup.OpenFile(other)
+	requireNoError(t, a.EditorGroup.OpenFile(other))
 	a.SyncReloadSegment()
 	if reloadSegment(a) != nil {
 		t.Fatal("another tab displayed the stale file's reload action")

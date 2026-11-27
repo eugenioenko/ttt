@@ -10,12 +10,15 @@ The file explorer lives in the sidebar (**Ctrl+B** to toggle, **Ctrl+K E** to fo
 - Directories are sorted before files, both alphabetically
 - Expand/collapse with Enter or arrow keys
 - Press **/** in the explorer or choose **Search in Folders** from its More menu (`explorer.find`) to focus a filter input. It searches loaded file and folder names across all roots and keeps parent folders visible for context. **Up/Down** navigate matches, **Enter** opens the selection, and **Esc** or **✕** clears the filter and hides the input; use quick open to search the whole workspace
-- Right-click context menu: **New File**, **New Folder**, **Rename**, **Delete**
+- Right-click context menu: **New File**, **New Folder**, **Rename**, **Duplicate**, **Delete**
+- **Duplicate** works on files and folders. It does not open the copy; names follow Zed's scheme — `file copy.txt`, `file copy 2.txt`, or `folder copy`. Folder duplication is recursive and recreates symlinks as symlinks rather than following them.
 - **Open in Terminal** (`explorer.openInTerminal`, right-click menu or palette) opens a new integrated terminal in that folder, or in the file's folder
 - Sidebar actions button for **Refresh** and **New File**
 - **Explorer: Reveal Active File** (`explorer.revealActiveFile`) expands the folders above the active file, selects it, and scrolls it into view without moving focus from the editor. Set `explorer.autoReveal` to `true` to do this every time the active file changes
 - A folder whose only entry is another folder is shown as one row, such as `src/main/java`, once you expand it, and that one expansion opens the whole chain. Right-click a segment of the row to act on that folder; keyboard actions on the row apply to its deepest folder. Set `explorer.compactFolders` to `false` to show each folder on its own row
 - File-type icons, which need a [Nerd Font](https://www.nerdfonts.com) in your terminal. They default off, since without one they'd render as boxes: turn them on with `"appearance": { "icons": "nerd-font" }`, **Options → Appearance → Font Icons**, or **Icons** in the settings editor
+
+**Options > Explorer** exposes **Show Hidden Files**, **Show Git-Ignored Files**, **Compact Folders**, **Auto-Reveal Active File**, **Git Status Colors**, and **Dim Staged Git Colors** as checked toggles. Changes apply immediately and are saved. Auto-reveal is off by default. The submenu also offers **Expand All** and **Collapse All**.
 
 When multiple folders are open, each root is shown as a collapsible group.
 

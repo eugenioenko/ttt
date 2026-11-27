@@ -35,6 +35,14 @@ When `--config` selects a custom file, **Settings: Open settings.json**, **Reloa
 | `debugMode` | bool | `false` | Enable debug logging |
 | `reuseWindow` | bool | `false` | Open command-line files and add explicit folder arguments to a running editor using the same config directory, preserving existing tabs and ignoring duplicate folder paths. Bare `ttt` and `--workspace` still start a new editor. Folder forwarding requires a compatible running editor; after upgrading, restart it with the updated binary or use `--new-window`. Requires a restart. The integrated terminal sets `TTT_FORWARD_SOCKET` to prefer its parent editor; otherwise, or if that socket is unavailable, use the newest reachable editor. If none is reachable, start normally. Successful forwarding prints `opened in running editor (pid N)` to stderr (without the PID when unavailable). Once connected, errors exit with status 1 without trying another editor; a busy editor makes the command exit 1 after about 5 seconds with the files unopened, while a stopped (^Z) or silent editor makes it exit 1 after about 30 seconds with `ttt: the running editor did not respond`. Use `--new-window` to start a separate editor; set `EDITOR="ttt --new-window"` for commands that wait for editing, since `EDITOR=ttt` returns immediately. Runtime tested on macOS and Linux; Windows builds but has not been runtime tested. |
 
+## Links
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `links.native` | bool | `false` | Use ttt's Ctrl+click handling by default, opening the browser on the machine running ttt. Set to `true` to let the outer terminal handle web links in editors and integrated terminals using OSC 8. Applies live. |
+
+The same setting is available under **General → Links → Open web links in outer terminal**. Native links use your terminal's hover appearance and opening gesture, including over SSH. File references such as `src/main.go:12:3` continue to open inside ttt in either mode. Explicit OSC 8 file links from terminal programs go to the outer terminal in native mode; in fallback mode, local file targets open in ttt.
+
 ## Keyboard
 
 For terminal setup, see [Command Key on macOS](/guides/macos-command-key/).
@@ -193,6 +201,7 @@ All editor settings are nested under the `editor` key.
 | `editor.gutterStyle` | string | `"compact"` | Gutter layout: `"minimal"`, `"compact"`, or `"extended"` |
 | `editor.borderStyle` | string | `"default"` | Border style preset: `"default"`, `"rounded"`, `"sharp"`, `"double"`, `"bold"`, `"ascii"`, `"none"`. Use `"default"` or `"theme"` to defer to the active theme. |
 | `editor.selectionStyle` | string | `"background"` | Selection highlight style: `"background"` (use theme's selection background) or `"invert"` (invert foreground and background colors) |
+| `editor.fullLineSelection` | bool | `false` | Extend the selection highlight to the editor's right edge on every selected line break. When off, only the selected text and one cell per selected line break are highlighted |
 | `editor.bracketPairColorization` | bool | `false` | Colorize matching bracket pairs by nesting depth |
 | `editor.grammars` | array | `[]` | External TextMate grammars (see [Grammars](#grammars)) |
 
@@ -308,6 +317,15 @@ These are starting values. Once you drag a header, resize the sidebar, the commi
 
 Below the favorites, the welcome page lists the last 10 folders opened under **Recent**, most recent first. ttt keeps the history in `state.json`, so a `settings.json` in a dotfiles repo is not rewritten every time you open a folder. Favorites and folders that no longer exist are left out.
 
+## Update
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `update.startupCheck` | bool | `false` | When enabled, check for a newer ttt release at startup. Off by default. `--exec` skips the check. Also in **Settings > General**. |
+| `update.startupCheckInterval` | string | `"daily"` | How often an eligible startup runs the check: `"daily"` (at most once every 24 hours) or `"everyLaunch"`. Used only when `update.startupCheck` is enabled. Also in **Settings > General**. |
+
+The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `settings.json`, so a shared settings file does not reset the interval. A startup check only opens the existing Check for Updates dialog when a newer release is available. Installation and restart stay explicit actions in that dialog. A failed lookup or an already-current release is recorded and stays quiet. If a newer release cannot be shown because another dialog is open, the attempt is not recorded and the next launch can try again.
+
 ## Git
 
 | Key | Type | Default | Description |
@@ -337,7 +355,47 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 | `lsp.saveOnRename` | bool | `false` | Auto-save files affected by a rename operation |
 | `lsp.codeActionsOnSave` | string[] | `[]` | Code actions to run before save (e.g. `"source.organizeImports"`) |
 | `lsp.notifyAvailability` | bool | `true` | Show a notification when a language server binary is not installed |
-| `lsp.servers` | object | `{}` | Map of server key to `{ "command": [...], "languages": {...} }`. Configured automatically by LSP plugins (e.g. `lsp-go`, `lsp-typescript`). The optional `languages` field maps file extensions to language IDs for servers handling multiple file types. |
+| `lsp.servers` | object | `{}` | Map of server key to `{ "command": [...], "languages": {...} }`. Configured automatically by LSP plugins (e.g. `lsp-go`, `lsp-typescript`). The optional `languages` field maps file extensions to language IDs for servers handling multiple file types. The optional `rootMarkers` field lists files or globs, in priority order, that mark a project root; each root gets its own server ([Project roots](/guides/lsp/#project-roots-the-rootmarkers-field)). |
+
+## Debug adapters
+
+`debug.adapters` defaults to `{}`. Each key names a `type` in a workspace launch configuration. For example, this entry describes a GDB adapter for C and C++:
+
+```json
+{
+  "debug": {
+    "adapters": {
+      "gdb": { "command": ["gdb", "-i", "dap"], "languages": ["c", "cpp"] }
+    }
+  }
+}
+```
+
+| Adapter field | Meaning |
+| --- | --- |
+| `command`, `cwd`, `env` | Adapter executable and arguments, optional working directory, and environment overrides. |
+| `transport` | `stdio` (default), `server` (command contains `${port}`), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
+| `languages` | Language IDs associated with the adapter. |
+| `provider` | Defaults to `generic`. Adapter-specific hooks use an explicit `delve`, `jsdebug`, or `debugpy` value. |
+| `fileLaunch` | Optional launch arguments for a single file. Recipes support `${file}`, `${fileDirname}`, and `${workspaceFolder}`. |
+| `fileLaunchOverrides` | Ordered entries with a filename glob in `pattern` and replacement fields in `arguments`. The first matching glob applies. |
+
+Workspace targets come from `.ttt/launch.json`, with `.vscode/launch.json` as a fallback. The generic provider passes adapter-specific arguments through and expands `${workspaceFolder}`. Task execution and interactive input substitution are unsupported.
+
+For a GDB process picker, add the following entry to the launch file's `configurations` array. Use a numeric PID to select a known process directly. Adapters that name their PID argument `processId` accept the same picker placeholder in that field.
+
+```json
+{
+  "name": "Attach GDB",
+  "type": "gdb",
+  "request": "attach",
+  "pid": "${command:pickProcess}"
+}
+```
+
+To attach to a running gdbserver, replace `pid` with `"target": "127.0.0.1:2345"` and supply `program` for the local binary with debug symbols. The sidebar's Detach action requests that the adapter leave the target running. When the *DAP adapter itself* is already listening, configure its `debug.adapters` entry with `"transport": "tcp"` and `"address": "host:port"`.
+
+Local stdio adapters can use DAP `runInTerminal` to open the debuggee in ttt’s integrated terminal. The request supplies the working directory, literal argument list, and environment overrides. A null environment value removes an inherited variable. External terminal requests and shell-interpreted arguments are unsupported. TCP adapters cannot start local terminal processes.
 
 ## Search
 
@@ -365,7 +423,7 @@ Below the favorites, the welcome page lists the last 10 folders opened under **R
 |-----|------|---------|-------------|
 | `autocomplete.enabled` | bool | `true` | Enable LSP-powered autocompletion |
 | `autocomplete.autoSuggest` | bool | `true` | Show completions automatically as you type |
-| `autocomplete.pathCompletion` | bool | `true` | Suggest explicit workspace-relative filesystem paths (`./` and `../`) when LSP has no suggestions; also required for absolute path completion |
+| `autocomplete.pathCompletion` | bool | `true` | Suggest filesystem paths starting with `./` or `../` when LSP has no suggestions. Paths are relative to the workspace, or the open file’s directory in a file-only window. Enables absolute path completion when that option is on. |
 | `autocomplete.absolutePathCompletion` | bool | `false` | Also suggest absolute filesystem paths; requires `autocomplete.pathCompletion` |
 | `autocomplete.debounce` | int | `150` | Milliseconds to wait after typing before requesting completions |
 | `autocomplete.signatureHelp` | bool | `true` | Show function signature help on `(` and `,` |
@@ -526,7 +584,8 @@ When `editor.formatOnSave` is `true`, external formatters take priority over LSP
     "gutterStyle": "compact",
     "borderStyle": "default",
     "selectionStyle": "background",
-    "bracketPairColorization": false
+    "bracketPairColorization": false,
+    "fullLineSelection": false
   },
   "quickOpen": {
     "showHidden": false,

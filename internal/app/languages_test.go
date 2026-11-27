@@ -103,7 +103,7 @@ func TestLanguageAutoUpdateDoesNotGetOverwrittenByOldPluginBundle(t *testing.T) 
 	p := &plugin.Plugin{Name: "spanish", Dir: t.TempDir(), Repo: "https://github.com/example/languages", Manifest: plugin.Manifest{
 		Languages: []plugin.Language{{Locale: "es", Name: "Español", Path: "messages.json", TTTVersion: "1.11.0"}},
 	}}
-	os.WriteFile(filepath.Join(p.Dir, "messages.json"), []byte(`{"general.save":"old"}`), 0644)
+	requireNoError(t, os.WriteFile(filepath.Join(p.Dir, "messages.json"), []byte(`{"general.save":"old"}`), 0644))
 	a.installPluginLanguages(p)
 	source := append([]config.LanguagePackSetting(nil), a.Settings.Language.Packs...)
 	update := languageUpdateResult{source: source, update: plugin.LanguageUpdate{Languages: []plugin.Language{{Locale: "es", Name: "Español", TTTVersion: "1.12.0"}}, Files: map[string][]byte{"es.json": []byte(`{"general.save":"new"}`)}}}

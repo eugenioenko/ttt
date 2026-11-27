@@ -25,6 +25,10 @@ func (a *App) DiscardSelected() {
 	if !ok || status.Group == scm.Staged {
 		return
 	}
+	if a.Changes.isJujutsu(dir) {
+		a.Changes.confirmDiscard(dir, status)
+		return
+	}
 	msg := i18n.Format("git.discardChangesToThisIsIrreversible", i18n.Args{"path": status.Path})
 	if status.Kind == scm.Untracked {
 		msg = i18n.Format("git.deleteUntrackedFileThisIsIrreversible", i18n.Args{"path": status.Path})
@@ -222,7 +226,9 @@ func (a *App) changesNavFile(dir int) {
 		}
 		target = paths[n]
 	}
-	a.EditorGroup.OpenFile(target)
+	if err := a.EditorGroup.OpenFile(target); err != nil {
+		return
+	}
 	a.FocusEditorIfEnabled()
 }
 

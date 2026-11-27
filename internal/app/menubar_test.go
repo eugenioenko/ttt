@@ -71,7 +71,7 @@ func TestMenuBarVisibleByDefault(t *testing.T) {
 
 func TestOptionsMenuGroupsControls(t *testing.T) {
 	items := buildTestApp(t, config.DefaultSettings()).BuildOptionsMenu()
-	wantLabels := []string{"Appearance", "Editor", "Code Assist", "Diff Views", "Git Files", "Markdown", "", "Settings", "Theme"}
+	wantLabels := []string{"Appearance", "Editor", "Explorer", "Code Assist", "Diff Views", "Git Files", "Markdown", "Terminal", "", "Settings", "Theme"}
 	var labels []string
 	for _, item := range items {
 		labels = append(labels, item.Label)
@@ -79,19 +79,21 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 	if !slices.Equal(labels, wantLabels) {
 		t.Fatalf("Options labels = %v, want %v", labels, wantLabels)
 	}
-	for _, item := range items[:6] {
+	for _, item := range items[:8] {
 		if len(item.Submenu) == 0 || item.Command != "" || item.Checked != 0 {
 			t.Errorf("category should only open a submenu: %+v", item)
 		}
 	}
-	if !items[6].IsSep || items[7].Command != "settings.openUI" || items[8].Command != "theme.switch" {
+	if !items[8].IsSep || items[9].Command != "settings.openUI" || items[10].Command != "theme.switch" {
 		t.Fatal("Settings and Theme should follow the final separator")
 	}
 	wantCommands := map[int][]string{
+		2: {"options.toggleExplorerShowHiddenFiles", "options.toggleExplorerShowGitIgnoredFiles", "options.toggleExplorerCompactFolders", "options.toggleExplorerAutoReveal", "", "options.toggleExplorerGitStatusColors", "options.toggleExplorerDimStagedGitColors"},
 		0: {"options.toggleFontIcons", menuBarToggleCommand, "options.toggleTransparentBackground", "", "options.gutterStyle", "options.tabBarStyle", "options.borderStyle"},
-		2: {"options.toggleLSP", "options.toggleLSPHover"},
+		3: {"options.toggleLSP", "options.toggleLSPHover"},
 		1: {"options.toggleWordWrap", "options.toggleLineNumbers", "options.toggleIndentGuides", "options.toggleSyntaxHighlight", "options.toggleBracketColors", "", "options.toggleAutoIndent", "options.toggleAutoDedent", "", "options.indentation", "", "options.toggleGitGutter", "options.toggleScrollbarGitMarks"},
-		5: {"options.markdownWordWrap", "options.markdownWrapWidth"},
+		6: {"options.markdownWordWrap", "options.markdownWrapWidth"},
+		7: {"options.toggleTerminalForwardShortcuts", "", "options.terminalSelectionStyle"},
 	}
 	for i, want := range wantCommands {
 		var commands []string
@@ -113,7 +115,7 @@ func TestOptionsMenuGroupsControls(t *testing.T) {
 			t.Error("Theme should move from View to Options")
 		}
 	}
-	assist := items[2].Submenu
+	assist := items[3].Submenu
 	if assist[0].Label != "Enable Code Assist" || assist[1].Label != "Hover Information" {
 		t.Fatalf("Code Assist labels = %+v", assist)
 	}

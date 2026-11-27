@@ -440,6 +440,24 @@ func unescapeXMLCommentText(text string) string {
 	return strings.ReplaceAll(text, "&amp;", "&")
 }
 
+// An endpoint inside an entity selects the decoded character instead of
+// retaining an offset into text that disappears during decoding.
+func unescapeXMLCommentColumn(text string, col int, isStart bool) int {
+	end := runeByteOffset(text, col)
+	if start := strings.LastIndex(text[:end], "&"); start >= 0 {
+		for _, entity := range []string{"&amp;", "&#45;"} {
+			if strings.HasPrefix(text[start:], entity) && end < start+len(entity) {
+				end = start
+				if !isStart {
+					end += len(entity)
+				}
+				break
+			}
+		}
+	}
+	return len([]rune(unescapeXMLCommentText(text[:end])))
+}
+
 // isWordCommentPrefix reports whether prefix is a keyword rather than a
 // punctuation delimiter, such as Batch's REM. Word prefixes are matched
 // case-insensitively and only as a whole word, so REMOVE_ME=1 is code.
@@ -600,6 +618,7 @@ func hasCommentPrefix(trimmed, prefix string) bool {
 
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
+	before := e.undoSelectionPosition()
 	prefix, postfix := e.commentSyntax()
 	prefixLen := len([]rune(prefix))
 	postfixLen := len([]rune(postfix))
@@ -633,8 +652,59 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		}
 	}
 
+	tabW := e.resolveTabSize()
+	commentCol := -1
+	if !allCommented {
+		for l := startLine; l <= endLine; l++ {
+			line := e.Buf.Lines[l]
+			whitespace := leadingWhitespace(line)
+			if whitespace == line {
+				continue
+			}
+			indent := bufColToVisualCol(line, len([]rune(whitespace)), tabW)
+			if commentCol < 0 || indent < commentCol {
+				commentCol = indent
+			}
+		}
+		if commentCol > 0 && commentCol%tabW != 0 {
+			// A tab crossing the shallowest indent ends at the next tab stop.
+			// Align before the earliest such tab to preserve every indent byte.
+			shallowest := commentCol
+			for _, line := range e.Buf.Lines[startLine : endLine+1] {
+				if leadingWhitespace(line) == line {
+					continue
+				}
+				col := visualColToBufCol(line, shallowest, tabW)
+				commentCol = min(commentCol, bufColToVisualCol(line, col, tabW))
+			}
+		}
+	}
+
+	selected := e.Selection != nil && e.Selection.Active
+	cursorAtStart := false
+	if selected {
+		start, _ := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+		cursorAtStart = start.Line == e.Cursor.Line && start.Col == e.Cursor.Col
+	}
+	// The selection's start stays before an insertion at its boundary; its
+	// end follows it so newly added comment markers remain selected.
+	mapColumns := func(line int, transform func(int, bool) int) {
+		if line == e.Cursor.Line {
+			e.Cursor.Col = transform(e.Cursor.Col, selected && cursorAtStart)
+		}
+		if selected && line == e.Selection.Anchor.Line {
+			e.Selection.Anchor.Col = transform(e.Selection.Anchor.Col, !cursorAtStart)
+		}
+	}
+	removeColumns := func(line, col, count int) {
+		mapColumns(line, func(c int, _ bool) int {
+			if c > col {
+				return max(col, c-count)
+			}
+			return c
+		})
+	}
 	var cmds []undo.EditCommand
-	cursorDelta := 0
 
 	for l := startLine; l <= endLine; l++ {
 		runes := []rune(e.Buf.Lines[l])
@@ -655,9 +725,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
-			if l == e.Cursor.Line {
-				cursorDelta = -removeLen
-			}
+			removeColumns(l, indent, removeLen)
 			if postfix != "" {
 				tail := []rune(strings.TrimRight(e.Buf.Lines[l], " \t"))
 				postStart := len(tail) - postfixLen
@@ -673,25 +741,14 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					}
 					del.Apply(e.Buf)
 					cmds = append(cmds, del)
-					if l == e.Cursor.Line {
-						// Compare in post-prefix coordinates; a cursor inside the
-						// removed suffix collapses to its start.
-						transformed := e.Cursor.Col + cursorDelta
-						switch {
-						case transformed >= postStart+postRemoveLen:
-							cursorDelta -= postRemoveLen
-						case transformed >= postStart:
-							cursorDelta = postStart - e.Cursor.Col
-						}
-					}
+					removeColumns(l, postStart, postRemoveLen)
 				}
 				if prefix == "<!--" {
 					if unescaped := unescapeXMLCommentText(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
-						if l == e.Cursor.Line {
-							line := []rune(e.Buf.Lines[l])
-							c := max(0, min(e.Cursor.Col+cursorDelta, len(line)))
-							cursorDelta += len([]rune(unescapeXMLCommentText(string(line[:c])))) - c
-						}
+						line := e.Buf.Lines[l]
+						mapColumns(l, func(c int, isStart bool) int {
+							return unescapeXMLCommentColumn(line, c, isStart)
+						})
 						replace := &undo.ReplaceLinesCommand{
 							Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{unescaped},
 						}
@@ -703,12 +760,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		} else {
 			if prefix == "<!--" {
 				if escaped := escapeXMLCommentText(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
-					if l == e.Cursor.Line {
-						c := min(e.Cursor.Col, len(runes))
-						line := string(runes)
+					mapColumns(l, func(c int, _ bool) int {
+						c = max(0, min(c, len(runes)))
 						end := len(string(runes[:c]))
-						cursorDelta += len([]rune(escapeXMLCommentTextPrefix(line, end))) - c
-					}
+						return len([]rune(escapeXMLCommentTextPrefix(string(runes), end)))
+					})
 					replace := &undo.ReplaceLinesCommand{
 						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{escaped},
 					}
@@ -716,31 +772,36 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					cmds = append(cmds, replace)
 				}
 			}
-			cmd := &undo.InsertStringCommand{Line: l, Col: indent, Text: prefix + " "}
+			col := visualColToBufCol(e.Buf.Lines[l], commentCol, tabW)
+			cmd := &undo.InsertStringCommand{Line: l, Col: col, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
-			if l == e.Cursor.Line {
-				cursorDelta += prefixLen + 1
-			}
+			mapColumns(l, func(c int, isStart bool) int {
+				if c > col || (c == col && !isStart) {
+					return c + prefixLen + 1
+				}
+				return c
+			})
 			if postfix != "" {
 				endCol := len([]rune(strings.TrimRight(e.Buf.Lines[l], " \t")))
 				add := &undo.InsertStringCommand{Line: l, Col: endCol, Text: " " + postfix}
 				add.Apply(e.Buf)
 				cmds = append(cmds, add)
+				mapColumns(l, func(c int, isStart bool) int {
+					if c > endCol || (selected && c == endCol && !isStart) {
+						return c + postfixLen + 1
+					}
+					return c
+				})
 			}
 		}
 	}
 
+	e.clampCursor()
 	if len(cmds) > 0 && e.Undo != nil {
-		e.Undo.Push(&undo.BatchCommand{Commands: cmds})
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds, Before: before, After: e.undoSelectionPosition()})
 		e.bufferDirty = true
 	}
-
-	e.Cursor.Col += cursorDelta
-	if e.Cursor.Col < 0 {
-		e.Cursor.Col = 0
-	}
-	e.clampCursor()
 	e.scrollViewport()
 }
 

@@ -177,7 +177,10 @@ For example, **Ctrl+K P** opens Quick Open, while **Ctrl+K Ctrl+P** sends Ctrl+P
 
 | Shortcut | Command | Description |
 |----------|---------|-------------|
-| F10 / Alt+F | `menu.file` | File menu |
+| F10 | `debug.stepOver` | Debug step over |
+| F11 | `debug.stepIn` | Debug step into |
+| Shift+F11 | `debug.stepOut` | Debug step out |
+| Alt+F | `menu.file` | File menu |
 | Alt+E | `menu.edit` | Edit menu |
 | Alt+S | `menu.selection` | Selection menu |
 | Alt+V | `menu.view` | View menu |

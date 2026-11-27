@@ -54,6 +54,11 @@ func (a *App) initTaskDelivery(screen *term.TcellScreen) {
 }
 
 func (a *App) CloseTasks() {
+	if run := a.debugger.run; run != nil {
+		run.cancel()
+		<-run.closed
+		a.closeDebugTerminals(run)
+	}
 	a.tasks.closed = true
 	for _, task := range a.tasks.tasks {
 		task.Close()

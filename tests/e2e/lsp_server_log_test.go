@@ -15,7 +15,7 @@ func TestLSPShowServerLogWithoutServer(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
 
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	h.exec("lsp.showServerLog")
 	h.assertContains("No language server for this file")
@@ -36,7 +36,7 @@ func TestLSPNotifyWithoutServerSkipsBufferCopy(t *testing.T) {
 	if err := os.WriteFile(path, []byte(strings.Repeat(line, 32*1024)), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	h.app.EditorGroup.OpenFile(path)
+	h.openFile(path)
 	h.redraw()
 
 	var before, after runtime.MemStats
@@ -57,7 +57,7 @@ func TestLSPShowServerLogNotInstalled(t *testing.T) {
 	h.app.LspManager = lsp.NewManager(&config.LSPSettings{Servers: map[string]config.LSPServerConfig{
 		"fake": {Command: []string{"ttt-no-such-binary"}, Languages: map[string]string{".txt": "plaintext"}},
 	}})
-	h.app.EditorGroup.OpenFile(filepath.Join(h.dir, "alpha.txt"))
+	h.openFile(filepath.Join(h.dir, "alpha.txt"))
 	h.redraw()
 	h.exec("lsp.showServerLog")
 	h.assertContains("fake: not installed")

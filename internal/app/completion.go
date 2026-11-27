@@ -97,7 +97,7 @@ func (a *App) RequestCompletions(path, lang string, line, col int, triggerChar s
 	target := a.currentCompletionTarget()
 	lines := a.lspLines(path)
 	wireCol := lsp.PositionToUTF16(lines, lsp.Position{Line: line, Character: col}).Character
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	manager := a.LspManager
 	if a.completion.read == nil {
 		a.completion.read = NewTask[completionReply](a, asynctask.TaskOptions{})
@@ -182,7 +182,7 @@ func (a *App) RequestSignatureHelp(path, lang string, line, col int, changeDone 
 		return
 	}
 	wireCol := a.lspColumn(path, line, col)
-	workDir := a.lspWorkDir(path)
+	workDir := a.lspWorkDirFor(path, lang)
 	manager := a.LspManager
 	if a.completion.signature == nil {
 		a.completion.signature = NewTask[*SignatureHelpResult](a, asynctask.TaskOptions{})

@@ -17,6 +17,18 @@ func (a *App) editorGroups() []*ui.EditorGroupWidget {
 	return a.EditorSplit.Groups()
 }
 
+func (a *App) editorTabGroupAt(x, y int) *ui.EditorGroupWidget {
+	if a.ContentSplit.Top != a.EditorSplit {
+		return nil
+	}
+	for _, group := range a.editorGroups() {
+		if group.TabBar.GetRect().Contains(x, y) {
+			return group
+		}
+	}
+	return nil
+}
+
 func (a *App) wireEditorGroupActivation(g *ui.EditorGroupWidget) {
 	g.OnActivate = func() {
 		a.activateEditorGroup(g)
@@ -45,6 +57,7 @@ func (a *App) activateEditorGroup(g *ui.EditorGroupWidget) {
 		return
 	}
 	a.FlushEditorOnChange()
+	a.closeFindBarOnGroupChange()
 	a.CloseAutocomplete()
 	a.DismissHover()
 	a.DismissSignatureHelp()
@@ -102,6 +115,8 @@ func (a *App) removeEditorGroup(closing *ui.EditorGroupWidget, merge bool) {
 	wasActive := closing == a.EditorGroup
 	if wasActive {
 		a.activateEditorGroup(keep)
+	} else if a.hover.tab.Group == closing {
+		a.DismissHover()
 	}
 	closing.OnEmpty = nil
 	if merge {
@@ -153,6 +168,7 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.FoldTask = NewTask[[]fold.Range](a, asynctask.TaskOptions{})
 	right.FoldDelay = NewTask[struct{}](a, asynctask.TaskOptions{Delay: ui.FoldRecomputeDelay})
 	right.InheritDocumentSources(left)
+	right.ShareClosedTabHistory(left)
 	a.wireEditorTabAutoHide(right)
 	right.ControlModifiers = left.ControlModifiers
 	right.SetChevrons(left.ChevronCollapsed, left.ChevronExpanded)
@@ -175,12 +191,13 @@ func (a *App) newEditorGroupLike(left *ui.EditorGroupWidget) *ui.EditorGroupWidg
 	right.FileHandler = left.FileHandler
 	right.OnFileHandled = left.OnFileHandled
 	right.LinkWorkDir = left.LinkWorkDir
+	right.NativeLinks = left.NativeLinks
 	right.OnOpenURL = left.OnOpenURL
 	right.OnOpenFileLink = left.OnOpenFileLink
 	right.OnLinkHover = left.OnLinkHover
 	right.ResolveFileLinks = left.ResolveFileLinks
 	right.OnBookmarkChanged = left.OnBookmarkChanged
-	right.OnGutterClick = left.OnGutterClick
+	a.wireDebuggerGutter(right)
 	right.OnActiveTabChange = a.editorTabChanged
 	a.wireEditorGroupActivation(right)
 	right.NameUntitledPlaceholder()
@@ -220,10 +237,10 @@ func (a *App) openEditorDocuments() []ui.OpenDocument {
 
 func (a *App) wireEditorAutoScroll(group *ui.EditorGroupWidget) {
 	group.TabBar.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.TabDragAutoScrollTick{Target: group.TabBar, Generation: generation}))
 	}
 	group.Editor.PostDragAutoScrollTick = func(generation uint64) {
-		a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
+		_ = a.Screen.PostEvent(tcell.NewEventInterrupt(&ui.EditorDragAutoScrollTick{Target: group.Editor, Generation: generation}))
 	}
 }
 
