@@ -1209,6 +1209,7 @@
   "status.screenshotSaved": "Screenshot saved: {path}",
   "status.settingsReloaded": "Settings reloaded",
   "status.skippedUnsavedOrChangedSinceTheSearch": "{msg}; skipped {items} (unsaved or changed since the search)",
+  "status.sourceControlWarning": "Source control reported a warning for {repository}. See Output.",
   "status.spaces": "Spaces",
   "status.stateSaved": "State saved: {path}",
   "status.syntaxHighlightingIsDisabled": "Syntax highlighting is disabled",

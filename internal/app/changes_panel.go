@@ -116,6 +116,8 @@ type changesGroup struct {
 	Dir        string
 	Name       string
 	Changes    []scm.Change
+
+	statusWarning string
 }
 
 type workFileRef struct {

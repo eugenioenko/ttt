@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -88,6 +89,38 @@ func repositoryResult(seq uint64, dir, revision string, files ...git.FileStatus)
 	group := changesGroup{Dir: dir, Name: filepath.Base(dir)}
 	group.Changes = git.ToChanges(files)
 	return &RepositoryStatusResult{Seq: seq, Entries: []repositoryStatusEntry{{Group: group, Revision: revision}}}
+}
+
+func TestRepositoryWarningReportsAgainAfterClearing(t *testing.T) {
+	dir := t.TempDir()
+	state := NewRepositoryState(nil, []string{dir})
+	const warning = "Refused to snapshot large.dat"
+	var reported []string
+	state.onStatusWarning = func(root, message string) {
+		if root != dir {
+			t.Errorf("warning from %q, want %q", root, dir)
+		}
+		reported = append(reported, message)
+	}
+	for _, status := range []struct {
+		message   string
+		wantCount int
+	}{
+		{warning, 1},
+		{warning, 1},
+		{"", 1},
+		{warning, 2},
+	} {
+		result := repositoryResult(0, dir, "revision")
+		result.Entries[0].Group.statusWarning = status.message
+		state.HandleStatus(result)
+		if len(reported) != status.wantCount {
+			t.Fatalf("report count after %q = %d, want %d", status.message, len(reported), status.wantCount)
+		}
+	}
+	if !slices.Equal(reported, []string{warning, warning}) {
+		t.Errorf("reported warnings = %v", reported)
+	}
 }
 
 func testRepositoryState(changes *ChangesPanel, dir string) (*RepositoryState, *fakeRepositoryScheduler, *testEventPoster) {

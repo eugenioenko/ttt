@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/app"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/jjtest"
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -76,6 +77,31 @@ func TestJJChangesPanelRendersWithoutStaging(t *testing.T) {
 	h.assertNotContains("Staged")
 	h.assertContains("Changes (1)")
 	h.assertContains("Not available in jj repositories")
+}
+
+func TestJJChangesReportsFilesRefusedBySnapshot(t *testing.T) {
+	h := newTestHarness(t, 120, 30)
+	defer h.stop()
+	initializeHarnessJJRepository(t, h.dir)
+	jjtest.Write(t, h.dir, "file.txt", "changed\n")
+	jjtest.Write(t, h.dir, "large.dat", strings.Repeat("x", 2<<20))
+
+	h.app.Repository.Start()
+	h.exec("sidebar.changes")
+	h.assertContains("Changes (1)")
+	h.assertContains("file.txt")
+	h.assertNotContains("large.dat")
+
+	h.app.Repository.RefreshNow(app.RepositoryWorktree)
+	warnings := 0
+	for _, line := range h.app.Output.Lines {
+		if line.Level == "warn" && strings.Contains(line.Message, "large.dat") {
+			warnings++
+		}
+	}
+	if warnings != 1 {
+		t.Fatalf("Output contains %d warnings about large.dat after two refreshes, want 1", warnings)
+	}
 }
 
 func TestJJRenamedFileDiffsAgainstItsSource(t *testing.T) {

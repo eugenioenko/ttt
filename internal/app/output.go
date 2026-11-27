@@ -2,6 +2,8 @@ package app
 
 import (
 	"log/slog"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -109,6 +111,13 @@ func (a *App) statusMessage(msg string, level view.NotifyLevel) {
 func (a *App) StatusNotify(msg string) { a.statusMessage(msg, view.NotifyInfo) }
 func (a *App) StatusWarn(msg string)   { a.statusMessage(msg, view.NotifyWarning) }
 func (a *App) StatusError(msg string)  { a.statusMessage(msg, view.NotifyError) }
+
+func (a *App) reportSCMStatusWarning(root, warning string) {
+	for line := range strings.SplitSeq(warning, "\n") {
+		a.LogOutput("warn", root, line)
+	}
+	a.StatusWarn(i18n.Format("status.sourceControlWarning", i18n.Args{"repository": filepath.Base(root)}))
+}
 
 func outputLevelForNotify(level view.NotifyLevel) string {
 	switch level {
