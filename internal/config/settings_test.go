@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -716,5 +717,21 @@ func TestFullLineSelectionSetting(t *testing.T) {
 	}
 	if !LoadSettings().Editor.FullLineSelection {
 		t.Fatal("FullLineSelection did not survive save and load")
+	}
+}
+
+func TestDebugRecipeNumberRoundTrip(t *testing.T) {
+	const number = "9007199254740993"
+	input := `{"debug":{"adapters":{"custom":{"fileLaunch":{"id":` + number + `},"fileLaunchOverrides":[{"pattern":"*.c","arguments":{"id":` + number + `}}]}}}}`
+	var settings Settings
+	if err := json.Unmarshal([]byte(input), &settings); err != nil {
+		t.Fatal(err)
+	}
+	encoded, err := json.Marshal(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(encoded, []byte(`"id":`+number)) != 2 {
+		t.Fatal("lost precision in adapter recipes")
 	}
 }

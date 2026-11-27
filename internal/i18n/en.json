@@ -815,6 +815,8 @@
   "permissions.readTerminals": "Read terminals",
   "permissions.readTerminalPalette": "Read terminal color palette",
   "permissions.runBinary": "Run binary",
+  "debug.missingAdapter": "Debug adapter '{type}' is not configured. Search Plugins for a debugger for your language, or configure debug.adapters in Settings.",
+  "permissions.debugCommand": "Install debugger command",
   "permissions.settingsKey": "Settings key",
   "permissions.sidebarPanel": "Sidebar panel",
   "permissions.simulateInput": "Simulate input",

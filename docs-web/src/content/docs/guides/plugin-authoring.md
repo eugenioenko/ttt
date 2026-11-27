@@ -3211,6 +3211,8 @@ local debounce = settings.get("autocomplete.debounce")  -- 150
 
 #### `settings.set_default(key, value)`
 
+To install a debugger configuration, declare the exact key (for example, `debug.adapters.gdb`) in `settings_keys` and call `settings.set_default` from `on_install`. The approval dialog identifies this as installing a debugger command. Uninstall preserves entries the user has edited.
+
 Call this during `ttt.on_install` to supply an absent user setting. It uses the same scoped settings permission as `settings.set`. Existing entries are preserved. On uninstall, the host removes each default it wrote only if the current value still matches the installed value. Cleanup also works for disabled plugins and after restarting ttt.
 
 ```lua

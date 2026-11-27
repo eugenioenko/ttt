@@ -1,8 +1,26 @@
 package plugin
 
 import (
+	"fmt"
+	"slices"
+	"strings"
+
 	lua "github.com/yuin/gopher-lua"
 )
+
+func checkSettingsWrite(ps PermissionSet, key string, install bool) error {
+	if err := ps.CheckSettingsKey(key); err != nil {
+		return err
+	}
+	parts := strings.SplitN(key, ".", 3)
+	if strings.EqualFold(parts[0], "debug") && (len(parts) == 1 || strings.EqualFold(parts[1], "adapters")) {
+		name, ok := strings.CutPrefix(key, "debug.adapters.")
+		if !install || !ok || name == "" || strings.ContainsAny(name, ".*") || !slices.Contains(ps.SettingsKeys, key) {
+			return fmt.Errorf("debug adapters require an exact settings key and set_default during install")
+		}
+	}
+	return nil
+}
 
 func setupSettingsModule(L *lua.LState, p *Plugin) {
 	loader := func(L *lua.LState) int {
@@ -29,7 +47,7 @@ func setupSettingsModule(L *lua.LState, p *Plugin) {
 
 		L.SetField(mod, "set_default", L.NewFunction(func(L *lua.LState) int {
 			key := L.CheckString(1)
-			if err := p.Granted.CheckSettingsKey(key); err != nil {
+			if err := checkSettingsWrite(p.Granted, key, true); err != nil {
 				L.ArgError(1, err.Error())
 				return 0
 			}
@@ -50,7 +68,7 @@ func setupSettingsModule(L *lua.LState, p *Plugin) {
 		L.SetField(mod, "set", L.NewFunction(func(L *lua.LState) int {
 			key := L.CheckString(1)
 			value := L.Get(2)
-			if err := p.Granted.CheckSettingsKey(key); err != nil {
+			if err := checkSettingsWrite(p.Granted, key, false); err != nil {
 				L.ArgError(1, err.Error())
 				return 0
 			}
