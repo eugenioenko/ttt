@@ -4,6 +4,7 @@ import (
 	"log/slog"
 	"unicode"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	tttimage "github.com/eugenioenko/ttt/internal/image"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -65,6 +66,15 @@ type Root struct {
 	button1Held      bool
 	focusClaimed     bool
 	linkHover        *EditorPaneWidget
+
+	HighlightDividers bool
+	DividerHoverTask  *asynctask.Task[struct{}]
+	dividers          []resizeDivider
+	hoverDivider      resizeDivider
+	frame             renderFrame
+	pointerX          int
+	pointerY          int
+	pointerSeen       bool
 }
 
 func NewRoot(main Widget) *Root {
@@ -263,6 +273,8 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 	if !ok {
 		return r.dispatch(ev)
 	}
+	r.pointerX, r.pointerY = mev.Position()
+	r.pointerSeen = true
 	held := mev.Buttons()&tcell.Button1 != 0
 	pressed := held && !r.button1Held
 	released := !held && r.button1Held
@@ -602,15 +614,28 @@ func (r *Root) handleGlobalKeys(kev *tcell.EventKey) EventResult {
 }
 
 func (r *Root) Render(cells [][]term.Cell) {
+	r.frame = renderFrame{}
 	surface := NewRenderSurface(cells, Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
+	surface.frame = &r.frame
 	// A modal overlay suppresses placements so images don't cover dialogs; unlocking first lets dialog text paint in the same frame.
 	if !r.HasOverlay() {
 		surface.SetImageLayer(r.ImageLayer)
 	} else if r.ImageLayer != nil {
 		r.ImageLayer.UnlockAll()
 	}
+	if r.HighlightDividers {
+		r.frame.dividers = &r.dividers
+	}
 	r.Main.Render(surface)
 	r.reconcilePointerCapture()
+	if r.HighlightDividers {
+		r.highlightDivider(surface, r.dividers)
+		clear(r.dividers)
+		r.dividers = r.dividers[:0]
+	} else if r.hoverDivider != nil {
+		r.clearDividerHover()
+	}
+
 	_, menuOpen := r.TopOverlayWidget().(*ContextMenuWidget)
 	if r.DebugToolbar != nil && (!r.HasOverlay() || menuOpen) {
 		r.DebugToolbar.render(surface)

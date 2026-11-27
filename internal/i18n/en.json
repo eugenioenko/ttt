@@ -21,6 +21,7 @@
   "command.moveEditorToOtherGroup": "Split: Move to Other Group",
   "command.openEditorToSide": "Split: Open to the Side",
   "settings.highlightActiveGroupBorder": "Highlight active split",
+  "settings.highlightDividers": "Highlight dividers on hover",
   "menu.closeSplit": "Close Split",
   "menu.splitDown": "Split Down",
   "menu.splitRight": "Split Right",

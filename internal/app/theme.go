@@ -126,6 +126,7 @@ func buildThemeStyles(theme config.ThemeConfig, opts ...StyleMapOption) (term.St
 	applyStyleDef(&m, term.StyleMenuBarActive, theme.Menu.Active)
 	applyStyleDef(&m, term.StyleBorder, theme.Border)
 	applyStyleDef(&m, term.StyleBorderActive, theme.BorderActive)
+	applyStyleDef(&m, term.StyleBorderHover, theme.BorderHover)
 	if o.pluginSelectionStyle == config.SelectionStyleBackground {
 		if theme.Editor.Selection.Bg != "" {
 			m[term.StylePluginSelection] = base

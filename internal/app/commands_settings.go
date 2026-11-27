@@ -137,6 +137,7 @@ func (a *App) ApplySettings(s config.Settings) {
 	*a.Settings = s
 	a.refreshDebugControls()
 	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
+	a.Root.HighlightDividers = s.Appearance.HighlightDividers
 	if prev.Terminal.ForwardShortcuts != s.Terminal.ForwardShortcuts {
 		a.Root.SetForwardShortcuts(s.Terminal.ForwardShortcuts)
 	}

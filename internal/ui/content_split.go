@@ -191,6 +191,7 @@ func (cs *ContentSplitWidget) Render(surface Surface) {
 		b = *cs.Borders
 	}
 	bs := term.StyleBorder
+	registerDivider(surface, cs)
 
 	if cs.Position == SplitRight {
 		cs.renderRight(surface, r, w, h, b, bs)

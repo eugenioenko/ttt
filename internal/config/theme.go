@@ -324,6 +324,7 @@ type ThemeConfig struct {
 	Hover          HoverStyles   `json:"hover"`
 	Border         StyleDef      `json:"border"`
 	BorderActive   StyleDef      `json:"borderActive"`
+	BorderHover    StyleDef      `json:"borderHover"`
 	Diff           DiffStyles    `json:"diff"`
 	Scrollbar      StyleDef      `json:"scrollbar"`
 	Syntax         SyntaxStyles  `json:"syntax"`
@@ -425,6 +426,7 @@ func (t *ThemeConfig) ResolveColors() {
 	fillBg(&t.Button.Inverse, t.Default.Fg)
 	fillFg(&t.Button.Inverse, t.Default.Bg)
 	fillFg(&t.BorderActive, t.Default.Fg)
+	fillFg(&t.BorderHover, t.BorderActive.Fg)
 	fillBg(&t.Diff.Added, "#1e2e1e")
 	fillBg(&t.Diff.Deleted, "#2e1e1e")
 	fillBg(&t.Diff.Modified, "#2e2e1e")

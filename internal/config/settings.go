@@ -385,6 +385,7 @@ type AppearanceSettings struct {
 	ScrollbarGlyphs            string            `json:"scrollbarGlyphs"`
 	PointerShapes              *bool             `json:"pointerShapes,omitempty"`
 	HighlightActiveGroupBorder bool              `json:"highlightActiveGroupBorder"`
+	HighlightDividers          bool              `json:"highlightDividers"`
 }
 
 func DefaultAppearanceSettings() AppearanceSettings {
@@ -393,6 +394,7 @@ func DefaultAppearanceSettings() AppearanceSettings {
 		ScrollbarGlyphs:            ScrollbarGlyphsBlocks,
 		PointerShapes:              boolPtr(true),
 		HighlightActiveGroupBorder: true,
+		HighlightDividers:          true,
 	}
 }
 
