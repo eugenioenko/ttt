@@ -18,7 +18,7 @@ for (const spec of cases.filter(c => c.name === "php-xdebug")) {
       tui.exec("Toggle Breakpoint");
       tui.exec("Start Debugging");
       for (const initial of [21, 41]) {
-        tui.waitFor(`│    $count = ${initial} `);
+        tui.waitFor(`│  $count = ${initial} `);
         tui.exec("Debug: Continue");
       }
       tui.panel("output");

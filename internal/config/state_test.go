@@ -125,3 +125,23 @@ func TestSaveAndLoadStateRoundTrip(t *testing.T) {
 		t.Errorf("RecentCommands = %v, want %v", got.RecentCommands, want.RecentCommands)
 	}
 }
+
+func TestSavedBreakpointConfirmationRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	OverrideConfigDir = dir
+	t.Cleanup(func() { OverrideConfigDir = "" })
+	if err := os.WriteFile(filepath.Join(dir, "state.json"), []byte(`{"breakpoints":{"project":{"main.c":[2,{"line":7,"needsConfirmation":true}]}}}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ReadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = SaveState(s); err != nil {
+		t.Fatal(err)
+	}
+	points := LoadState().Breakpoints["project"]["main.c"]
+	if len(points) != 2 || points[0] != (SavedBreakpoint{Line: 2}) || points[1] != (SavedBreakpoint{Line: 7, NeedsConfirmation: true}) {
+		t.Fatalf("restored %+v", points)
+	}
+}

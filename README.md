@@ -324,7 +324,7 @@ Use the editor tab bar’s **More** menu to split right or down (up to 16 groups
 
 Choose **Extended**, **Hidden**, or **Auto-hide** tab bars in **Settings > Appearance > Window** or **Options > Appearance > Tab Bar Style**. Hidden keeps a one-row divider; tab commands remain available. Auto-hide reveals the strip when the pointer reaches the editor’s top edge.
 
-While paused in the Debug sidebar, use **F10** to step over, **F11** to step into, or **Shift+F11** to step out.
+Use **F5** to start debugging or continue a paused session and **Shift+F5** to stop. While paused in the Debug sidebar, use **F10** to step over, **F11** to step into, or **Shift+F11** to step out.
 
 The full default keybinding list is in [`docs-web/src/content/docs/reference/keybindings.md`](docs-web/src/content/docs/reference/keybindings.md).
 

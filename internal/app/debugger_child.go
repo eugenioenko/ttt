@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"slices"
+	"strconv"
 	"sync"
 
 	"github.com/eugenioenko/ttt/internal/dap"
@@ -69,8 +71,43 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			return requestCtx.Err()
 		}
 	}
+	peer.inspectionError = func(err error) { deliver(func() { a.StatusError(err.Error()) }) }
+	peer.onBindings = func(path string, lines []int, bindings []debugBinding) {
+		deliver(func() {
+			if peer.bindings == nil {
+				peer.bindings = make(map[string]map[int]debugBinding)
+			}
+			byLine := make(map[int]debugBinding)
+			for i, b := range bindings {
+				if i < len(lines) {
+					byLine[lines[i]] = b
+				}
+			}
+			peer.bindings[path] = byLine
+			a.refreshDebugPanel()
+		})
+	}
 	err := peer.runSession(peer.ctx, func(ctx context.Context, event func(dap.Event)) (*dap.Session, error) {
 		return open(ctx, func(e dap.Event) {
+			switch e.Name {
+			case "breakpoint":
+				var b struct {
+					Reason     string
+					Breakpoint debugBinding
+				}
+				if json.Unmarshal(e.Body, &b) == nil {
+					deliver(func() { a.debugBindingEvent(peer, b.Reason, b.Breakpoint) })
+				}
+				return
+			case "exited":
+				var b struct{ ExitCode *int }
+				if json.Unmarshal(e.Body, &b) == nil && b.ExitCode != nil {
+					deliver(func() {
+						a.LogOutput("info", "debug:"+target.Name, i18n.Format("debug.exitCode", i18n.Args{"code": strconv.Itoa(*b.ExitCode)}))
+					})
+				}
+				return
+			}
 			if e.Name != "output" {
 				event(e)
 				return
@@ -92,19 +129,29 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			ready <- nil
 			ready = nil
 		}
-	}, func(tid int, frames []debugFrame) {
+	}, func(tid int, frames []debugFrame, threads []debugThread) {
 		deliver(func() {
 			a.debugger.selected = peer
+			peer.threads = threads
 			peer.frames = frames
 			a.showDebugStop(peer, tid, frames)
 		})
-	}, func() {
+	}, func(replacing bool) {
 		deliver(func() {
-			if peer.thread == nil {
+			if peer.thread == nil && !peer.busy {
 				return
 			}
 			peer.generation++
-			peer.busy = false
+			peer.busy = replacing
+			if replacing {
+				peer.thread = nil
+				peer.frames = nil
+				peer.threads = nil
+				if a.activeDebugPeer() == peer {
+					a.clearDebugInspection()
+				}
+				return
+			}
 			if a.activeDebugPeer() == peer {
 				a.debugResumed(peer)
 			} else {

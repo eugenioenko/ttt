@@ -49,12 +49,7 @@ func renderFindBar(surface Surface, borders *term.BorderSet, anchor Rect, query 
 	l := findBarLayout{barRect: findBarRect(surface, anchor, expanded)}
 	r := l.barRect
 	w := r.W
-	b := term.SingleBorderSet()
-	if borders != nil {
-		b = *borders
-	}
-	surface.DrawBorder(r.X, r.Y, r.W, r.H, b, term.StyleBorder)
-	surface.ClearRect(r.X+1, r.Y+1, max(w-2, 0), r.H-2, term.StyleInput)
+	drawFloatingBar(surface, borders, r)
 	ox, oy := surface.Origin()
 	row := r.Y + 1
 	gutterW := min(3, max(w-3, 0))
@@ -118,4 +113,13 @@ func renderFindBarInput(surface Surface, input *widgets.InputWidget, x, y, width
 	}
 	renderPanelInput(surface, input, x, y, width)
 	input.Actions = actions
+}
+
+func drawFloatingBar(surface Surface, borders *term.BorderSet, r Rect) {
+	b := term.SingleBorderSet()
+	if borders != nil {
+		b = *borders
+	}
+	surface.DrawBorder(r.X, r.Y, r.W, r.H, b, term.StyleBorder)
+	surface.ClearRect(r.X+1, r.Y+1, max(r.W-2, 0), r.H-2, term.StyleInput)
 }
