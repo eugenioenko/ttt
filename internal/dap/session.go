@@ -97,7 +97,7 @@ func (s *Session) read() {
 				return
 			}
 			response := s.reverseResponse(s.reverseCtx, p)
-			err := s.write(context.Background(), func(seq int) any {
+			err := s.write(context.Background(), nil, func(seq int) any {
 				response["seq"] = seq
 				return response
 			})
@@ -144,7 +144,7 @@ func (s *Session) read() {
 	}
 }
 
-func (s *Session) write(ctx context.Context, message func(int) any) error {
+func (s *Session) write(ctx context.Context, afterWrite func(), message func(int) any) error {
 	select {
 	case s.writer <- struct{}{}:
 		defer func() { <-s.writer }()
@@ -164,6 +164,9 @@ func (s *Session) write(ctx context.Context, message func(int) any) error {
 	// A partial frame cannot be retried. Interrupt the transport if its writer stalls.
 	stop := context.AfterFunc(ctx, s.Close)
 	err := s.codec.Send(message(s.seq))
+	if err == nil && afterWrite != nil {
+		afterWrite()
+	}
 	if !stop() {
 		return ctx.Err()
 	}
@@ -178,12 +181,13 @@ func (s *Session) Call(ctx context.Context, command string, args, out any) error
 }
 
 // CallWithResponse handles a successful response on the reader before subsequent events.
-// The callback must not wait for another packet.
-func (s *Session) CallWithResponse(ctx context.Context, command string, args any, beforeWrite func(), onSuccess func(json.RawMessage)) error {
-	return s.call(ctx, command, args, nil, beforeWrite, onSuccess)
+// afterWrite runs once the request frame has been sent, before onSuccess.
+// Neither callback may wait for another packet.
+func (s *Session) CallWithResponse(ctx context.Context, command string, args any, afterWrite func(), onSuccess func(json.RawMessage)) error {
+	return s.call(ctx, command, args, nil, afterWrite, onSuccess)
 }
 
-func (s *Session) call(ctx context.Context, command string, args, out any, beforeWrite func(), onSuccess func(json.RawMessage)) error {
+func (s *Session) call(ctx context.Context, command string, args, out any, afterWrite func(), onSuccess func(json.RawMessage)) error {
 	var arguments json.RawMessage
 	if args != nil {
 		var err error
@@ -192,12 +196,20 @@ func (s *Session) call(ctx context.Context, command string, args, out any, befor
 			return err
 		}
 	}
+	var written chan struct{}
+	if afterWrite != nil {
+		written = make(chan struct{})
+		handle := onSuccess
+		onSuccess = func(body json.RawMessage) {
+			<-written
+			if handle != nil {
+				handle(body)
+			}
+		}
+	}
 	var id int
 	reply := make(chan packet, 1)
-	err := s.write(ctx, func(seq int) any {
-		if beforeWrite != nil {
-			beforeWrite()
-		}
+	err := s.write(ctx, afterWrite, func(seq int) any {
 		id = seq
 		s.mu.Lock()
 		s.pending[id] = pendingCall{reply, onSuccess}
@@ -209,6 +221,9 @@ func (s *Session) call(ctx context.Context, command string, args, out any, befor
 			Arguments json.RawMessage `json:"arguments,omitempty"`
 		}{"request", seq, command, arguments}
 	})
+	if written != nil {
+		close(written)
+	}
 	defer func() { s.mu.Lock(); delete(s.pending, id); s.mu.Unlock() }()
 	if err != nil {
 		return err

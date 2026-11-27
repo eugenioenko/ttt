@@ -18,7 +18,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event", "continue-new-stop"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event", "continue-new-stop", "continue-partial-new-stop"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -58,7 +58,16 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 					if mode == "continue-partial" && !replacing {
 						t.Error("replacement stack was delivered before invalidating the resumed thread")
 					}
-					if id != want || len(threads) != 1 {
+					wantThreads := 1
+					if mode == "continue-partial-new-stop" {
+						wantThreads = 2
+						for _, thread := range threads {
+							if thread.ID == 2 {
+								t.Error("resumed thread still paused")
+							}
+						}
+					}
+					if id != want || len(threads) != wantThreads {
 						return
 					}
 				}
@@ -159,17 +168,17 @@ func simulateConfiguringAdapter(mode string) {
 		case "continue-event":
 			send(map[string]any{"type": "event", "event": "continued", "body": map[string]int{"threadId": 2}})
 			reply(control, nil)
-		case "continue-new-stop":
+		case "continue-new-stop", "continue-partial-new-stop":
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 			pending := read("stackTrace")
-			reply(control, nil)
+			reply(control, map[string]bool{"allThreadsContinued": mode == "continue-new-stop"})
 			reply(pending, nil)
 		case "continue-partial":
 			reply(control, map[string]bool{"allThreadsContinued": false})
 		default:
 			reply(control, nil)
 		}
-		if mode != "continue-partial" && mode != "continue-new-stop" {
+		if mode != "continue-partial" && !strings.HasSuffix(mode, "new-stop") {
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 		}
 		reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})

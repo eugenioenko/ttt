@@ -105,10 +105,10 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		}
 	}
 	r.resumeControl = func(request context.Context, s *dap.Session, cmd string, id int) error {
-		var before uint64
+		var sentGeneration uint64
 		return s.CallWithResponse(request, cmd, map[string]int{"threadId": id}, func() {
 			eventMu.Lock()
-			before = generation
+			sentGeneration = generation
 			eventMu.Unlock()
 		}, func(raw json.RawMessage) {
 			var result struct{ AllThreadsContinued *bool }
@@ -117,7 +117,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			}
 			eventMu.Lock()
 			defer eventMu.Unlock()
-			applyContinuation(&id, result.AllThreadsContinued, before)
+			applyContinuation(&id, result.AllThreadsContinued, sentGeneration)
 		})
 	}
 	startup, cancel := context.WithTimeout(ctx, 90*time.Second)

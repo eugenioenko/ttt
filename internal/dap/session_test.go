@@ -2,11 +2,13 @@ package dap
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net"
 	"os"
 	"os/exec"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,6 +51,51 @@ func (a adapter) send(msg any) {
 
 func (a adapter) reply(p packet) {
 	a.send(map[string]any{"type": "response", "request_seq": p.Seq, "success": true, "body": p.Command})
+}
+
+type blockedRequestWriter struct {
+	io.Writer
+	started chan struct{}
+}
+
+func (w blockedRequestWriter) Write(data []byte) (int, error) {
+	select {
+	case <-w.started:
+	default:
+		close(w.started)
+	}
+	return w.Writer.Write(data)
+}
+
+func TestControlSnapshotIncludesStopWhileRequestWriteIsBlocked(t *testing.T) {
+	client, peer := net.Pipe()
+	t.Cleanup(func() { _ = peer.Close() })
+	if err := peer.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	writer := blockedRequestWriter{client, make(chan struct{})}
+	var generation atomic.Int32
+	handled := make(chan struct{})
+	session := newSession(client, writer, func() { _ = client.Close() }, func(Event) { generation.Add(1); close(handled) }, SessionOptions{})
+	t.Cleanup(session.Close)
+	adapter := adapter{t, jsonrpc.NewCodec(peer, peer), peer}
+	result := make(chan error, 1)
+	var snapshot int32
+	go func() {
+		result <- session.CallWithResponse(t.Context(), "continue", map[string]int{"threadId": 1}, func() { snapshot = generation.Load() }, func(json.RawMessage) {
+			if snapshot != 1 {
+				t.Errorf("continue used generation %d, want the stop before transmission", snapshot)
+			}
+		})
+	}()
+	<-writer.started
+	adapter.send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 2}})
+	<-handled
+	request := adapter.receive()
+	adapter.reply(request)
+	if err := <-result; err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestInterleavedRepliesAndEvents(t *testing.T) {
