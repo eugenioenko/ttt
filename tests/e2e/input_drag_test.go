@@ -38,7 +38,8 @@ func TestSearchBarInputDrag(t *testing.T) {
 			}
 			input.SetText("abcdef")
 			h.redraw()
-			inputDrag(h, 83, 5, 86, 5)
+			r := input.GetRect()
+			inputDrag(h, r.X, r.Y, r.X+3, r.Y)
 			if !input.HasSelection() || h.app.Root.PointerCaptureActive() {
 				t.Fatal("drag did not leave a selection and release capture")
 			}
@@ -49,11 +50,11 @@ func TestSearchBarInputDrag(t *testing.T) {
 			if got := editorText(h); got != "abcdef" {
 				t.Fatalf("drag edited buffer: %q", got)
 			}
-			inputDrag(h, 84, 5, 0, 20)
+			inputDrag(h, r.X+1, r.Y, 0, 20)
 			if h.app.Root.PointerCaptureActive() {
 				t.Fatal("release outside bar kept pointer captured")
 			}
-			h.app.Root.HandleEvent(tcell.NewEventMouse(84, 5, tcell.Button1, 0))
+			h.app.Root.HandleEvent(tcell.NewEventMouse(r.X+1, r.Y, tcell.Button1, 0))
 			h.app.Root.SetSize(121, 30)
 			if h.app.Root.PointerCaptureActive() {
 				t.Fatal("resize kept input drag captured")

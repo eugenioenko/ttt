@@ -33,7 +33,7 @@ func findBarRect(surface Surface, anchor Rect, expanded bool) Rect {
 	if anchor.W > 0 && anchor.H > 0 {
 		ox, oy := surface.Origin()
 		left := max(anchor.X-ox, 0)
-		right := min(anchor.X-ox+anchor.W, sw)
+		right := min(anchor.X-ox+anchor.W-1, sw)
 		if aw := right - left; aw > 0 {
 			w := min(40, max(aw, min(sw, minFindBarWidth)))
 			x := max(right-w, 0)
