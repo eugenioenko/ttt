@@ -473,3 +473,64 @@ func TestContextMenuDisabledItemsCannotBeSelectedOrExecuted(t *testing.T) {
 		t.Errorf("pointer over disabled item = %q, want default", got)
 	}
 }
+
+func TestContextMenuClearsFullwidthAtBorders(t *testing.T) {
+	vertical := term.SingleBorderSet().Vertical
+
+	// The editor right-click menu anchors at raw mouse coordinates, which can
+	// land on the continuation cell of a fullwidth glyph. A '界' head at
+	// column 9 occupies columns 9-10, so its continuation is exactly the left
+	// border column of a menu anchored at x=10. Continuation cells are zero
+	// cells, as the editor render leaves them.
+	t.Run("glyph spanning left border", func(t *testing.T) {
+		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "Long menu choice"}}, 10, 2)
+		cells := makeGrid(60, 20)
+		cells[3][9] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[3][10] = term.Cell{}
+		menu.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: 60, H: 20}))
+
+		if got := cells[3][9]; got.Ch != ' ' {
+			t.Fatalf("glyph head at column 9 not cleared: %+v", got)
+		}
+		if got := cells[3][10]; got.Ch != vertical {
+			t.Fatalf("left border at column 10 = %+v, want %q", got, vertical)
+		}
+	})
+
+	// A '界' head on the right border column itself is overwritten by the
+	// border, orphaning its continuation cell just outside the menu; the
+	// orphan must not stay a zero cell or the terminal keeps the glyph's
+	// trailing half.
+	t.Run("orphan continuation outside right border", func(t *testing.T) {
+		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "Long menu choice"}}, 10, 2)
+		menuW := menu.menuWidth()
+		right := 10 + menuW - 1
+		cells := makeGrid(60, 20)
+		cells[3][right] = term.Cell{Ch: '界', Style: term.StyleDefault}
+		cells[3][right+1] = term.Cell{}
+		menu.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: 60, H: 20}))
+
+		if got := cells[3][right]; got.Ch != vertical {
+			t.Fatalf("right border at column %d = %+v, want %q", right, got, vertical)
+		}
+		if got := cells[3][right+1]; got.Ch != ' ' {
+			t.Fatalf("orphan continuation at column %d not cleared: %+v", right+1, got)
+		}
+	})
+
+	// A fullwidth glyph fully inside the menu's label area must render intact,
+	// and content away from the borders must survive the straddle clearing.
+	t.Run("interior fullwidth label preserved", func(t *testing.T) {
+		menu := NewContextMenuWidget([]ContextMenuItem{{Label: "閉じる"}}, 10, 2)
+		cells := makeGrid(60, 20)
+		menu.Render(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: 60, H: 20}))
+
+		if got := cells[3][12].Ch; got != '閉' {
+			t.Fatalf("label glyph head = %+v, want 閉", got)
+		}
+		menuW := menu.menuWidth()
+		if got := cells[3][10+menuW-1].Ch; got != term.SingleBorderSet().Vertical {
+			t.Fatalf("right border dislodged by wide label: %+v", got)
+		}
+	})
+}
