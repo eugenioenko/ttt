@@ -350,30 +350,33 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	if e.Highlighter != nil {
 		switch e.commentLanguage() {
 		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
-			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
-			"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
-			"r", "ruby", "shellscript", "systemd", "toml", "yaml":
+			"elixir", "fish", "gdscript", "gherkin", "graphql", "hcl", "julia",
+			"make", "mojo", "nix", "nushell", "perl", "powershell", "puppet",
+			"python", "r", "ruby", "shellscript", "systemd", "terraform", "toml",
+			"yaml":
 			prefix = "#"
 		case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
 			prefix = "--"
-		case "angular-html", "html", "html-derivative", "xml":
+		case "angular-html", "html", "html-derivative", "markdown", "svelte", "xml":
 			return "<!--", "-->"
 		case "css", "less", "scss":
 			return "/*", "*/"
 		case "coq", "ocaml":
 			return "(*", "*)"
-		case "jinja":
+		case "jinja", "twig":
 			return "{#", "#}"
 		case "smalltalk":
 			return "\"", "\""
-		case "ahk", "clojure", "common-lisp", "fennel", "hy", "reg", "scheme":
+		case "ahk", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
 			prefix = ";"
 		case "bat":
 			prefix = "REM"
-		case "erlang", "tex":
+		case "bibtex", "erlang", "tex":
 			prefix = "%"
 		case "vb":
 			prefix = "'"
+		case "viml":
+			prefix = "\""
 		}
 	}
 	return prefix, ""

@@ -39,6 +39,28 @@ func TestCommentSyntaxResolvesShellAliasToHash(t *testing.T) {
 	}
 }
 
+func TestCommentSyntaxForMoreLanguages(t *testing.T) {
+	for lang, want := range map[string][2]string{
+		"bibtex":    {"%", ""},
+		"hcl":       {"#", ""},
+		"ini":       {";", ""},
+		"markdown":  {"<!--", "-->"},
+		"svelte":    {"<!--", "-->"},
+		"terraform": {"#", ""},
+		"twig":      {"{#", "#}"},
+		"viml":      {"\"", ""},
+	} {
+		h := highlight.NewForLanguage(lang)
+		if h == nil {
+			t.Fatalf("no highlighter for %s", lang)
+		}
+		e := &EditorPaneWidget{Highlighter: h}
+		if prefix, postfix := e.commentSyntax(); prefix != want[0] || postfix != want[1] {
+			t.Errorf("%s comment syntax = %q/%q, want %q/%q", lang, prefix, postfix, want[0], want[1])
+		}
+	}
+}
+
 func newCommentEditor(t *testing.T, filename string, lines []string, line, col int) *EditorPaneWidget {
 	t.Helper()
 	h := highlight.New(filename)
