@@ -256,10 +256,11 @@ func GenerateContext(ctx context.Context, oldLines, newLines []string, fileName 
 			}
 			if li < len(lcs) && oi < len(oldLines) && ni < len(newLines) && oldLines[oi] == lcs[li] && newLines[ni] == lcs[li] {
 				peekEnd := 0
-				for peekEnd < contextLines*2 && oi+peekEnd < len(oldLines) && li+peekEnd < len(lcs) && oldLines[oi+peekEnd] == lcs[li+peekEnd] {
+				for peekEnd < contextLines*2 && oi+peekEnd < len(oldLines) && ni+peekEnd < len(newLines) && li+peekEnd < len(lcs) &&
+					oldLines[oi+peekEnd] == lcs[li+peekEnd] && newLines[ni+peekEnd] == lcs[li+peekEnd] {
 					peekEnd++
 				}
-				if peekEnd >= contextLines*2 || (oi+peekEnd >= len(oldLines) && li+peekEnd >= len(lcs)) {
+				if peekEnd >= contextLines*2 || (oi+peekEnd >= len(oldLines) && ni+peekEnd >= len(newLines) && li+peekEnd >= len(lcs)) {
 					trail := contextLines
 					if peekEnd < trail {
 						trail = peekEnd
