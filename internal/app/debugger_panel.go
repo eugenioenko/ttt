@@ -55,6 +55,7 @@ func (a *App) ensureDebugPanel() {
 	if p.adapter != nil {
 		return
 	}
+	a.wireDebuggerGutter(a.EditorGroup)
 	config := widgets.TreeConfig{Indent: 2, OnExpand: a.expandDebugNode, OnCommand: func(cmd string, n *widgets.TreeNode) {
 		if cmd != "activate" {
 			return
