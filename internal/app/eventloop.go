@@ -191,6 +191,9 @@ func RunEventLoop(
 	app.ShowPendingPluginApprovals()
 
 	handleKey := func(tev *tcell.EventKey) {
+		if app.hover.button != nil {
+			app.DismissHover()
+		}
 		app.stopHoverTask()
 		switch tev.Key() {
 		case tcell.KeyUp, tcell.KeyDown, tcell.KeyLeft, tcell.KeyRight,

@@ -160,6 +160,8 @@ Panel taller and Panel shorter remain available in the command palette and can b
 
 | Shortcut | Action |
 |----------|--------|
+| F5 | Start debugging or continue |
+| Shift+F5 | Stop debugging |
 | F10 | Debug step over |
 | F11 | Debug step into |
 | Shift+F11 | Debug step out |

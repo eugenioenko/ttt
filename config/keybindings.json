@@ -90,6 +90,8 @@
   { "key": "ctrl+k right", "command": "focus.editorRight" },
   { "key": "ctrl+k up", "command": "focus.editorUp" },
   { "key": "ctrl+k down", "command": "focus.editorDown" },
+  { "key": "f5", "command": "debug.startOrContinue" },
+  { "key": "shift+f5", "command": "debug.stop" },
   { "key": "f10", "command": "debug.stepOver" },
   { "key": "f11", "command": "debug.stepIn" },
   { "key": "shift+f11", "command": "debug.stepOut" },

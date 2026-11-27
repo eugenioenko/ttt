@@ -177,6 +177,8 @@ For example, **Ctrl+K P** opens Quick Open, while **Ctrl+K Ctrl+P** sends Ctrl+P
 
 | Shortcut | Command | Description |
 |----------|---------|-------------|
+| F5 | `debug.startOrContinue` | Start debugging or continue |
+| Shift+F5 | `debug.stop` | Stop debugging |
 | F10 | `debug.stepOver` | Debug step over |
 | F11 | `debug.stepIn` | Debug step into |
 | Shift+F11 | `debug.stepOut` | Debug step out |

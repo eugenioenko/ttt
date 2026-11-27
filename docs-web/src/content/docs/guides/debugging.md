@@ -48,9 +48,11 @@ Choose **Run & Debug** to run a workspace target. If several are configured, TTT
 
 ## Breakpoints and session controls
 
-Click the left half of the line-number gutter to toggle a breakpoint, or use **Toggle Breakpoint** from the command palette. Breakpoints apply to the adapter’s configured languages. When the program stops, the execution marker shows the current line.
+Click the left half of the line-number gutter to toggle a breakpoint, or use **Toggle Breakpoint** from the command palette. Breakpoints apply to the adapter’s configured languages. TTT remembers breakpoint lines per workspace. A hollow marker indicates that a breakpoint needs confirmation or the adapter has yet to verify it. The Breakpoints section shows any location or explanation returned by the adapter. When the program stops, the execution marker shows the current line.
 
-Select a frame in **Call Stack** to inspect its **Variables**. Expand a value to see its children, or right-click it to copy its name or value. Drag the dividers to resize the sidebar sections. Use **F10** to step over, **F11** to step in, and **Shift+F11** to step out. The sidebar also provides pause, continue, and stop controls.
+Use **F5** to start debugging or continue a paused session and **Shift+F5** to stop. Select a frame in **Call Stack** to inspect its **Variables**. Expand a value to see its children, or right-click it to copy its name or value. Drag the dividers to resize the sidebar sections. Use **F10** to step over, **F11** to step in, and **Shift+F11** to step out. The sidebar also provides pause, continue, and stop controls.
+
+While debugging, the floating toolbar provides stepping and stop controls. Use its menu or the Debug sidebar menu to dock it in any corner or hide it. When multiple threads are paused, select a thread in Call Stack to inspect it.
 
 The Output panel shows output sent by the adapter under `debug:<target name>`. A program launched in a terminal can use that terminal for input and output.
 

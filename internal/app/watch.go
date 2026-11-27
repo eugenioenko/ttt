@@ -116,6 +116,7 @@ func (a *App) reloadFile(path string) {
 	reloaded := false
 	for _, group := range a.editorGroups() {
 		if group.ReloadFile(path) {
+			a.updateDebugSource(path, group.BufferForPath(path))
 			reloaded = true
 			break
 		}

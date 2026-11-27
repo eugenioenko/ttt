@@ -37,7 +37,7 @@ for (const spec of cases) {
         for (const {key, line: expected, variable} of spec.inspection) {
           if (key) tui.press(key);
           tui.waitFor(executionMarker(dir, file)(expected), 10000);
-          tui.waitFor(`│    ${variable} `, 10000);
+          tui.waitFor(`│  ${variable} `, 10000);
         }
         if (external) {
           tui.exec("Stop Debugging");

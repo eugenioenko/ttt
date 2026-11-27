@@ -40,7 +40,7 @@ func inspectionTestPeer(t *testing.T) (*App, *debugRun, *jsonrpc.Codec, chan fun
 func TestQueuedVariableResultExpiresOnResume(t *testing.T) {
 	a, r, codec, queued := inspectionTestPeer(t)
 	applied := false
-	debugQuery(a, r, "variables", map[string]int{"variablesReference": 42}, func(_ struct{}) { applied = true })
+	debugQuery(a, r, "variables", map[string]int{"variablesReference": 42}, func(_ struct{}, _ error) { applied = true })
 	var req struct{ Seq int }
 	if err := codec.ReceiveInto(&req); err != nil {
 		t.Fatal(err)
@@ -149,6 +149,26 @@ func TestSteppingSelectsFrameProvidingLocals(t *testing.T) {
 	p.stack.SelectByID("frame:42")
 	p.stack.ActivateSelected()
 	check(42, "caller locals")
+	a.selectDebugThread(2)
+	var trace struct {
+		Seq     int
+		Command string
+	}
+	if err := codec.ReceiveInto(&trace); err != nil || trace.Command != "stackTrace" {
+		t.Fatalf("stack request: %+v %v", trace, err)
+	}
+	if err := codec.Send(map[string]any{"type": "response", "request_seq": trace.Seq, "success": false, "message": "thread exited"}); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case apply := <-queued:
+		apply()
+	case <-r.ctx.Done():
+		t.Fatal(r.ctx.Err())
+	}
+	if *r.thread != 1 || p.frameID != 42 || p.stale || p.scopes[0].Label != "caller locals" {
+		t.Fatal("failed thread selection replaced the previous inspection")
+	}
 	r.stepping = true
 	a.debugResumed(r)
 	a.showDebugStop(r, 1, frames)
@@ -171,7 +191,7 @@ func TestDebugFileOutsideWorkspaceKeepsOnlyItsBreakpoints(t *testing.T) {
 		t.Fatal(target, ok)
 	}
 	run := debugRun{file: target.File, folder: target.Folder, languages: []string{"c"}, points: make(chan map[string][]int, 1)}
-	a.debugger.points = map[string][]int{file: {1}, filepath.Join(target.Folder, "other.c"): {3}}
+	a.debugger.points = map[string]map[int]*debugBreakpoint{file: {1: {}}, filepath.Join(target.Folder, "other.c"): {3: {}}}
 	a.queueDebugPoints(&run)
 	if got := <-run.points; !reflect.DeepEqual(got, map[string][]int{file: {1}}) {
 		t.Fatal(got)

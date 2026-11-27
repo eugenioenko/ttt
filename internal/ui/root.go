@@ -39,6 +39,9 @@ type chordState struct {
 
 type Root struct {
 	Main             Widget
+	ButtonHover      *HoverWidget
+	DebugToolbar     *DebugToolbar
+	toolbarPress     bool
 	Overlays         []Overlay
 	Focused          Widget
 	Width            int
@@ -267,6 +270,25 @@ func (r *Root) HandleEvent(ev tcell.Event) EventResult {
 		r.focusClaimed = false
 	}
 	r.button1Held = held
+	if r.toolbarPress {
+		if released {
+			r.toolbarPress = false
+			if menu, ok := r.TopOverlayWidget().(*ContextMenuWidget); ok {
+				menu.HandleEvent(mev)
+			}
+		}
+		return EventConsumed
+	}
+	if bar := r.DebugToolbar; bar != nil && !r.HasOverlay() && !r.PointerCaptureActive() && !linkPress {
+		x, y := mev.Position()
+		if bar.rect.Contains(x, y) && (!held || pressed) && !released {
+			if pressed {
+				r.toolbarPress = true
+				bar.click(x, y)
+			}
+			return EventConsumed
+		}
+	}
 	if mev.Buttons() == tcell.ButtonNone && !released && !linkPress && !r.HasOverlay() && !r.PointerCaptureActive() && r.OnMouseMove != nil {
 		x, y := mev.Position()
 		if r.OnMouseMove(x, y) {
@@ -589,6 +611,14 @@ func (r *Root) Render(cells [][]term.Cell) {
 	}
 	r.Main.Render(surface)
 	r.reconcilePointerCapture()
+	_, menuOpen := r.TopOverlayWidget().(*ContextMenuWidget)
+	if r.DebugToolbar != nil && (!r.HasOverlay() || menuOpen) {
+		r.DebugToolbar.render(surface)
+	}
+
+	if r.ButtonHover != nil && !r.HasOverlay() {
+		r.ButtonHover.Render(surface)
+	}
 
 	for _, overlay := range r.Overlays {
 		overlay.Widget.SetRect(Rect{X: 0, Y: 0, W: r.Width, H: r.Height})
