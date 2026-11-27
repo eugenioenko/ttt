@@ -266,3 +266,22 @@ func TestCompletionEditClampsMultiLineRangeToCompletionLine(t *testing.T) {
 		t.Fatalf("cursor = %d:%d, want 0:19", line, col)
 	}
 }
+
+func TestCompletionEditStartingOnAnotherLineIsIgnored(t *testing.T) {
+	a := completionTestApp(t, "a.tsx", "<Alert type=\"x\n  da\"\n")
+	moveCursor(a, 1, 4)
+	a.insertCompletion(ui.CompletionItem{Label: "danger"}, &lsp.TextEdit{
+		Range: lsp.Range{
+			Start: lsp.Position{Line: 0, Character: 13},
+			End:   lsp.Position{Line: 1, Character: 4},
+		},
+		NewText: "danger",
+	})
+	lines := a.EditorGroup.ActiveBuffer().Lines
+	if lines[0] != `<Alert type="x` || lines[1] != `  da"` {
+		t.Fatalf("lines = %q", lines[:2])
+	}
+	if line, col := a.EditorGroup.ActiveCursor(); line != 1 || col != 4 {
+		t.Fatalf("cursor = %d:%d, want 1:4", line, col)
+	}
+}
