@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +17,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 
@@ -228,6 +230,73 @@ func (e *EditorPaneWidget) ClearBookmarks() {
 	e.fireBookmarkChange(-1, "clear", Bookmark{})
 }
 
+// ToggleBookmark adds a bookmark to the cursor line or removes the one there.
+func (e *EditorPaneWidget) ToggleBookmark() {
+	line := e.Cursor.Line
+	if !e.validBookmarkLine(line) {
+		return
+	}
+	if _, ok := e.GetBookmark(line); ok {
+		e.RemoveBookmark(line)
+		return
+	}
+	e.SetBookmark(line, icons.Rune(icons.Bookmark), term.StyleGutterBookmark)
+}
+
+// JumpBookmark moves the cursor to the next bookmark (delta > 0) or the
+// previous one, wrapping at either end, and reports whether any bookmark was
+// reachable.
+func (e *EditorPaneWidget) JumpBookmark(delta int) bool {
+	if delta == 0 {
+		return false
+	}
+	lines := make([]int, 0, len(e.Bookmarks))
+	for line := range e.Bookmarks {
+		if e.validBookmarkLine(line) {
+			lines = append(lines, line)
+		}
+	}
+	if len(lines) == 0 {
+		return false
+	}
+	sort.Ints(lines)
+	target := lines[0]
+	if delta > 0 {
+		for _, line := range lines {
+			if line > e.Cursor.Line {
+				target = line
+				break
+			}
+		}
+	} else {
+		target = lines[len(lines)-1]
+		for _, line := range slices.Backward(lines) {
+			if line < e.Cursor.Line {
+				target = line
+				break
+			}
+		}
+	}
+	if e.Selection != nil {
+		e.Selection.Clear()
+	}
+	e.Cursor.Line = target
+	e.Cursor.Col = 0
+	if e.isMultiActive() {
+		e.syncToMulti()
+		e.Multi.Deduplicate()
+		if len(e.Multi.Cursors) == 1 {
+			e.Multi = nil
+		}
+	}
+	e.revealGapRow = e.DiffOverlay != nil
+	for e.Folds != nil && e.Folds.IsLineHidden(e.Cursor.Line) {
+		e.ExpandFoldContaining(e.Cursor.Line)
+	}
+	e.EnsureCursorVisible()
+	return true
+}
+
 func (e *EditorPaneWidget) fireBookmarkChange(line int, action string, b Bookmark) {
 	if e.OnBookmarkChange != nil {
 		e.OnBookmarkChange(line, action, b)
@@ -331,6 +400,7 @@ func (e *EditorPaneWidget) DiagnosticAt(line, col int) *Diagnostic {
 
 func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	version, prevLines := e.Buf.Version(), len(e.Buf.Lines)
+	defer e.Buf.PinChanges(version).Release()
 	e.applyAutoClosingEdit(cmd)
 	if undo.IsNoop(cmd) {
 		return
@@ -340,6 +410,7 @@ func (e *EditorPaneWidget) exec(cmd undo.EditCommand) {
 	}
 	e.bufferDirty = true
 	e.refreshFoldsAfterEdit(version, prevLines)
+	e.remapBookmarks(version)
 }
 
 const asyncFoldLines = 50_000
@@ -365,6 +436,31 @@ func (e *EditorPaneWidget) remapFolds(version uint64) bool {
 		return true
 	}
 	return shifted
+}
+
+// remapBookmarks replays the edits since version over the bookmarks in place,
+// so shared references to the map stay valid. A bookmark on a deleted line is
+// dropped, and bookmarks that collapse onto one line keep the earliest.
+func (e *EditorPaneWidget) remapBookmarks(version uint64) {
+	if len(e.Bookmarks) == 0 || version == e.Buf.Version() {
+		return
+	}
+	if oldest := e.Buf.OldestReplayVersion(); version < oldest {
+		// An undo batch can be longer than the change log. Replaying the
+		// retained tail still moves bookmarks on lines the missing prefix
+		// never touched, so leave those in place rather than dropping all.
+		version = oldest
+	}
+	if !e.Buf.ChangesSince(version, func(c buffer.Change) {
+		if c.Added == 0 {
+			for line := c.Start; line < c.Start+c.Removed; line++ {
+				delete(e.Bookmarks, line)
+			}
+		}
+		shiftKeys(e.Bookmarks, c, func(a, _ Bookmark) Bookmark { return a })
+	}) {
+		return
+	}
 }
 
 func (e *EditorPaneWidget) refreshFolds() {
@@ -655,7 +751,11 @@ func (e *EditorPaneWidget) skipFoldUp() {
 }
 
 func (e *EditorPaneWidget) EnsureCursorVisible() {
-	e.skipHiddenLineDown()
+	// A hidden range behind a diff gap would carry the cursor past a line the
+	// caller asked for with revealGapRow; the diff reveals that line instead.
+	if !e.revealGapRow {
+		e.skipHiddenLineDown()
+	}
 	e.scrollViewport()
 }
 

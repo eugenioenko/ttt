@@ -43,6 +43,7 @@ func TestEditorCommandsOnSettingsTabAreSafeNoOps(t *testing.T) {
 		"editor.moveWordLeft", "editor.moveWordRight",
 		"editor.deleteWordLeft", "editor.deleteWordRight",
 		"fold.toggle", "fold.collapseAll", "fold.expandAll",
+		"bookmark.toggle", "bookmark.next", "bookmark.previous",
 		"diff.nextHunk", "diff.prevHunk",
 	} {
 		h.exec(cmd)

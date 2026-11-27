@@ -37,6 +37,7 @@ func NewEditableDiffWidget(filePath string, base []string, lines []diff.DiffLine
 		liveActive:      -1,
 	}
 	d.left.NoWrapMargin = false
+	d.left.OnBookmarkChange = d.trackLeftBookmark
 	d.attachHighlighters()
 	d.rebuild()
 	return d
@@ -188,12 +189,68 @@ func (d *DiffEditorWidget) rebuildLive() {
 		lLines, d.leftRows = appendDiffSide(d.leftBase, lLines, d.leftRows, dl.Left, i, d.gapByLine)
 	}
 	d.resetPane(d.left, lLines, d.leftBase)
+	d.projectLeftBookmarks()
 	d.buildLiveOverlays()
 	d.applyOverlayOptions()
 	if gap, ok := d.hiddenCursorGap(); ok {
 		d.revealed = append(d.revealed, d.liveSpans[gap])
 		d.rebuildLive()
 	}
+}
+
+// baseLineAt returns the base file line the given base-pane row shows, or 0
+// for rows with no line of their own such as fillers and collapsed gaps.
+func (d *DiffEditorWidget) baseLineAt(row int) int {
+	if d.leftBase == nil || row < 0 || row >= len(d.leftBase.Nums) {
+		return 0
+	}
+	return d.leftBase.Nums[row]
+}
+
+// trackLeftBookmark records the base pane's bookmarks by base line, because
+// every projection rebuild renumbers its rows.
+func (d *DiffEditorWidget) trackLeftBookmark(row int, action string, b Bookmark) {
+	switch action {
+	case "clear":
+		clear(d.leftBookmarks)
+	case "set_all":
+		clear(d.leftBookmarks)
+		for r, bookmark := range d.left.Bookmarks {
+			if num := d.baseLineAt(r); num > 0 {
+				d.leftBookmarks[num] = bookmark
+			}
+		}
+	case "set":
+		if num := d.baseLineAt(row); num > 0 {
+			if d.leftBookmarks == nil {
+				d.leftBookmarks = make(map[int]Bookmark)
+			}
+			d.leftBookmarks[num] = b
+		}
+	case "remove":
+		if num := d.baseLineAt(row); num > 0 {
+			delete(d.leftBookmarks, num)
+		}
+	}
+}
+
+// projectLeftBookmarks puts the tracked bookmarks on the rebuilt projection's
+// rows. A base line a collapsed gap hides keeps its bookmark until the gap is
+// expanded.
+func (d *DiffEditorWidget) projectLeftBookmarks() {
+	rows := make(map[int]Bookmark, len(d.leftBookmarks))
+	if d.leftBase != nil {
+		for row, num := range d.leftBase.Nums {
+			if b, ok := d.leftBookmarks[num]; ok {
+				rows[row] = b
+			}
+		}
+	}
+	if len(rows) == 0 {
+		d.left.Bookmarks = nil
+		return
+	}
+	d.left.Bookmarks = rows
 }
 
 func (d *DiffEditorWidget) hiddenCursorGap() (int, bool) {

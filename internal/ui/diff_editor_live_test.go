@@ -8,6 +8,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/core/fold"
 	"github.com/eugenioenko/ttt/internal/core/undo"
+	"github.com/eugenioenko/ttt/internal/term"
 
 	"github.com/gdamore/tcell/v3"
 )
@@ -198,6 +199,80 @@ func TestEditableCursorJumpIntoGapExpandsIt(t *testing.T) {
 	screen := strings.Join(f.render(), "\n")
 	if !strings.Contains(screen, "line 05") {
 		t.Fatalf("jumping the cursor into a gap did not reveal it:\n%s", screen)
+	}
+}
+
+func TestEditableJumpBookmarkRevealsTargetInsideHiddenGap(t *testing.T) {
+	old, cur := gapFile()
+	f := newLiveDiffFixture(t, old, cur, DiffModeUnified, 100, 40)
+	f.render()
+	f.e.SetBookmark(20, '*', term.StyleDefault)
+	f.e.Cursor.Line = 11
+
+	if !f.e.JumpBookmark(1) {
+		t.Fatal("jump found no bookmark")
+	}
+	if f.e.Cursor.Line != 20 {
+		t.Fatalf("cursor line = %d, want the bookmarked line 20", f.e.Cursor.Line)
+	}
+	screen := strings.Join(f.render(), "\n")
+	if !strings.Contains(screen, "line 21") {
+		t.Fatalf("jump did not reveal the hidden bookmarked line:\n%s", screen)
+	}
+}
+
+func baseRowForLine(d *DiffEditorWidget, line int) int {
+	for row, num := range d.leftBase.Nums {
+		if num == line {
+			return row
+		}
+	}
+	return -1
+}
+
+func TestEditableBasePaneBookmarksFollowBaseLines(t *testing.T) {
+	old, cur := gapFile()
+	f := newLiveDiffFixture(t, old, cur, DiffModeSplit, 100, 40)
+	f.render()
+	f.d.focusLeft = true
+	row := baseRowForLine(f.d, 15)
+	if row < 0 {
+		t.Fatal("base line 15 is not projected")
+	}
+	f.d.left.Cursor.Line = row
+	f.d.keyPane().ToggleBookmark()
+	if _, ok := f.d.left.GetBookmark(row); !ok {
+		t.Fatal("toggle did not bookmark the base pane row")
+	}
+
+	f.d.expandContextGap(0)
+
+	moved := baseRowForLine(f.d, 15)
+	if moved == row {
+		t.Fatalf("expanding the gap left base line 15 on row %d", row)
+	}
+	if _, ok := f.d.left.GetBookmark(row); ok {
+		t.Fatalf("bookmark stayed on row %d, want it moved with base line 15", row)
+	}
+	if _, ok := f.d.left.GetBookmark(moved); !ok {
+		t.Fatalf("bookmark not on row %d, the new row for base line 15", moved)
+	}
+	if got := f.d.left.Buf.Lines[moved]; got != "line 15" {
+		t.Fatalf("bookmarked row %d shows %q, want line 15", moved, got)
+	}
+
+	// A base line a collapsed gap hides keeps its bookmark until the gap opens.
+	f.d.left.Cursor.Line = baseRowForLine(f.d, 5)
+	f.d.keyPane().ToggleBookmark()
+	f.d.applyExtended(false)
+	for r := range f.d.left.Bookmarks {
+		if f.d.leftBase.Nums[r] == 5 {
+			t.Fatal("bookmark on a line hidden by the collapsed gap is still projected")
+		}
+	}
+	f.d.expandContextGap(0)
+	if _, ok := f.d.left.GetBookmark(baseRowForLine(f.d, 5)); !ok {
+		t.Fatal("bookmark did not come back when the gap was expanded again")
 	}
 }
 
