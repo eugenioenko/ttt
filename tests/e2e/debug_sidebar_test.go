@@ -27,6 +27,7 @@ func TestDebugSidebarGutterRoutesToClickedSplit(t *testing.T) {
 		}
 	}
 	right := h.app.EditorGroup
+	h.redraw()
 	r := left.Editor.GetRect()
 	h.click(r.X, r.Y)
 	if h.app.EditorGroup != left {
