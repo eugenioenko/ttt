@@ -374,7 +374,7 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 | Adapter field | Meaning |
 | --- | --- |
 | `command`, `cwd`, `env` | Adapter executable and arguments, optional working directory, and environment overrides. |
-| `transport` | `stdio` (default), `server` (command contains `${port}`), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
+| `transport` | `stdio` (default), `server` (command contains `${port}`, requires `lsof` on Unix to verify the adapter connection), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
 | `languages` | Language IDs associated with the adapter. |
 | `provider` | Defaults to `generic`. Adapter-specific hooks use an explicit `delve`, `jsdebug`, or `debugpy` value. |
 | `fileLaunch` | Optional launch arguments for a single file. Recipes support `${file}`, `${fileDirname}`, and `${workspaceFolder}`. |

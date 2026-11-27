@@ -184,6 +184,11 @@ func socketProcess(ctx context.Context, cmd *exec.Cmd, address string, pattern *
 		stop()
 		return nil, fmt.Errorf("owned adapter requires a loopback address, got %q", address)
 	}
+	if network == "tcp" && pattern == nil {
+		options.verifyPeer = func(ctx context.Context, conn net.Conn) error {
+			return verifyServerPeer(ctx, conn, cmd.Process.Pid, exited)
+		}
+	}
 	for {
 		conn, err := (&net.Dialer{}).DialContext(ctx, network, address)
 		if err == nil {
@@ -192,6 +197,13 @@ func socketProcess(ctx context.Context, cmd *exec.Cmd, address string, pattern *
 				_ = conn.Close()
 				return nil, exitError()
 			default:
+			}
+			if options.verifyPeer != nil {
+				if err := options.verifyPeer(ctx, conn); err != nil {
+					_ = conn.Close()
+					stop()
+					return nil, err
+				}
 			}
 			return SocketSession(conn, func() {
 				select {

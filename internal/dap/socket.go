@@ -11,6 +11,7 @@ type SessionOptions struct {
 	RunInTerminal      RunInTerminal
 	StartDebugging     func(context.Context, string, map[string]any, OpenChild) error
 	openChild          OpenChild
+	verifyPeer         func(context.Context, net.Conn) error
 	ResumeBeforeDetach bool
 }
 
@@ -33,10 +34,18 @@ func SocketSession(conn net.Conn, cleanup func(), event func(Event), options Ses
 	addr := conn.RemoteAddr()
 	if addr.Network() == "tcp" || (addr.Network() == "unix" && addr.String() != "" && addr.String() != "@") {
 		allowTerminal := options.RunInTerminal != nil
+		verifyPeer := options.verifyPeer
 		options.openChild = func(ctx context.Context, event func(Event), options SessionOptions) (*Session, error) {
 			conn, err := (&net.Dialer{}).DialContext(ctx, addr.Network(), addr.String())
 			if err != nil {
 				return nil, err
+			}
+			if verifyPeer != nil {
+				if err := verifyPeer(ctx, conn); err != nil {
+					_ = conn.Close()
+					return nil, err
+				}
+				options.verifyPeer = verifyPeer
 			}
 			if !allowTerminal {
 				options.RunInTerminal = nil
