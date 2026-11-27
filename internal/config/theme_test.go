@@ -544,14 +544,14 @@ func TestResolveColorsDerivesHighlightStyles(t *testing.T) {
 	}
 }
 
-func TestResolveColorsBorderHoverFallsBackToBookmarkColor(t *testing.T) {
+func TestResolveColorsBorderHoverFallsBackToActiveBorder(t *testing.T) {
 	theme := DefaultTheme()
-	if err := json.Unmarshal([]byte(`{"diff":{"gutterBookmark":{"fg":"#6464c8"}}}`), &theme); err != nil {
+	if err := json.Unmarshal([]byte(`{"borderActive":{"fg":"#6464c8"}}`), &theme); err != nil {
 		t.Fatal(err)
 	}
 	theme.ResolveColors()
 	if got := theme.BorderHover.Fg; got != "#6464c8" {
-		t.Errorf("borderHover fg = %q, want the bookmark color", got)
+		t.Errorf("borderHover fg = %q, want the active border color", got)
 	}
 
 	explicit := DefaultTheme()
