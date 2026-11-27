@@ -724,24 +724,7 @@ func (a *App) WirePlugin(p *plugin.Plugin) {
 	p.RequestExecPath = func(path string, done func(bool)) error {
 		return a.ShowExecPathApproval(p, path, done)
 	}
-	p.ShowContextMenu = func(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
-		items := contextMenuItemsFromWidgetEntries(entries)
-		a.captureMenuFocus()
-		menu := ui.NewContextMenuWidget(items, x, y)
-		menu.Borders = a.Borders
-		menu.Icons = a.Settings.Appearance.Icons
-		menu.OnExec = func(cmd string) {
-			a.Root.PopOverlay()
-			a.restoreMenuFocus()
-			onCommand(cmd)
-		}
-		menu.OnDismiss = func() {
-			a.Root.PopOverlay()
-			a.restoreMenuFocus()
-		}
-		a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
-		a.Root.SetFocus(menu)
-	}
+	p.ShowContextMenu = a.showWidgetMenu
 
 	p.OpenDrawer = func(panel *plugin.PluginPanelWidget, width, minWidth int, side string) {
 		a.ClosePluginDrawer()
@@ -1053,22 +1036,7 @@ func (a *App) HandleRemoteRegistryResult(result *RemoteRegistryResult) {
 }
 
 func (a *App) ShowPluginDropdownMenu(entries []widgets.MenuEntry, x, y int) {
-	items := contextMenuItemsFromWidgetEntries(entries)
-	a.captureMenuFocus()
-	menu := ui.NewContextMenuWidget(items, x, y)
-	menu.Borders = a.Borders
-	menu.Icons = a.Settings.Appearance.Icons
-	menu.OnExec = func(cmd string) {
-		a.Root.PopOverlay()
-		a.restoreMenuFocus()
-		a.handlePluginDropdownCommand(cmd)
-	}
-	menu.OnDismiss = func() {
-		a.Root.PopOverlay()
-		a.restoreMenuFocus()
-	}
-	a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
-	a.Root.SetFocus(menu)
+	a.showWidgetMenu(entries, x, y, a.handlePluginDropdownCommand)
 }
 
 func contextMenuItemFromWidgetEntry(entry widgets.MenuEntry) ui.ContextMenuItem {
@@ -1420,4 +1388,23 @@ func (a *App) simulatePluginText(text string, allowed func() bool) error {
 
 func (a *App) acceptsPluginInput() bool {
 	return len(a.PendingPluginApprovals) == 0
+}
+
+func (a *App) showWidgetMenu(entries []widgets.MenuEntry, x, y int, onCommand func(string)) {
+	items := contextMenuItemsFromWidgetEntries(entries)
+	a.captureMenuFocus()
+	menu := ui.NewContextMenuWidget(items, x, y)
+	menu.Borders = a.Borders
+	menu.Icons = a.Settings.Appearance.Icons
+	menu.OnExec = func(cmd string) {
+		a.Root.PopOverlay()
+		a.restoreMenuFocus()
+		onCommand(cmd)
+	}
+	menu.OnDismiss = func() {
+		a.Root.PopOverlay()
+		a.restoreMenuFocus()
+	}
+	a.Root.PushOverlay(ui.Overlay{Widget: menu, Modal: true})
+	a.Root.SetFocus(menu)
 }

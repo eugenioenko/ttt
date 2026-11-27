@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
@@ -16,7 +17,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -27,7 +28,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			hit := false
-			err := run.launch(ctx, cmd, "fixture", nil, func(_ string, line int) { hit = line == 7; cancel() })
+			err := run.launch(ctx, cmd, "fixture", nil, func(*dap.Session) {}, func(_ int, frames []debugFrame) { hit = len(frames) > 0 && frames[0].Line == 7; cancel() }, func() {})
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}
@@ -79,7 +80,7 @@ func simulateConfiguringAdapter(mode string) {
 	}
 	reply(launch, nil)
 	body := map[string]any{"allThreadsStopped": true}
-	if mode == "configuration-done" {
+	if mode != "filters-only" {
 		body["threadId"] = 0
 	}
 	send(map[string]any{"type": "event", "event": "stopped", "body": body})
@@ -92,6 +93,12 @@ func simulateConfiguringAdapter(mode string) {
 	var trace struct{ ThreadID *int }
 	if json.Unmarshal(stack.Arguments, &trace) != nil || trace.ThreadID == nil || *trace.ThreadID != id {
 		fail()
+	}
+	if mode == "superseded" {
+		send(map[string]string{"type": "event", "event": "continued"})
+		send(map[string]any{"type": "response", "request_seq": stack.Seq, "success": false, "message": "already running"})
+		send(map[string]any{"type": "event", "event": "stopped", "body": body})
+		stack = read("stackTrace")
 	}
 	reply(stack, map[string]any{"stackFrames": []any{map[string]any{"line": 7, "source": map[string]string{"path": "main.c"}}}})
 	reply(read("disconnect"), nil)

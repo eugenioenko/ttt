@@ -20,7 +20,7 @@ func TestGenericFileLaunchRecipe(t *testing.T) {
 	if err != nil || !reflect.DeepEqual(args, want) {
 		t.Fatalf("got %v, %v", args, err)
 	}
-	target.file = ""
+	target.File = ""
 	saved, err := a.Arguments(target)
 	if err != nil || saved["args"].([]any)[0] != "${file}" {
 		t.Fatal("saved target unexpectedly expanded file placeholder")

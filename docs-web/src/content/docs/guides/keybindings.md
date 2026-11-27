@@ -160,7 +160,10 @@ Panel taller and Panel shorter remain available in the command palette and can b
 
 | Shortcut | Action |
 |----------|--------|
-| F10 / Alt+F | File menu |
+| F10 | Debug step over |
+| F11 | Debug step into |
+| Shift+F11 | Debug step out |
+| Alt+F | File menu |
 | Alt+E | Edit menu |
 | Alt+S | Selection menu |
 | Alt+V | View menu |

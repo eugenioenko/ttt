@@ -15,6 +15,14 @@ import (
 )
 
 type debugRun struct {
+	ctx            context.Context
+	session        *dap.Session
+	thread         *int
+	lastThread     *int
+	generation     uint64
+	busy, stepping bool
+
+	file      string
 	folder    string
 	languages []string
 	points    chan map[string][]int
@@ -22,17 +30,28 @@ type debugRun struct {
 	cancel    context.CancelFunc
 }
 
-func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, args map[string]any, stopped func(string, int)) error {
+func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame), resumed func()) error {
 	initial := <-r.points
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
-	stops := make(chan *int, 1)
+	type stopEvent struct {
+		threadID   *int
+		generation uint64
+	}
+	var eventMu sync.Mutex
+	var generation uint64
+	stops := make(chan stopEvent, 1)
 	session, err := dap.StartStdio(cmd, func(e dap.Event) {
 		switch e.Name {
 		case "initialized":
 			initOnce.Do(func() { close(initSignal) })
 		case "terminated":
 			endOnce.Do(func() { close(terminated) })
+		case "continued":
+			eventMu.Lock()
+			generation++
+			resumed()
+			eventMu.Unlock()
 		case "stopped":
 			var body struct{ ThreadID *int }
 			if json.Unmarshal(e.Body, &body) == nil {
@@ -40,7 +59,10 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 				case <-stops:
 				default:
 				}
-				stops <- body.ThreadID
+				eventMu.Lock()
+				generation++
+				stops <- stopEvent{body.ThreadID, generation}
+				eventMu.Unlock()
 			}
 		}
 	})
@@ -113,6 +135,7 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 		}
 	}
 	cancel()
+	ready(session)
 	for {
 		select {
 		case <-ctx.Done():
@@ -134,54 +157,59 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 				return err
 			}
 			sent = next
-		case id := <-stops:
+		case event := <-stops:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
-			path, line, err := stoppedLocation(request, session, id)
+			tid, frames, err := stoppedFrames(request, session, event.threadID)
 			finish()
+			// Keep the freshness check and UI delivery ordered against a concurrent resume.
+			eventMu.Lock()
+			if generation != event.generation {
+				eventMu.Unlock()
+				continue
+			}
 			if err != nil {
+				eventMu.Unlock()
 				return err
 			}
-			if path != "" && line > 0 {
-				if !filepath.IsAbs(path) {
-					path = filepath.Join(r.folder, path)
+			if tid != nil {
+				for i := range frames {
+					p := frames[i].Source.Path
+					if p != "" && !filepath.IsAbs(p) {
+						frames[i].Source.Path = filepath.Join(r.folder, p)
+					}
 				}
-				stopped(filepath.Clean(path), line)
+				stopped(*tid, frames)
 			}
+			eventMu.Unlock()
 		}
 	}
 }
 
-func stoppedLocation(ctx context.Context, session *dap.Session, id *int) (string, int, error) {
+func stoppedFrames(ctx context.Context, session *dap.Session, id *int) (*int, []debugFrame, error) {
 	var threads struct{ Threads []struct{ ID int } }
 	if id == nil {
 		if err := session.Call(ctx, "threads", nil, &threads); err != nil {
-			return "", 0, err
+			return nil, nil, err
 		}
 	} else {
 		threads.Threads = append(threads.Threads, struct{ ID int }{*id})
 	}
 	for _, thread := range threads.Threads {
 		var trace struct {
-			StackFrames []struct {
-				Line   int
-				Source struct{ Path string }
-			}
+			StackFrames []debugFrame
 		}
-		err := session.Call(ctx, "stackTrace", map[string]int{"threadId": thread.ID, "levels": 1}, &trace)
+		err := session.Call(ctx, "stackTrace", map[string]int{"threadId": thread.ID, "levels": 50}, &trace)
 		if err != nil {
 			if id != nil || ctx.Err() != nil {
-				return "", 0, err
+				return nil, nil, err
 			}
 			continue
 		}
-		if len(trace.StackFrames) > 0 {
-			f := trace.StackFrames[0]
-			if f.Source.Path != "" && f.Line > 0 {
-				return f.Source.Path, f.Line, nil
-			}
+		if id != nil || len(trace.StackFrames) > 0 {
+			return &thread.ID, trace.StackFrames, nil
 		}
 	}
-	return "", 0, nil
+	return nil, nil, nil
 }
 
 func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string][]int) error {
@@ -206,4 +234,64 @@ func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string]
 		}
 	}
 	return nil
+}
+
+func (a *App) DebugPause()    { a.debugControl("pause") }
+func (a *App) DebugContinue() { a.debugControl("continue") }
+func (a *App) DebugStepOver() { a.debugControl("next") }
+func (a *App) DebugStepIn()   { a.debugControl("stepIn") }
+func (a *App) DebugStepOut()  { a.debugControl("stepOut") }
+func (a *App) debugControl(cmd string) {
+	r := a.debugger.run
+	if r == nil || r.session == nil || r.busy || (cmd == "pause") != (r.thread == nil) {
+		return
+	}
+	if r.stepping && cmd != "pause" {
+		return
+	}
+	if cmd == "next" || cmd == "stepIn" || cmd == "stepOut" {
+		r.stepping = true
+	}
+	r.busy = true
+	a.refreshDebugControls()
+	generation := r.generation
+	tid := r.thread
+	if tid == nil {
+		tid = r.lastThread
+	}
+	post := a.tasks.post
+	go func() {
+		ctx, cancel := context.WithTimeout(r.ctx, 10*time.Second)
+		defer cancel()
+		var err error
+		if tid == nil {
+			var result struct{ Threads []struct{ ID int } }
+			err = r.session.Call(ctx, "threads", nil, &result)
+			if err == nil && len(result.Threads) > 0 {
+				tid = &result.Threads[0].ID
+			}
+		}
+		if err == nil && tid != nil {
+			err = r.session.Call(ctx, cmd, map[string]int{"threadId": *tid}, nil)
+		}
+
+		_ = post(func() {
+			if a.debugger.run != r || r.ctx.Err() != nil || r.generation != generation {
+				return
+			}
+			r.busy = false
+			a.refreshDebugControls()
+			if err != nil {
+				if cmd != "pause" {
+					r.stepping = false
+				}
+				a.StatusError(err.Error())
+				return
+			}
+			if cmd != "pause" {
+				r.generation++
+				a.debugResumed(r)
+			}
+		})
+	}()
 }

@@ -222,6 +222,7 @@ func (a *App) FocusEditorIfEnabled() {
 }
 
 func (a *App) refreshWorkspaceWidgets() {
+	a.refreshDebugConfiguration()
 	a.updateEditorSessionWorkspace()
 	paths := a.Workspace.Paths()
 	a.RememberRecentFolders()
@@ -354,7 +355,6 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 			a.PluginManager.DispatchEvent("bookmark.change", path, line+1, action, string(icon), plugin.NameByStyle(style))
 		}
 	}
-	a.wireDebuggerGutter(a.EditorGroup)
 
 	lspManager.OnLog = func(server, level, message string) {
 		a.LogOutputAsync(level, "lsp:"+server, message)

@@ -135,6 +135,7 @@ func (a *App) ApplySettings(s config.Settings) {
 		a.language.updates.Stop()
 	}
 	*a.Settings = s
+	a.refreshDebugControls()
 	a.Root.SetControlModifiers(controlModifiers(s.Keyboard.ModifierKey))
 	if prev.Terminal.ForwardShortcuts != s.Terminal.ForwardShortcuts {
 		a.Root.SetForwardShortcuts(s.Terminal.ForwardShortcuts)

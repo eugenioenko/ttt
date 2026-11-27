@@ -39,7 +39,7 @@ type Target struct {
 	Type      string
 	Request   string
 	Folder    string
-	file      string
+	File      string
 	Arguments map[string]any
 }
 
@@ -95,7 +95,7 @@ func (a Adapter) FileTarget(folder, file, name string) (Target, bool) {
 			break
 		}
 	}
-	return Target{Name: filepath.Base(file), Folder: folder, Type: name, Request: "launch", file: file, Arguments: args}, true
+	return Target{Name: filepath.Base(file), Folder: folder, Type: name, Request: "launch", File: file, Arguments: args}, true
 }
 
 func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string, error) {
@@ -141,10 +141,10 @@ func (t Target) expand(value any) (any, error) {
 			return nil, fmt.Errorf("unsupported substitution in %q", v)
 		}
 		var s string
-		if t.file == "" {
+		if t.File == "" {
 			s = strings.ReplaceAll(v, "${workspaceFolder}", t.Folder)
 		} else {
-			s = strings.NewReplacer("${file}", t.file, "${fileDirname}", filepath.Dir(t.file), "${workspaceFolder}", t.Folder).Replace(v)
+			s = strings.NewReplacer("${file}", t.File, "${fileDirname}", filepath.Dir(t.File), "${workspaceFolder}", t.Folder).Replace(v)
 		}
 		return s, nil
 	case []any:
