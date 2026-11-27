@@ -853,6 +853,7 @@
   "debug.stepOverButton": "Step Over",
   "debug.stopButton": "Stop",
   "debug.variables": "Variables",
+  "debug.startOrContinue": "Debug: Start or Continue",
   "debug.start": "Start Debugging",
   "debug.stop": "Stop Debugging",
   "debug.toggleBreakpoint": "Toggle Breakpoint",

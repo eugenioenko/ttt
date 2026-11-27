@@ -59,6 +59,7 @@ func registerDebuggerCommands(a *App) {
 	a.Reg.Register(command.Command{ID: "sidebar.debug", Title: i18n.Text("command.showDebug"), Handler: func() { a.ShowPanel("debug", a.debugger.panel.adapter) }})
 	a.Reg.Register(command.Command{ID: "debug.configure", Title: i18n.Text("debug.createConfiguration"), Handler: a.configureDebugger})
 
+	a.Reg.Register(command.Command{ID: "debug.startOrContinue", Title: i18n.Text("debug.startOrContinue"), Handler: a.startOrContinueDebugging})
 	a.Reg.Register(command.Command{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging})
 	a.Reg.Register(command.Command{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger})
 	a.Reg.Register(command.Command{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging})
@@ -189,6 +190,14 @@ func (a *App) DetachDebugger() {
 		r.cancel()
 	}
 }
+func (a *App) startOrContinueDebugging() {
+	if a.debugger.run == nil {
+		a.StartDebugging()
+		return
+	}
+	a.DebugContinue()
+}
+
 func (a *App) StartDebugging() {
 	if a.debugger.run != nil || a.Root.HasModalOverlay() {
 		return

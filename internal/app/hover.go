@@ -122,7 +122,16 @@ func (a *App) TrackMouseHover(ev *tcell.EventMouse) {
 				a.ensureHoverTask()
 				a.hover.button = b
 				label := b.Config.Label
-				if key := a.KeyFor(b.Config.Command); key != "" {
+				key := a.KeyFor(b.Config.Command)
+				if key == "" {
+					switch b.Config.Command {
+					case "debug.continue":
+						key = a.KeyFor("debug.startOrContinue")
+					case "debug.detach":
+						key = a.KeyFor("debug.stop")
+					}
+				}
+				if key != "" {
 					label += " (" + key + ")"
 				}
 				a.hover.task.ScheduleKey(b, func(context.Context) (string, error) { return escapeMarkdown(label), nil }, func(text string, err error) {
