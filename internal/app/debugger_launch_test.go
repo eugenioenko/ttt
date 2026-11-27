@@ -28,7 +28,9 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			hit := false
-			err := run.launch(ctx, cmd, "fixture", nil, func(*dap.Session) {}, func(_ int, frames []debugFrame) { hit = len(frames) > 0 && frames[0].Line == 7; cancel() }, func() {})
+			err := run.runSession(ctx, func(_ context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
+				return dap.StartStdio(cmd, onEvent)
+			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(*dap.Session) {}, func(_ int, frames []debugFrame) { hit = len(frames) > 0 && frames[0].Line == 7; cancel() }, func() {})
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}

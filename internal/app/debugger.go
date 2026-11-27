@@ -2,11 +2,14 @@ package app
 
 import (
 	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"sync"
+	"time"
 
+	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/highlight"
@@ -18,6 +21,7 @@ import (
 )
 
 type debuggerState struct {
+	picker *asynctask.Task[[]dap.Process]
 	panel  debugSidebar
 	points map[string][]int
 	run    *debugRun
@@ -37,6 +41,7 @@ func registerDebuggerCommands(a *App) {
 	a.Reg.Register(command.Command{ID: "debug.configure", Title: i18n.Text("debug.createConfiguration"), Handler: a.configureDebugger})
 
 	a.Reg.Register(command.Command{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging})
+	a.Reg.Register(command.Command{ID: "debug.detach", Title: i18n.Text("debug.detach"), Handler: a.DetachDebugger})
 	a.Reg.Register(command.Command{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging})
 	a.Reg.Register(command.Command{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint})
 }
@@ -129,13 +134,24 @@ func (a *App) queueDebugPoints(r *debugRun) {
 }
 
 func (a *App) StopDebugging() {
+	if a.debugger.picker != nil {
+		a.debugger.picker.Stop()
+	}
 	if r := a.debugger.run; r != nil {
+		r.cancel()
+	}
+}
+func (a *App) DetachDebugger() {
+	if r := a.debugger.run; r != nil && r.attached {
 		r.cancel()
 	}
 }
 func (a *App) StartDebugging() {
 	if a.debugger.run != nil || a.Root.HasModalOverlay() {
 		return
+	}
+	if a.debugger.picker != nil {
+		a.debugger.picker.Stop()
 	}
 	for _, g := range a.editorGroups() {
 		for _, folder := range a.Workspace.Folders {
@@ -188,7 +204,7 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		a.StatusError(err.Error())
 		return
 	}
-	if t.Request != "launch" || adapter.Provider != "generic" || (adapter.Transport != "" && adapter.Transport != "stdio") {
+	if adapter.Provider != "generic" || (adapter.Transport != "" && adapter.Transport != "stdio" && adapter.Transport != "tcp") {
 		a.StatusError(i18n.Text("debug.unsupportedLaunch"))
 		return
 	}
@@ -197,10 +213,13 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		a.StatusError(err.Error())
 		return
 	}
-	cmd, err := adapter.Process(t.Folder)
-	if err != nil {
-		a.StatusError(err.Error())
-		return
+	if t.Request == "attach" {
+		for _, key := range []string{"pid", "processId"} {
+			if args[key] == "${command:pickProcess}" {
+				a.pickDebugProcess(t, key)
+				return
+			}
+		}
 	}
 	for _, g := range a.editorGroups() {
 		for _, path := range g.OpenFilePaths() {
@@ -213,8 +232,11 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 			}
 		}
 	}
+	if a.debugger.picker != nil {
+		a.debugger.picker.Stop()
+	}
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &debugRun{ctx: ctx, cancel: cancel, folder: t.Folder, file: t.File, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
+	r := &debugRun{ctx: ctx, cancel: cancel, attached: t.Request == "attach", folder: t.Folder, file: t.File, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
 	a.debugger.run = r
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()
@@ -246,7 +268,9 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 
 	go func() {
 		defer close(r.closed)
-		err := r.launch(ctx, cmd, t.Type, args, func(session *dap.Session) { deliver(func() { r.session = session; a.refreshDebugControls() }) }, func(tid int, frames []debugFrame) {
+		err := r.runSession(ctx, func(ctx context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
+			return adapter.Open(ctx, t.Folder, onEvent)
+		}, t, args, func(session *dap.Session) { deliver(func() { r.session = session; a.refreshDebugControls() }) }, func(tid int, frames []debugFrame) {
 			deliver(func() {
 				a.showDebugStop(r, tid, frames)
 			})
@@ -282,4 +306,37 @@ func (a *App) clearDebugBreakpoints() {
 		a.queueDebugPoints(r)
 	}
 	a.refreshDebugPanel()
+}
+
+func (a *App) pickDebugProcess(t dap.Target, key string) {
+	if a.debugger.picker == nil {
+		a.debugger.picker = NewTask[[]dap.Process](a, asynctask.TaskOptions{})
+	}
+	a.debugger.picker.Schedule(func(ctx context.Context) ([]dap.Process, error) {
+		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		defer cancel()
+		return dap.Processes(ctx)
+	}, func(processes []dap.Process, err error) {
+		if a.debugger.run != nil || a.Root.HasModalOverlay() {
+			return
+		}
+		if err != nil {
+			a.StatusError(err.Error())
+			return
+		}
+		items := make([]widgets.SelectItem, 0, len(processes))
+		for _, p := range processes {
+			id := strconv.Itoa(p.PID)
+			items = append(items, widgets.SelectItem{ID: id, Label: id + "  " + p.Name})
+		}
+		a.ShowSelectDialog(i18n.Text("debug.pickProcess"), items, func(id string) {
+			pid, err := strconv.Atoi(id)
+			if err != nil {
+				return
+			}
+			t.Arguments = maps.Clone(t.Arguments)
+			t.Arguments[key] = pid
+			a.prepareDebugTarget(t)
+		}, nil)
+	})
 }

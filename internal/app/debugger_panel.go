@@ -110,8 +110,8 @@ func debugSectionSplit(top, bottom ui.Widget, ratio float64, minTop int) *ui.Con
 }
 
 type debugControlState struct {
-	active, paused, ready, fileReady bool
-	idle                             debugIdleAction
+	active, paused, ready, fileReady, attached bool
+	idle                                       debugIdleAction
 }
 
 func (a *App) refreshDebugControls() {
@@ -121,7 +121,7 @@ func (a *App) refreshDebugControls() {
 	}
 	state := debugControlState{idle: p.idle}
 	if r := a.debugger.run; r != nil {
-		state = debugControlState{active: true, paused: r.thread != nil, ready: r.session != nil && !r.busy}
+		state = debugControlState{active: true, attached: r.attached, paused: r.thread != nil, ready: r.session != nil && !r.busy}
 	} else {
 		_, state.fileReady = a.currentFileDebugTarget()
 	}
@@ -149,7 +149,11 @@ func (a *App) refreshDebugControls() {
 		} else {
 			button("debug.pause", i18n.Text("debug.pauseButton"), icons.DebugPause, state.ready)
 		}
-		button("debug.stop", i18n.Text("debug.stopButton"), icons.DebugStop, true)
+		if state.attached {
+			button("debug.detach", i18n.Text("debug.detachButton"), icons.DebugDetach, true)
+		} else {
+			button("debug.stop", i18n.Text("debug.stopButton"), icons.DebugStop, true)
+		}
 	}
 	if p.adapter != nil {
 		p.adapter.RebuildFocus()
