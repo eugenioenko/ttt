@@ -20,9 +20,10 @@ type debugThread struct {
 }
 
 type debugRun struct {
-	threads    []debugThread
-	bindings   map[string]map[int]debugBinding
-	onBindings func(string, []int, []debugBinding)
+	resumeControl func(context.Context, *dap.Session, string, int) error
+	threads       []debugThread
+	bindings      map[string]map[int]debugBinding
+	onBindings    func(string, []int, []debugBinding)
 
 	output         map[string]string
 	terminalIDs    []string
@@ -72,6 +73,41 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		stops <- stopEvent{all, id, gen}
 	}
 
+	applyContinuation := func(tid *int, all *bool) {
+		generation++
+		if tid != nil && all != nil && !*all {
+			pausedIDs = slices.DeleteFunc(pausedIDs, func(id int) bool { return id == *tid })
+		} else {
+			pausedIDs = nil
+		}
+		if len(pausedIDs) > 0 {
+			id := pausedIDs[0]
+			if pausedThread != nil && slices.Contains(pausedIDs, *pausedThread) {
+				id = *pausedThread
+			}
+			pausedThread = &id
+			queueStop(false, &id, generation)
+		} else {
+			paused = false
+			resumed()
+		}
+	}
+	r.resumeControl = func(request context.Context, s *dap.Session, cmd string, id int) error {
+		eventMu.Lock()
+		before := generation
+		eventMu.Unlock()
+		return s.CallWithResponse(request, cmd, map[string]int{"threadId": id}, func(raw json.RawMessage) {
+			var result struct{ AllThreadsContinued *bool }
+			if len(raw) > 0 {
+				_ = json.Unmarshal(raw, &result)
+			}
+			eventMu.Lock()
+			defer eventMu.Unlock()
+			if generation == before {
+				applyContinuation(&id, result.AllThreadsContinued)
+			}
+		})
+	}
 	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	session, err := open(startup, func(e dap.Event) {
@@ -82,28 +118,12 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			endOnce.Do(func() { close(terminated) })
 		case "continued":
 			eventMu.Lock()
-			generation++
 			var body struct {
 				ThreadID            *int
-				AllThreadsContinued bool
+				AllThreadsContinued *bool
 			}
 			_ = json.Unmarshal(e.Body, &body)
-			if body.ThreadID != nil && !body.AllThreadsContinued {
-				pausedIDs = slices.DeleteFunc(pausedIDs, func(id int) bool { return id == *body.ThreadID })
-			} else {
-				pausedIDs = nil
-			}
-			if len(pausedIDs) > 0 {
-				id := pausedIDs[0]
-				if pausedThread != nil && slices.Contains(pausedIDs, *pausedThread) {
-					id = *pausedThread
-				}
-				pausedThread = &id
-				queueStop(false, &id, generation)
-			} else {
-				paused = false
-				resumed()
-			}
+			applyContinuation(body.ThreadID, body.AllThreadsContinued)
 			eventMu.Unlock()
 		case "stopped":
 			var body struct {
@@ -390,7 +410,11 @@ func (a *App) debugControl(cmd string) {
 			}
 		}
 		if err == nil && tid != nil {
-			err = r.session.Call(ctx, cmd, map[string]int{"threadId": *tid}, nil)
+			if cmd == "pause" {
+				err = r.session.Call(ctx, cmd, map[string]int{"threadId": *tid}, nil)
+			} else {
+				err = r.resumeControl(ctx, r.session, cmd, *tid)
+			}
 		}
 
 		_ = post(func() {
@@ -406,14 +430,7 @@ func (a *App) debugControl(cmd string) {
 				a.StatusError(err.Error())
 				return
 			}
-			if cmd != "pause" {
-				r.generation++
-				if a.activeDebugPeer() == r {
-					a.debugResumed(r)
-				} else {
-					r.thread = nil
-				}
-			}
+
 		})
 	}()
 }

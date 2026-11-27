@@ -28,6 +28,11 @@ type Event struct {
 	Body json.RawMessage
 }
 
+type pendingCall struct {
+	reply     chan packet
+	onSuccess func(json.RawMessage)
+}
+
 type Session struct {
 	options        SessionOptions
 	cleanupMu      sync.Mutex
@@ -44,7 +49,7 @@ type Session struct {
 	writer         chan struct{}
 	seq            int
 	mu             sync.Mutex
-	pending        map[int]chan packet
+	pending        map[int]pendingCall
 }
 
 // NewSession takes ownership of the stream. Closing it must interrupt both reads
@@ -56,7 +61,7 @@ func NewSession(stream io.ReadWriteCloser, onEvent func(Event)) *Session {
 func newSession(r io.Reader, w io.Writer, closeTransport func(), onEvent func(Event), options SessionOptions) *Session {
 	ctx, cancel := context.WithCancel(context.Background())
 	s := &Session{options: options, reverseCtx: ctx, cancelReverse: cancel, codec: jsonrpc.NewCodec(r, w), closeTransport: closeTransport, onEvent: onEvent,
-		done: make(chan struct{}), writer: make(chan struct{}, 1), pending: make(map[int]chan packet)}
+		done: make(chan struct{}), writer: make(chan struct{}, 1), pending: make(map[int]pendingCall)}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
 	return s
@@ -111,11 +116,15 @@ func (s *Session) read() {
 		switch p.Type {
 		case "response":
 			s.mu.Lock()
-			if reply := s.pending[p.RequestSeq]; reply != nil {
-				reply <- p
-				delete(s.pending, p.RequestSeq)
-			}
+			call, ok := s.pending[p.RequestSeq]
+			delete(s.pending, p.RequestSeq)
 			s.mu.Unlock()
+			if ok {
+				if p.Success && call.onSuccess != nil {
+					call.onSuccess(p.Body)
+				}
+				call.reply <- p
+			}
 		case "event":
 			if s.onEvent != nil {
 				s.onEvent(Event{Name: p.Event, Body: p.Body})
@@ -165,6 +174,16 @@ func (s *Session) write(ctx context.Context, message func(int) any) error {
 }
 
 func (s *Session) Call(ctx context.Context, command string, args, out any) error {
+	return s.call(ctx, command, args, out, nil)
+}
+
+// CallWithResponse handles a successful response on the reader before subsequent events.
+// The callback must not wait for another packet.
+func (s *Session) CallWithResponse(ctx context.Context, command string, args any, onSuccess func(json.RawMessage)) error {
+	return s.call(ctx, command, args, nil, onSuccess)
+}
+
+func (s *Session) call(ctx context.Context, command string, args, out any, onSuccess func(json.RawMessage)) error {
 	var arguments json.RawMessage
 	if args != nil {
 		var err error
@@ -178,7 +197,7 @@ func (s *Session) Call(ctx context.Context, command string, args, out any) error
 	err := s.write(ctx, func(seq int) any {
 		id = seq
 		s.mu.Lock()
-		s.pending[id] = reply
+		s.pending[id] = pendingCall{reply, onSuccess}
 		s.mu.Unlock()
 		return struct {
 			Type      string          `json:"type"`

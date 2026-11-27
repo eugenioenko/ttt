@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,7 +18,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -28,9 +29,28 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			hit := false
+			var session *dap.Session
+			continued := false
 			err := run.runSession(ctx, func(_ context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
 				return dap.StartStdio(cmd, onEvent, nil)
-			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(*dap.Session) {}, func(id int, frames []debugFrame, threads []debugThread) {
+			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(s *dap.Session) { session = s }, func(id int, frames []debugFrame, threads []debugThread) {
+				if strings.HasPrefix(mode, "continue-") {
+					if !continued {
+						if len(threads) != 2 {
+							return
+						}
+						continued = true
+						go func() { _ = run.resumeControl(ctx, session, "continue", id) }()
+						return
+					}
+					want := 3
+					if mode == "continue-partial" {
+						want = 0
+					}
+					if id != want || len(threads) != 1 {
+						return
+					}
+				}
 				if mode == "individual" && (id != 2 || len(threads) != 2) {
 					return
 				}
@@ -91,7 +111,7 @@ func simulateConfiguringAdapter(mode string) {
 	if mode != "filters-only" {
 		body["threadId"] = 0
 	}
-	if mode == "individual" {
+	if mode == "individual" || strings.HasPrefix(mode, "continue-") {
 		body["allThreadsStopped"] = false
 	}
 	send(map[string]any{"type": "event", "event": "stopped", "body": body})
@@ -105,7 +125,7 @@ func simulateConfiguringAdapter(mode string) {
 	if json.Unmarshal(stack.Arguments, &trace) != nil || trace.ThreadID == nil || *trace.ThreadID != id {
 		fail()
 	}
-	if mode == "individual" {
+	if mode == "individual" || strings.HasPrefix(mode, "continue-") {
 		body["threadId"] = 2
 		send(map[string]any{"type": "event", "event": "stopped", "body": body})
 		reply(stack, nil)
@@ -118,7 +138,22 @@ func simulateConfiguringAdapter(mode string) {
 		stack = read("stackTrace")
 	}
 	reply(stack, map[string]any{"stackFrames": []any{map[string]any{"line": 7, "source": map[string]string{"path": "main.c"}}}})
-	if mode != "individual" {
+	if strings.HasPrefix(mode, "continue-") {
+		control := read("continue")
+		switch mode {
+		case "continue-event":
+			send(map[string]any{"type": "event", "event": "continued", "body": map[string]int{"threadId": 2}})
+			reply(control, nil)
+		case "continue-partial":
+			reply(control, map[string]bool{"allThreadsContinued": false})
+		default:
+			reply(control, nil)
+		}
+		if mode != "continue-partial" {
+			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
+		}
+		reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})
+	} else if mode != "individual" {
 		reply(read("threads"), map[string]any{"threads": []any{map[string]int{"id": id}}})
 	}
 	reply(read("disconnect"), nil)
