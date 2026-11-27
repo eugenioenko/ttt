@@ -233,6 +233,19 @@ func TestTerminalWidget_CtrlVPastes(t *testing.T) {
 			}
 		}
 	}
+
+	t.Run("no text in clipboard", func(t *testing.T) {
+		tw.CtrlVPastes = true
+		clipboard.Set("")
+		before := len(term.RawTail())
+		if got := tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlV, "", tcell.ModCtrl)); got != EventConsumed {
+			t.Fatalf("HandleEvent = %v, want EventConsumed", got)
+		}
+		waitFor(t, updated, func() bool { return len(term.RawTail()) > before })
+		if got := string(term.RawTail()[before:]); got != "\x16" {
+			t.Errorf("PTY received %q, want Ctrl+V so the program can read a clipboard image", got)
+		}
+	})
 }
 
 func TestTerminalWidget_SuperClipboard(t *testing.T) {
@@ -292,12 +305,14 @@ func TestTerminalWidget_SuperClipboard(t *testing.T) {
 		}
 	}
 	before := len(dev.RawTail())
+	clipboard.Set("")
+	tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "v", tcell.ModMeta))
 	tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, "c", tcell.ModMeta))
 	tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlC, "", tcell.ModCtrl))
 	tw.HandleEvent(tcell.NewEventKey(tcell.KeyCtrlZ, "", tcell.ModCtrl))
 	tw.HandleEvent(tcell.NewEventKey(tcell.KeyRune, ".", 0))
 	waitFor(t, updated, func() bool { return len(dev.RawTail()) > before && strings.HasSuffix(string(dev.RawTail()), ".") })
 	if got := string(dev.RawTail()[before:]); got != "\x03\x1a." {
-		t.Fatalf("copy without selection and shell controls: PTY received %q, want %q", got, "\x03\x1a.")
+		t.Fatalf("empty Command paste, Command copy without selection, and shell controls: PTY received %q, want %q", got, "\x03\x1a.")
 	}
 }

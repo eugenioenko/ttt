@@ -526,13 +526,15 @@ func (tw *TerminalWidget) HandleEvent(ev tcell.Event) EventResult {
 		isPaste := (tev.Key() == tcell.KeyCtrlV) ||
 			(tev.Key() == tcell.KeyRune && (r == 'v' || r == 'V') && (tev.Modifiers()&tcell.ModCtrl != 0 || super))
 		if isPaste && (super || tw.CtrlVPastes || tev.Modifiers()&tcell.ModShift != 0) {
-			text := clipboard.Get()
-			if text != "" {
+			if text := clipboard.Get(); text != "" {
 				tw.PasteText(text)
-			} else {
-				tw.ClearSelection()
+				return EventConsumed
 			}
-			return EventConsumed
+			if super {
+				tw.ClearSelection()
+				return EventConsumed
+			}
+			// Forward Ctrl+V so the program can read an image itself.
 		}
 
 		tw.ClearSelection()
