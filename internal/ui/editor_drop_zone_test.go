@@ -182,3 +182,66 @@ func TestEditorLayoutSplitGroupAt(t *testing.T) {
 		})
 	}
 }
+
+func TestDropPreviewBordersDoNotOverlapFullwidthGlyphs(t *testing.T) {
+	const w, h, row = 40, 6, 2
+	tests := []struct {
+		name   string
+		zone   EditorDropZone
+		glyphX int
+		border int
+	}{
+		{"spans right border", EditorDropLeft, 18, 19},
+		{"starts on left border", EditorDropRight, 20, 20},
+		{"ends on left border", EditorDropRight, 19, 20},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			pr := DropPreviewRect(w, h, tc.zone)
+			if tc.border != pr.X && tc.border != pr.X+pr.W-1 {
+				t.Fatalf("column %d is not a vertical border of %+v", tc.border, pr)
+			}
+			cells := makeGrid(w, h)
+			cells[row][tc.glyphX] = term.Cell{Ch: '界', Style: term.StyleDefault}
+			cells[row][tc.glyphX+1] = term.Cell{}
+
+			group := NewEditorGroupWidget(nil, 4, true, "relative")
+			group.SetDropZone(tc.zone)
+			group.renderDropPreview(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: w, H: h}))
+
+			if got := cells[row][tc.border]; got.Ch != term.SingleBorderSet().Vertical {
+				t.Fatalf("border cell = %q, want the vertical border", got.Ch)
+			}
+			for x := 0; x < w; x++ {
+				if cells[row][x].Ch == '界' {
+					t.Fatalf("glyph still at column %d beside the border at %d", x, tc.border)
+				}
+			}
+			other := tc.glyphX
+			if other == tc.border {
+				other = tc.glyphX + 1
+			}
+			if got := cells[row][other]; got.Ch != ' ' {
+				t.Fatalf("column %d = %q, want a space where the glyph was", other, got.Ch)
+			}
+		})
+	}
+}
+
+func TestDropPreviewKeepsFullwidthGlyphsAwayFromBorders(t *testing.T) {
+	const w, h, row = 40, 6, 2
+	cells := makeGrid(w, h)
+	cells[row][5] = term.Cell{Ch: '界', Style: term.StyleDefault}
+	cells[row][6] = term.Cell{}
+
+	group := NewEditorGroupWidget(nil, 4, true, "relative")
+	group.SetDropZone(EditorDropLeft)
+	group.renderDropPreview(NewRenderSurface(cells, Rect{X: 0, Y: 0, W: w, H: h}))
+
+	if got := cells[row][5]; got.Ch != '界' || got.BgStyle != term.StyleHighlightStrong {
+		t.Fatalf("glyph inside the preview = %+v, want it kept and tinted", got)
+	}
+	if got := cells[row][6]; got.Ch != 0 {
+		t.Fatalf("continuation cell = %q, want it left empty", got.Ch)
+	}
+}
