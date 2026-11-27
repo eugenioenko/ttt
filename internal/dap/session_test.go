@@ -1,0 +1,187 @@
+package dap
+
+import (
+	"context"
+	"errors"
+	"io"
+	"net"
+	"os"
+	"os/exec"
+	"testing"
+	"time"
+
+	"github.com/eugenioenko/ttt/internal/jsonrpc"
+)
+
+type adapter struct {
+	t *testing.T
+	*jsonrpc.Codec
+	net.Conn
+}
+
+func pipeSession(t *testing.T, onEvent func(Event)) (*Session, adapter) {
+	t.Helper()
+	client, peer := net.Pipe()
+	if err := peer.SetDeadline(time.Now().Add(3 * time.Second)); err != nil {
+		t.Fatal(err)
+	}
+	s := NewSession(client, onEvent)
+	t.Cleanup(s.Close)
+	t.Cleanup(func() { _ = peer.Close() })
+	return s, adapter{t, jsonrpc.NewCodec(peer, peer), peer}
+}
+
+func (a adapter) receive() packet {
+	a.t.Helper()
+	var p packet
+	if err := a.ReceiveInto(&p); err != nil {
+		a.t.Fatal(err)
+	}
+	return p
+}
+
+func (a adapter) send(msg any) {
+	a.t.Helper()
+	if err := a.Send(msg); err != nil {
+		a.t.Fatal(err)
+	}
+}
+
+func (a adapter) reply(p packet) {
+	a.send(map[string]any{"type": "response", "request_seq": p.Seq, "success": true, "body": p.Command})
+}
+
+func TestInterleavedRepliesAndEvents(t *testing.T) {
+	events := make(chan Event, 1)
+	s, a := pipeSession(t, func(e Event) { events <- e })
+	results := make(chan error, 2)
+	for _, command := range []string{"threads", "scopes"} {
+		go func() {
+			var result string
+			err := s.Call(t.Context(), command, nil, &result)
+			if err == nil && result != command {
+				err = errors.New("wrong response: " + result)
+			}
+			results <- err
+		}()
+	}
+	first, second := a.receive(), a.receive()
+	if first.Seq != "1" || second.Seq != "2" {
+		t.Fatal(first, second)
+	}
+	a.reply(second)
+	a.send(map[string]any{"type": "event", "seq": "12", "event": "stopped", "body": map[string]int{"threadId": 1}})
+	a.reply(first)
+	_ = a.Close()
+	for range 2 {
+		if err := <-results; err != nil {
+			t.Fatal(err)
+		}
+	}
+	select {
+	case e := <-events:
+		if e.Name != "stopped" || string(e.Body) != `{"threadId":1}` {
+			t.Fatal(e)
+		}
+	default:
+		t.Fatal("missing event")
+	}
+}
+
+func TestCanceledRequestIgnoresLateResponse(t *testing.T) {
+	s, a := pipeSession(t, nil)
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- s.Call(ctx, "threads", nil, nil) }()
+	p := a.receive()
+	// Receiving the next request proves the first one has finished writing.
+	go func() { done <- s.Disconnect(t.Context(), false) }()
+	disconnect := a.receive()
+	if disconnect.Command != "disconnect" {
+		t.Fatal(disconnect)
+	}
+	cancel()
+	if err := <-done; !errors.Is(err, context.Canceled) {
+		t.Fatal(err)
+	}
+	a.reply(p)
+	a.reply(disconnect)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	<-s.Done()
+}
+
+func TestAdapterStopsReadingOrExits(t *testing.T) {
+	for _, blocked := range []bool{true, false} {
+		s, a := pipeSession(t, nil)
+		ctx, cancel := context.WithTimeout(t.Context(), 200*time.Millisecond)
+		done := make(chan error, 1)
+		go func() { done <- s.Call(ctx, "threads", nil, nil) }()
+		want := error(context.DeadlineExceeded)
+		if !blocked {
+			a.receive()
+			_ = a.Close()
+			want = io.EOF
+		}
+		if err := <-done; !errors.Is(err, want) {
+			t.Fatalf("blocked=%t: %v", blocked, err)
+		}
+		cancel()
+		<-s.Done()
+	}
+}
+
+func TestStdioAdapter(t *testing.T) {
+	if os.Getenv("TTT_TEST_DAP_CHILD") == "1" {
+		codec := jsonrpc.NewCodec(os.Stdin, os.Stdout)
+		var p packet
+		if codec.ReceiveInto(&p) != nil || p.Command != "disconnect" {
+			os.Exit(1)
+		}
+		if codec.Send(map[string]any{"type": "response", "request_seq": p.Seq, "success": true}) != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestStdioAdapter$")
+	cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CHILD=1", "GORACE=atexit_sleep_ms=0")
+	s, err := StartStdio(cmd, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(s.Close)
+	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
+	defer cancel()
+	if err := s.Disconnect(ctx, false); err != nil {
+		t.Fatal(err)
+	}
+	if !cmd.ProcessState.Success() {
+		t.Fatal(cmd.ProcessState)
+	}
+}
+
+func TestCloseReleasesPendingCalls(t *testing.T) {
+	s, a := pipeSession(t, nil)
+	done := make(chan error, 2)
+	for range 2 {
+		go func() { done <- s.Call(t.Context(), "threads", nil, nil) }()
+		a.receive()
+	}
+	s.Close()
+	for range 2 {
+		if err := <-done; !errors.Is(err, io.ErrClosedPipe) {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestUnsupportedAdapterRequest(t *testing.T) {
+	_, a := pipeSession(t, nil)
+	a.send(map[string]any{"type": "request", "seq": 19, "command": "runInTerminal"})
+	p := a.receive()
+	if p.Type != "response" || p.RequestSeq != 19 || p.Command != "runInTerminal" || p.Success || p.Message == "" {
+		t.Fatal(p)
+	}
+}
