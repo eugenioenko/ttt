@@ -125,6 +125,11 @@ type DiffEditorWidget struct {
 	fullChanges []buffer.Change
 	liveExpand  []int
 	liveHunk    *liveHunkAnchor
+
+	// leftBookmarks tracks the read-only base pane's bookmarks by the base
+	// file line they mark, so each rebuilt projection puts them back on the
+	// row that shows that line.
+	leftBookmarks map[int]Bookmark
 }
 
 type liveHunkAnchor struct {

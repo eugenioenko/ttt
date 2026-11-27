@@ -221,6 +221,61 @@ func TestEditableJumpBookmarkRevealsTargetInsideHiddenGap(t *testing.T) {
 	}
 }
 
+func baseRowForLine(d *DiffEditorWidget, line int) int {
+	for row, num := range d.leftBase.Nums {
+		if num == line {
+			return row
+		}
+	}
+	return -1
+}
+
+func TestEditableBasePaneBookmarksFollowBaseLines(t *testing.T) {
+	old, cur := gapFile()
+	f := newLiveDiffFixture(t, old, cur, DiffModeSplit, 100, 40)
+	f.render()
+	f.d.focusLeft = true
+	row := baseRowForLine(f.d, 15)
+	if row < 0 {
+		t.Fatal("base line 15 is not projected")
+	}
+	f.d.left.Cursor.Line = row
+	f.d.keyPane().ToggleBookmark()
+	if _, ok := f.d.left.GetBookmark(row); !ok {
+		t.Fatal("toggle did not bookmark the base pane row")
+	}
+
+	f.d.expandContextGap(0)
+
+	moved := baseRowForLine(f.d, 15)
+	if moved == row {
+		t.Fatalf("expanding the gap left base line 15 on row %d", row)
+	}
+	if _, ok := f.d.left.GetBookmark(row); ok {
+		t.Fatalf("bookmark stayed on row %d, want it moved with base line 15", row)
+	}
+	if _, ok := f.d.left.GetBookmark(moved); !ok {
+		t.Fatalf("bookmark not on row %d, the new row for base line 15", moved)
+	}
+	if got := f.d.left.Buf.Lines[moved]; got != "line 15" {
+		t.Fatalf("bookmarked row %d shows %q, want line 15", moved, got)
+	}
+
+	// A base line a collapsed gap hides keeps its bookmark until the gap opens.
+	f.d.left.Cursor.Line = baseRowForLine(f.d, 5)
+	f.d.keyPane().ToggleBookmark()
+	f.d.applyExtended(false)
+	for r := range f.d.left.Bookmarks {
+		if f.d.leftBase.Nums[r] == 5 {
+			t.Fatal("bookmark on a line hidden by the collapsed gap is still projected")
+		}
+	}
+	f.d.expandContextGap(0)
+	if _, ok := f.d.left.GetBookmark(baseRowForLine(f.d, 5)); !ok {
+		t.Fatal("bookmark did not come back when the gap was expanded again")
+	}
+}
+
 func TestEditableDiffHasNoFolds(t *testing.T) {
 	old, cur := gapFile()
 	f := newLiveDiffFixture(t, old, cur, DiffModeUnified, 100, 20)
