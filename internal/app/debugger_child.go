@@ -71,6 +71,7 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			return requestCtx.Err()
 		}
 	}
+	peer.inspectionError = func(err error) { deliver(func() { a.StatusError(err.Error()) }) }
 	peer.onBindings = func(path string, lines []int, bindings []debugBinding) {
 		deliver(func() {
 			if peer.bindings == nil {

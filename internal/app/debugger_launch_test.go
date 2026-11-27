@@ -219,7 +219,8 @@ func simulateConfiguringAdapter(mode string) {
 			pending := read("stackTrace")
 			reply(control, nil)
 			reply(pending, nil)
-			reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})
+			probe := read("stackTrace")
+			send(map[string]any{"type": "response", "request_seq": probe.Seq, "success": false, "message": "stack temporarily unavailable"})
 		case "continue-new-stop", "continue-partial-new-stop":
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 			pending := read("stackTrace")

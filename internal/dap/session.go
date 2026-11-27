@@ -11,6 +11,8 @@ import (
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
+var ErrNotStopped = errors.New("notStopped")
+
 type packet struct {
 	Arguments  json.RawMessage
 	Type       string
@@ -242,6 +244,9 @@ func (s *Session) call(ctx context.Context, command string, args, out any, after
 		}
 	}
 	if !p.Success {
+		if p.Message == ErrNotStopped.Error() {
+			return fmt.Errorf("%s: %w", command, ErrNotStopped)
+		}
 		return fmt.Errorf("%s: %s", command, p.Message)
 	}
 	if out != nil {

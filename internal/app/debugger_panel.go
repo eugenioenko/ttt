@@ -418,7 +418,7 @@ func (a *App) showDebugVariableMenu(_ []widgets.MenuEntry, n *widgets.TreeNode, 
 
 func (a *App) selectDebugThread(tid int) {
 	r := a.activeDebugPeer()
-	if r == nil || r.thread == nil || r.busy || r.stepping || *r.thread == tid {
+	if a.debugger.panel.stale || r == nil || r.thread == nil || r.busy || r.stepping || *r.thread == tid {
 		return
 	}
 	generation := r.generation

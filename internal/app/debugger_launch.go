@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -21,10 +22,11 @@ type debugThread struct {
 }
 
 type debugRun struct {
-	resumeControl func(context.Context, *dap.Session, string, int) error
-	threads       []debugThread
-	bindings      map[string]map[int]debugBinding
-	onBindings    func(string, []int, []debugBinding)
+	inspectionError func(error)
+	resumeControl   func(context.Context, *dap.Session, string, int) error
+	threads         []debugThread
+	bindings        map[string]map[int]debugBinding
+	onBindings      func(string, []int, []debugBinding)
 
 	output         map[string]string
 	terminalIDs    []string
@@ -307,7 +309,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				eventMu.Lock()
 				if generation == event.generation && uncertain[id] {
 					delete(uncertain, id)
-					if probeErr != nil && request.Err() == nil {
+					if errors.Is(probeErr, dap.ErrNotStopped) {
 						pausedIDs = slices.DeleteFunc(pausedIDs, func(n int) bool { return n == id })
 						delete(stopGeneration, id)
 					}
@@ -346,8 +348,20 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				continue
 			}
 			if err != nil {
-				eventMu.Unlock()
-				return err
+				if event.threadID == nil || ctx.Err() != nil {
+					eventMu.Unlock()
+					return err
+				}
+				if errors.Is(err, dap.ErrNotStopped) {
+					all := false
+					applyContinuation(event.threadID, &all, generation)
+					eventMu.Unlock()
+					continue
+				}
+				if r.inspectionError != nil {
+					r.inspectionError(err)
+				}
+				tid = event.threadID
 			}
 			if tid != nil {
 				for i := range frames {
