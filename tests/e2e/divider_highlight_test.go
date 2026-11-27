@@ -56,10 +56,15 @@ func assertHoverColumn(t *testing.T, cells [][]term.Cell, x, fromY, toY int) {
 			t.Fatalf("highlighted cell %v is off the divider column x=%d rows %d..%d", p, x, fromY, toY)
 		}
 	}
-	for y := fromY + 1; y < toY; y++ {
-		if c := cells[y][x]; c.Ch != 0 && c.Ch != ' ' && c.Style != term.StyleBorderHover {
-			t.Fatalf("divider cell (%d,%d) %q kept style %v", x, y, c.Ch, c.Style)
-		}
+	for y := fromY; y <= toY; y++ {
+		assertHoverGlyph(t, cells, x, y)
+	}
+}
+
+func assertHoverGlyph(t *testing.T, cells [][]term.Cell, x, y int) {
+	t.Helper()
+	if c := cells[y][x]; c.Ch != 0 && c.Ch != ' ' && c.Style != term.StyleBorderHover {
+		t.Fatalf("divider cell (%d,%d) %q kept style %v", x, y, c.Ch, c.Style)
 	}
 }
 
@@ -73,6 +78,9 @@ func assertHoverRow(t *testing.T, cells [][]term.Cell, y, fromX, toX int) {
 		if p.y != y || p.x < fromX || p.x > toX {
 			t.Fatalf("highlighted cell %v is off the divider row y=%d cols %d..%d", p, y, fromX, toX)
 		}
+	}
+	for x := fromX; x <= toX; x++ {
+		assertHoverGlyph(t, cells, x, y)
 	}
 }
 
@@ -132,6 +140,46 @@ func TestDraggedPanelDividerStaysHighlightedUntilRelease(t *testing.T) {
 	assertNoHover(t, h.frame())
 }
 
+func TestRightDockedPanelDividerHighlightsParentJunction(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.setHighlightDividers(true)
+	h.app.ShowBottomPanel()
+	h.exec("panel.dockRight")
+	cs := h.app.ContentSplit
+	if cs.Position != ui.SplitRight {
+		t.Fatal("panel did not dock right")
+	}
+	divX := cs.DividerScreenX()
+	r := cs.GetRect()
+
+	h.mouseMove(divX, r.Y+r.H/2)
+	cells := h.frame()
+	if c := cells[r.Y+r.H][divX]; c.Style != term.StyleBorderHover {
+		t.Fatalf("bottom junction %q kept style %v", c.Ch, c.Style)
+	}
+	assertHoverColumn(t, cells, divX, r.Y, r.Y+r.H)
+}
+
+func TestEditorSplitDividerLeavesPanelDividerBelowAlone(t *testing.T) {
+	h := newTestHarness(t, 100, 30)
+	defer h.stop()
+	h.setHighlightDividers(true)
+	h.exec("editor.split")
+	h.app.ShowBottomPanel()
+	h.redraw()
+	split := h.app.EditorSplit.Split
+	divX := split.DividerScreenX()
+	r := split.GetRect()
+
+	h.mouseMove(divX, r.Y+r.H/2)
+	cells := h.frame()
+	assertHoverColumn(t, cells, divX, r.Y, r.Y+r.H-1)
+	if c := cells[r.Y+r.H][divX]; c.Style == term.StyleBorderHover {
+		t.Fatalf("panel divider cell %q under the editor split was restyled", c.Ch)
+	}
+}
+
 func TestEditorSplitDividersHighlightOnlyBorderCells(t *testing.T) {
 	h := newTestHarness(t, 120, 40)
 	defer h.stop()
@@ -143,7 +191,7 @@ func TestEditorSplitDividersHighlightOnlyBorderCells(t *testing.T) {
 
 	h.mouseMove(divX, r.Y+r.H/2)
 	cells := h.frame()
-	assertHoverColumn(t, cells, divX, r.Y, r.Y+r.H-1)
+	assertHoverColumn(t, cells, divX, r.Y, r.Y+r.H)
 
 	h.exec("editor.splitDown")
 	down := h.app.EditorSplit.Second.Split
