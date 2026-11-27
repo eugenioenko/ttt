@@ -19,9 +19,12 @@ type editorRow struct {
 	// must stop there rather than fill the width.
 	nextCol int
 	phantom int
+	// conflict marks a merge-conflict action row drawn above the conflict's
+	// header line.
+	conflict bool
 }
 
-func (r editorRow) isPhantom() bool { return r.phantom >= 0 }
+func (r editorRow) isPhantom() bool { return r.phantom >= 0 || r.conflict }
 
 var singleSegment = []int{0}
 
@@ -36,6 +39,8 @@ type rowLayout struct {
 	tabW     int
 	visible  []int
 	phantoms map[int]int
+	// conflicts holds one action row per conflict, anchored above its header.
+	conflicts map[int]mergeConflict
 	// notes places an annotation overlay's note rows when folds hide lines.
 	notes   map[int][]NoteRow
 	labels  map[int]string
@@ -51,18 +56,19 @@ type rowLayout struct {
 // version covers every edit; the line-slice identity catches a slice assigned
 // to Lines without going through the buffer.
 type rowLayoutKey struct {
-	buf        *buffer.Buffer
-	lines      *string
-	n          int
-	version    uint64
-	overlay    *DiffOverlay
-	visible    *int
-	visN       int
-	phantomGen uint64
-	wrap       bool
-	words      bool
-	width      int
-	tabW       int
+	buf         *buffer.Buffer
+	lines       *string
+	n           int
+	version     uint64
+	overlay     *DiffOverlay
+	visible     *int
+	visN        int
+	phantomGen  uint64
+	conflictGen uint64
+	wrap        bool
+	words       bool
+	width       int
+	tabW        int
 }
 
 type lineRowsMemo struct {
@@ -93,17 +99,20 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	case hidden:
 		visible = e.DiffOverlay.visibleLines(n)
 	}
+	// Read conflicts before the key: detecting them can bump conflictGen.
+	conflicts := e.conflictBlocks()
 	key := rowLayoutKey{
-		buf:        e.Buf,
-		lines:      unsafe.SliceData(e.Buf.Lines),
-		n:          n,
-		version:    e.Buf.Version(),
-		overlay:    e.DiffOverlay,
-		visible:    unsafe.SliceData(visible),
-		visN:       len(visible),
-		phantomGen: e.phantomGen,
-		wrap:       e.WordWrap,
-		tabW:       e.resolveTabSize(),
+		buf:         e.Buf,
+		lines:       unsafe.SliceData(e.Buf.Lines),
+		n:           n,
+		version:     e.Buf.Version(),
+		overlay:     e.DiffOverlay,
+		visible:     unsafe.SliceData(visible),
+		visN:        len(visible),
+		phantomGen:  e.phantomGen,
+		conflictGen: e.conflictGen,
+		wrap:        e.WordWrap,
+		tabW:        e.resolveTabSize(),
 	}
 	if e.WordWrap {
 		key.width = width
@@ -131,6 +140,7 @@ func (e *EditorPaneWidget) rowLayout(width int) *rowLayout {
 	if len(e.phantoms) > 0 {
 		l.phantoms = e.phantoms
 	}
+	l.conflicts = conflicts
 	if o := e.DiffOverlay; o != nil && o.annotate && visible != nil && len(o.Notes) > 0 {
 		l.phantoms, l.notes = foldedNotes(o.Notes, visible, n)
 	}
@@ -213,7 +223,7 @@ func (e *EditorPaneWidget) layout() *rowLayout {
 
 func (l *rowLayout) n() int { return len(l.lines) }
 
-func (l *rowLayout) identity() bool { return !l.wrap && l.phantoms == nil }
+func (l *rowLayout) identity() bool { return !l.wrap && l.phantoms == nil && l.conflicts == nil }
 
 func sameInputs(a, b rowLayoutKey) bool {
 	a.lines, a.n, a.version = nil, 0, 0
@@ -227,7 +237,7 @@ func sameInputs(a, b rowLayoutKey) bool {
 // rows move with edits only through a diff overlay, which shifts their anchors
 // as it replays the same edits; without one a layout with any is rebuilt.
 func (l *rowLayout) advance(key rowLayoutKey, buf *buffer.Buffer) bool {
-	if l.starts == nil || l.visible != nil || (l.phantoms != nil && key.overlay == nil) || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
+	if l.starts == nil || l.visible != nil || (l.phantoms != nil && key.overlay == nil) || l.conflicts != nil || key.visible != nil || key.version <= l.key.version || !sameInputs(l.key, key) {
 		return false
 	}
 	n := len(l.lines)
@@ -358,12 +368,21 @@ func (l *rowLayout) phantomSegments(line, k int) []int {
 	return wrapLineSegments(block[k].Text, l.width, l.tabW, l.words)
 }
 
+// conflictRows is 1 for a line that opens a merge conflict, which draws an
+// action row above its marker.
+func (l *rowLayout) conflictRows(line int) int {
+	if _, ok := l.conflicts[line]; ok {
+		return 1
+	}
+	return 0
+}
+
 func (l *rowLayout) phantomRows(line int) int {
 	n := l.phantoms[line]
+	rows := l.conflictRows(line)
 	if !l.wrap || n == 0 {
-		return n
+		return rows + n
 	}
-	rows := 0
 	for k := 0; k < n; k++ {
 		rows += len(l.phantomSegments(line, k))
 	}
@@ -371,6 +390,12 @@ func (l *rowLayout) phantomRows(line int) int {
 }
 
 func (l *rowLayout) phantomAt(line, offset int) (editorRow, bool) {
+	if l.conflictRows(line) > 0 {
+		if offset == 0 {
+			return editorRow{bufLine: line, phantom: -1, conflict: true}, true
+		}
+		offset--
+	}
 	for k := 0; k < l.phantoms[line]; k++ {
 		segs := l.phantomSegments(line, k)
 		if offset < len(segs) {
@@ -539,6 +564,9 @@ func (l *rowLayout) appendRows(out []editorRow, topLine, offset, h int) []editor
 		return len(out) >= h
 	}
 	emitBlock := func(line int) bool {
+		if l.conflictRows(line) > 0 && emit(editorRow{bufLine: line, phantom: -1, conflict: true}) {
+			return true
+		}
 		for k := 0; k < l.phantoms[line]; k++ {
 			segs := l.phantomSegments(line, k)
 			for i, seg := range segs {

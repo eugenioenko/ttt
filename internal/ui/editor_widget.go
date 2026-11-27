@@ -116,6 +116,14 @@ type EditorPaneWidget struct {
 	goalContext             cursorGoalContext
 	phantoms                map[int]int
 	phantomGen              uint64
+	conflicts               map[int]mergeConflict
+	conflictValid           bool
+	conflictIncomplete      bool
+	conflictVer             uint64
+	conflictData            *string
+	conflictGen             uint64
+	conflictHover           [2]int
+	conflictPress           bool
 	DiffOverlay             *DiffOverlay
 	diffNumDigits           int
 	// Passive panes draw no active line or bracket match: a diff pane that
@@ -147,6 +155,7 @@ func NewEditorPaneWidget(buf *buffer.Buffer, cur *cursor.Cursor, vp *view.Viewpo
 		AutoClosing:       config.DefaultAutoClosingSettings(),
 		ScrollbarGitMarks: true,
 		bracketColorDirty: true,
+		conflictHover:     [2]int{-1, -1},
 	}
 }
 
