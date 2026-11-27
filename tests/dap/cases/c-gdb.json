@@ -1,0 +1,35 @@
+{
+  "name": "c-gdb",
+  "requires": [
+    "install/gdb.sh"
+  ],
+  "source": "fixtures/c-counter/main.c",
+  "binary": "bin/linux-amd64/c-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "gdb": {
+          "command": [
+            "gdb",
+            "-q",
+            "-nx",
+            "-i",
+            "dap"
+          ],
+          "languages": [
+            "c"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "c-gdb",
+    "type": "gdb",
+    "request": "launch",
+    "program": "${workspaceFolder}/c-counter"
+  },
+  "breakpoint": {
+    "line": 7
+  }
+}
