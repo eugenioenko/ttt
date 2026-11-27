@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/eugenioenko/ttt/internal/dap"
 	"github.com/eugenioenko/ttt/internal/jsonrpc"
 )
 
@@ -27,7 +28,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 			defer cancel()
 			hit := false
-			err := run.launch(ctx, cmd, "fixture", nil, func(_ string, line int) { hit = line == 7; cancel() })
+			err := run.launch(ctx, cmd, "fixture", nil, func(*dap.Session) {}, func(_ int, frames []debugFrame) { hit = len(frames) > 0 && frames[0].Line == 7; cancel() }, func() {})
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}

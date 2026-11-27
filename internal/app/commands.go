@@ -26,6 +26,7 @@ func RegisterCommands(app *App) {
 	registerOutputCommands(app)
 	registerDebugCommands(app)
 	registerDebuggerCommands(app)
+	app.ensureDebugPanel()
 	registerWidgetCallbacks(app)
 	RegisterEscapeDismissers(app)
 	app.syncApps()

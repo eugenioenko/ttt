@@ -222,6 +222,7 @@ func (a *App) FocusEditorIfEnabled() {
 }
 
 func (a *App) refreshWorkspaceWidgets() {
+	a.refreshDebugConfiguration()
 	a.updateEditorSessionWorkspace()
 	paths := a.Workspace.Paths()
 	a.RememberRecentFolders()

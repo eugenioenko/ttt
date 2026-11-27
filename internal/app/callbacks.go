@@ -722,6 +722,9 @@ func registerWidgetCallbacks(app *App) {
 	}
 
 	app.Sidebar.OnPanelChange = func(id string) {
+		if id == "debug" {
+			app.refreshDebugConfiguration()
+		}
 		if id == "search" {
 			app.applySearchHighlights()
 		} else {
@@ -1002,6 +1005,7 @@ func (a *App) tabMoreMenu() []ui.ContextMenuItem {
 }
 
 func (app *App) editorTabChanged() {
+	app.refreshDebugControls()
 	app.Root.ClearEditorLinkHover()
 	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {
 		findBar.OnEditorTabChange()

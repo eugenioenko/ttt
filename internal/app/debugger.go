@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strconv"
+	"sync"
 
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/dap"
@@ -17,6 +18,7 @@ import (
 )
 
 type debuggerState struct {
+	panel  debugSidebar
 	points map[string][]int
 	run    *debugRun
 	file   string
@@ -24,6 +26,16 @@ type debuggerState struct {
 }
 
 func registerDebuggerCommands(a *App) {
+	a.Reg.Register(command.Command{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause})
+	a.Reg.Register(command.Command{ID: "debug.continue", Title: i18n.Text("debug.continue"), Handler: a.DebugContinue})
+	a.Reg.Register(command.Command{ID: "debug.stepOver", Title: i18n.Text("debug.stepOver"), Handler: a.DebugStepOver})
+	a.Reg.Register(command.Command{ID: "debug.stepIn", Title: i18n.Text("debug.stepIn"), Handler: a.DebugStepIn})
+	a.Reg.Register(command.Command{ID: "debug.stepOut", Title: i18n.Text("debug.stepOut"), Handler: a.DebugStepOut})
+	a.Reg.Register(command.Command{ID: "debug.file", Title: i18n.Text("debug.file"), Handler: a.debugFile})
+	a.Reg.Register(command.Command{ID: "debug.clearBreakpoints", Title: i18n.Text("debug.clearBreakpoints"), Handler: a.clearDebugBreakpoints})
+	a.Reg.Register(command.Command{ID: "sidebar.debug", Title: i18n.Text("command.showDebug"), Handler: func() { a.ShowPanel("debug", a.debugger.panel.adapter) }})
+	a.Reg.Register(command.Command{ID: "debug.configure", Title: i18n.Text("debug.createConfiguration"), Handler: a.configureDebugger})
+
 	a.Reg.Register(command.Command{ID: "debug.start", Title: i18n.Text("debug.start"), Handler: a.StartDebugging})
 	a.Reg.Register(command.Command{ID: "debug.stop", Title: i18n.Text("debug.stop"), Handler: a.StopDebugging})
 	a.Reg.Register(command.Command{ID: "debug.toggleBreakpoint", Title: i18n.Text("debug.toggleBreakpoint"), Handler: a.ToggleDebugBreakpoint})
@@ -32,7 +44,7 @@ func registerDebuggerCommands(a *App) {
 func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 	g.OnGutterClick = func(path string, line int) bool {
 		plugin := a.PluginManager != nil && a.PluginManager.HasEventListeners("gutter.click")
-		if (!plugin || a.debugger.run != nil) && a.toggleEditorBreakpoint(g, line+1) {
+		if (!plugin || a.debugger.run != nil || a.Sidebar.Visible && a.Sidebar.ActivePanel == "debug") && a.toggleEditorBreakpoint(g, line+1) {
 			return true
 		}
 		if plugin {
@@ -85,6 +97,7 @@ func (a *App) toggleEditorBreakpoint(g *ui.EditorGroupWidget, line int) bool {
 		if r := a.debugger.run; r != nil {
 			a.queueDebugPoints(r)
 		}
+		a.refreshDebugPanel()
 		return true
 	}
 	return false
@@ -201,32 +214,59 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		}
 	}
 	ctx, cancel := context.WithCancel(context.Background())
-	r := &debugRun{cancel: cancel, folder: t.Folder, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
+	r := &debugRun{ctx: ctx, cancel: cancel, folder: t.Folder, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
 	a.debugger.run = r
+	a.Sidebar.SetActivePanel("debug")
+	a.ShowSidebar()
+	a.refreshDebugPanel()
 	a.queueDebugPoints(r)
 	post := a.tasks.post
+	// PostEvent can deliver concurrent posts out of order when the terminal queue fills.
+	var queueMu sync.Mutex
+	var pending []func()
 	deliver := func(f func()) {
-		_ = post(func() {
-			if a.debugger.run == r {
-				f()
-			}
-		})
+		queueMu.Lock()
+		schedule := len(pending) == 0
+		pending = append(pending, f)
+		queueMu.Unlock()
+		if schedule {
+			_ = post(func() {
+				queueMu.Lock()
+				batch := pending
+				pending = nil
+				queueMu.Unlock()
+				for _, apply := range batch {
+					if a.debugger.run == r {
+						apply()
+					}
+				}
+			})
+		}
 	}
+
 	go func() {
 		defer close(r.closed)
-		err := r.launch(ctx, cmd, t.Type, args, func(path string, line int) {
+		err := r.launch(ctx, cmd, t.Type, args, func(session *dap.Session) { deliver(func() { r.session = session; a.refreshDebugControls() }) }, func(tid int, frames []debugFrame) {
 			deliver(func() {
-				a.debugger.file, a.debugger.line = path, line
-				a.navigateToLocation(path, line-1, 0)
-				a.StatusNotify(i18n.Format("debug.stoppedAt", i18n.Args{"file": filepath.Base(path), "line": line}))
+				a.showDebugStop(r, tid, frames)
+			})
+		}, func() {
+			deliver(func() {
+				if r.thread != nil {
+					r.generation++
+					r.busy = false
+					a.debugResumed(r)
+				}
 			})
 		})
+
 		canceled := ctx.Err() != nil
 		cancel()
 		deliver(func() {
 			a.debugger.run = nil
 			a.debugger.file = ""
 			a.debugger.line = 0
+			a.clearDebugInspection()
 			if err != nil && !canceled {
 				a.StatusError(err.Error())
 			} else {
@@ -234,4 +274,12 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 			}
 		})
 	}()
+}
+
+func (a *App) clearDebugBreakpoints() {
+	clear(a.debugger.points)
+	if r := a.debugger.run; r != nil {
+		a.queueDebugPoints(r)
+	}
+	a.refreshDebugPanel()
 }
