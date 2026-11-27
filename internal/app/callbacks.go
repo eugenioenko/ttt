@@ -66,6 +66,8 @@ func (a *App) ShowSidebarMoreMenu(sx, sy int) {
 			ui.MenuSep(),
 			{Label: i18n.Text("general.help"), Command: "search.help"},
 		}
+	case "debug":
+		items = a.debugToolbarMenu()
 	case "changes":
 		items = a.BuildChangesPanelMenu()
 	case "outline":
@@ -1005,6 +1007,7 @@ func (a *App) tabMoreMenu() []ui.ContextMenuItem {
 }
 
 func (app *App) editorTabChanged() {
+	app.updateDebugSource(app.EditorGroup.ActiveFilePath(), app.EditorGroup.ActiveBuffer())
 	app.refreshDebugControls()
 	app.Root.ClearEditorLinkHover()
 	if findBar, ok := app.Root.TopOverlayWidget().(*ui.FindBarWidget); ok && findBar.OnEditorTabChange != nil {

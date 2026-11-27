@@ -10,16 +10,17 @@ import (
 )
 
 type State struct {
-	PanelPosition       string   `json:"panelPosition,omitempty"`
-	SidebarWidth        int      `json:"sidebarWidth,omitempty"`
-	SidebarHidden       bool     `json:"sidebarHidden,omitempty"`
-	SidebarPanelOrder   []string `json:"sidebarPanelOrder,omitempty"`
-	CommitHistoryHeight int      `json:"commitHistoryHeight,omitempty"`
-	PanelHeight         int      `json:"panelHeight,omitempty"`
-	PanelWidth          int      `json:"panelWidth,omitempty"`
-	RecentFolders       []string `json:"recentFolders,omitempty"`
-	RecentCommands      []string `json:"recentCommands,omitempty"`
-	LastUpdateCheckAt   string   `json:"lastUpdateCheckAt,omitempty"`
+	Breakpoints         map[string]map[string][]int `json:"breakpoints,omitempty"`
+	PanelPosition       string                      `json:"panelPosition,omitempty"`
+	SidebarWidth        int                         `json:"sidebarWidth,omitempty"`
+	SidebarHidden       bool                        `json:"sidebarHidden,omitempty"`
+	SidebarPanelOrder   []string                    `json:"sidebarPanelOrder,omitempty"`
+	CommitHistoryHeight int                         `json:"commitHistoryHeight,omitempty"`
+	PanelHeight         int                         `json:"panelHeight,omitempty"`
+	PanelWidth          int                         `json:"panelWidth,omitempty"`
+	RecentFolders       []string                    `json:"recentFolders,omitempty"`
+	RecentCommands      []string                    `json:"recentCommands,omitempty"`
+	LastUpdateCheckAt   string                      `json:"lastUpdateCheckAt,omitempty"`
 }
 
 func LoadState() State {
@@ -57,7 +58,7 @@ func SaveState(s State) error {
 		return err
 	}
 	data = append(data, '\n')
-	return os.WriteFile(path, data, 0644)
+	return writeFileAtomically(path, data, 0644)
 }
 
 func (s State) LastUpdateCheckTime() time.Time {

@@ -27,7 +27,6 @@ func TestDebugSidebarGutterRoutesToClickedSplit(t *testing.T) {
 		}
 	}
 	right := h.app.EditorGroup
-	h.exec("sidebar.debug")
 	r := left.Editor.GetRect()
 	h.click(r.X, r.Y)
 	if h.app.EditorGroup != left {
@@ -39,6 +38,7 @@ func TestDebugSidebarGutterRoutesToClickedSplit(t *testing.T) {
 	if _, ok := right.Editor.BookmarkOverlay(0); ok {
 		t.Fatal("breakpoint appeared in the right split")
 	}
+	h.exec("sidebar.debug")
 	h.assertContains("left.c:1")
 	h.exec("debug.clearBreakpoints")
 	if _, ok := left.Editor.BookmarkOverlay(0); ok {

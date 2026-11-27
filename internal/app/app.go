@@ -222,6 +222,7 @@ func (a *App) FocusEditorIfEnabled() {
 }
 
 func (a *App) refreshWorkspaceWidgets() {
+	a.restoreBreakpoints()
 	a.refreshDebugConfiguration()
 	a.updateEditorSessionWorkspace()
 	paths := a.Workspace.Paths()
@@ -320,6 +321,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		}
 	}
 	a.EditorGroup.OnFileClose = func(path, lang string) {
+		a.rememberClosedDebugSource(path)
 		a.NotifyLSPClose(path, lang)
 		if a.PluginManager != nil {
 			a.PluginManager.DispatchEvent("file.close", path)
@@ -339,6 +341,10 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 	a.References.OnNavigate = a.navigateToLocation
 	a.EditorGroup.Editor.OnChange = func() {
 		path, lang := a.editorPathLang()
+		if a.debugger.run != nil {
+			a.debugger.edited[path] = true
+		}
+		a.updateDebugSource(path, a.EditorGroup.ActiveBuffer())
 		changeDone := a.NotifyLSPChange(path, lang, a.EditorGroup.Editor.Buf.Lines)
 		a.cancelBackgroundPull(path, lang)
 		a.ScheduleDiagnosticPull(false)

@@ -14,7 +14,16 @@ import (
 	"github.com/eugenioenko/ttt/internal/dap"
 )
 
+type debugThread struct {
+	ID   int
+	Name string
+}
+
 type debugRun struct {
+	threads    []debugThread
+	bindings   map[string]map[int]debugBinding
+	onBindings func(string, []int, []debugBinding)
+
 	output         map[string]string
 	terminalIDs    []string
 	stopChildren   func()
@@ -35,7 +44,7 @@ type debugRun struct {
 	cancel    context.CancelFunc
 }
 
-func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame), resumed func()) error {
+func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame, bool), resumed func()) error {
 	var initial map[string][]int
 	select {
 	case initial = <-r.points:
@@ -45,6 +54,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
 	type stopEvent struct {
+		all        bool
 		threadID   *int
 		generation uint64
 	}
@@ -68,7 +78,10 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			resumed()
 			eventMu.Unlock()
 		case "stopped":
-			var body struct{ ThreadID *int }
+			var body struct {
+				ThreadID          *int
+				AllThreadsStopped bool
+			}
 			if json.Unmarshal(e.Body, &body) == nil {
 				select {
 				case <-stops:
@@ -77,7 +90,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				eventMu.Lock()
 				generation++
 				paused, pausedThread = true, body.ThreadID
-				stops <- stopEvent{body.ThreadID, generation}
+				stops <- stopEvent{body.AllThreadsStopped, body.ThreadID, generation}
 				eventMu.Unlock()
 			}
 		}
@@ -100,7 +113,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		stop, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		defer cancel()
 		if r.attached && session.ResumeBeforeDetach() {
-			_ = syncDebugPoints(stop, session, sent, nil)
+			_ = syncDebugPoints(stop, session, sent, nil, nil)
 			eventMu.Lock()
 			isPaused, tid := paused, pausedThread
 			eventMu.Unlock()
@@ -150,7 +163,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			case initial = <-r.points:
 			default:
 			}
-			if err = syncDebugPoints(startup, session, nil, initial); err != nil {
+			if err = syncDebugPoints(startup, session, nil, initial, r.onBindings); err != nil {
 				return err
 			}
 			sent = initial
@@ -196,7 +209,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			}
 		case next := <-r.points:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
-			err := syncDebugPoints(request, session, sent, next)
+			err := syncDebugPoints(request, session, sent, next, r.onBindings)
 			finish()
 			if err != nil {
 				return err
@@ -223,7 +236,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 						frames[i].Source.Path = filepath.Join(r.folder, p)
 					}
 				}
-				stopped(*tid, frames)
+				stopped(*tid, frames, event.all)
 			}
 			eventMu.Unlock()
 		}
@@ -257,7 +270,7 @@ func stoppedFrames(ctx context.Context, session *dap.Session, id *int) (*int, []
 	return nil, nil, nil
 }
 
-func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string][]int) error {
+func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string][]int, apply func(string, []int, []debugBinding)) error {
 	changes := make(map[string][]int)
 	for path, lines := range next {
 		if !slices.Equal(prev[path], lines) {
@@ -274,8 +287,20 @@ func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string]
 		for i, line := range lines {
 			list[i] = map[string]int{"line": line}
 		}
-		if err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": list}, nil); err != nil {
+		var result struct{ Breakpoints []debugBinding }
+		if err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": list}, &result); err != nil {
+			if apply != nil && ctx.Err() == nil && len(lines) > 0 {
+				bindings := make([]debugBinding, len(lines))
+				for i := range bindings {
+					bindings[i].Message = err.Error()
+				}
+				apply(path, lines, bindings)
+				continue
+			}
 			return fmt.Errorf("%s: %w", path, err)
+		}
+		if apply != nil {
+			apply(path, lines, result.Breakpoints)
 		}
 	}
 	return nil

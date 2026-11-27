@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"maps"
+	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -22,17 +23,32 @@ import (
 )
 
 type debuggerState struct {
-	picker   *asynctask.Task[[]dap.Process]
-	panel    debugSidebar
-	points   map[string][]int
-	run      *debugRun
-	selected *debugRun
-	peers    []*debugRun
-	file     string
-	line     int
+	toolbarCorner          ui.ToolbarCorner
+	lastFolder, lastTarget string
+	picker                 *asynctask.Task[[]dap.Process]
+	panel                  debugSidebar
+	points                 map[string]map[int]*debugBreakpoint
+	sources                map[string]debugSourceVersion
+	closedSources          map[string]os.FileInfo
+	edited                 map[string]bool
+	workspaceKey           string
+	run                    *debugRun
+	selected               *debugRun
+	peers                  []*debugRun
+	file                   string
+	line                   int
 }
 
 func registerDebuggerCommands(a *App) {
+	for _, pos := range debugToolbarPositions() {
+		a.Reg.Register(command.Command{ID: pos.command, Title: pos.label, PaletteHidden: true, Handler: func() {
+			a.debugger.toolbarCorner = pos.corner
+			if bar := a.Root.DebugToolbar; bar != nil {
+				bar.Corner = pos.corner
+			}
+		}})
+	}
+	a.Reg.Register(command.Command{ID: "debug.toggleToolbar", Title: i18n.Text("debug.toggleToolbar"), Handler: a.toggleDebugToolbar})
 	a.Reg.Register(command.Command{ID: "debug.pause", Title: i18n.Text("debug.pause"), Handler: a.DebugPause})
 	a.Reg.Register(command.Command{ID: "debug.continue", Title: i18n.Text("debug.continue"), Handler: a.DebugContinue})
 	a.Reg.Register(command.Command{ID: "debug.stepOver", Title: i18n.Text("debug.stepOver"), Handler: a.DebugStepOver})
@@ -65,8 +81,8 @@ func (a *App) wireDebuggerGutter(g *ui.EditorGroupWidget) {
 		if path != "" && path == a.debugger.file && line+1 == a.debugger.line {
 			return ui.Bookmark{Icon: icons.Rune(icons.DebugExecution), Style: term.StyleDebugExecution}, true
 		}
-		if slices.Contains(a.debugger.points[path], line+1) {
-			return ui.Bookmark{Icon: icons.Rune(icons.Breakpoint), Style: term.StyleDebugBreakpoint}, true
+		if pt := a.debugger.points[path][line+1]; pt != nil {
+			return ui.Bookmark{Icon: icons.Rune(a.breakpointIcon(path, pt)), Style: term.StyleDebugBreakpoint}, true
 		}
 		return ui.Bookmark{}, false
 	}
@@ -87,21 +103,32 @@ func (a *App) toggleEditorBreakpoint(g *ui.EditorGroupWidget, line int) bool {
 		if !slices.Contains(adapter.Languages, lang) {
 			continue
 		}
+		a.updateDebugSource(path, buf)
 		if a.debugger.points == nil {
-			a.debugger.points = make(map[string][]int)
+			a.debugger.points = make(map[string]map[int]*debugBreakpoint)
 		}
 		points := a.debugger.points[path]
-		i, found := slices.BinarySearch(points, line)
-		if found {
-			points = slices.Delete(points, i, i+1)
+		if points == nil {
+			points = make(map[int]*debugBreakpoint)
+			a.debugger.points[path] = points
+		}
+		if p := points[line]; p != nil && !p.confirm {
+			delete(points, line)
 		} else {
-			points = slices.Insert(points, i, line)
+			runtime := line
+			if a.debugger.edited[path] {
+				runtime = 0
+			}
+			points[line] = &debugBreakpoint{runtimeLine: runtime}
 		}
 		if len(points) == 0 {
 			delete(a.debugger.points, path)
+			delete(a.debugger.sources, path)
 		} else {
-			a.debugger.points[path] = points
+			a.trackDebugSource(path, buf)
 		}
+		a.persistBreakpoints()
+
 		if r := a.debugger.run; r != nil {
 			a.queueDebugPoints(r)
 		}
@@ -126,7 +153,15 @@ func (a *App) queueDebugPoints(r *debugRun) {
 			}
 		}
 		if slices.Contains(r.languages, lang) {
-			points[path] = slices.Clone(lines)
+			for line, p := range lines {
+				if a.debugger.edited[path] {
+					line = p.runtimeLine
+				}
+				if line > 0 && !p.confirm {
+					points[path] = append(points[path], line)
+				}
+			}
+			slices.Sort(points[path])
 		}
 	}
 	for _, peer := range append([]*debugRun{r}, a.debugger.peers...) {
@@ -190,11 +225,15 @@ func (a *App) StartDebugging() {
 	case 1:
 		a.prepareDebugTarget(targets[0])
 	default:
+		selected := ""
 		items := make([]widgets.SelectItem, 0, len(targets))
 		for i, t := range targets {
+			if t.Folder == a.debugger.lastFolder && t.Name == a.debugger.lastTarget {
+				selected = strconv.Itoa(i)
+			}
 			items = append(items, widgets.SelectItem{ID: strconv.Itoa(i), Label: t.Name + " (" + t.Folder + ")"})
 		}
-		a.showSelectDialog(i18n.Text("debug.start"), items, "", func(id string) {
+		a.showSelectDialog(i18n.Text("debug.start"), items, selected, func(id string) {
 			i, err := strconv.Atoi(id)
 			if err == nil && i >= 0 && i < len(targets) {
 				a.prepareDebugTarget(targets[i])
@@ -248,7 +287,16 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &debugRun{ctx: ctx, cancel: cancel, attached: t.Request == "attach", folder: t.Folder, file: t.File, languages: adapter.Languages, points: make(chan map[string][]int, 1), closed: make(chan struct{})}
+	for path, points := range a.debugger.points {
+		a.checkDebugSource(path)
+		for line, pt := range points {
+			pt.runtimeLine = line
+		}
+	}
+	a.debugger.edited = make(map[string]bool)
 	a.debugger.run = r
+	a.debugger.lastFolder, a.debugger.lastTarget = t.Folder, t.Name
+	a.toggleDebugToolbar()
 	a.Sidebar.SetActivePanel("debug")
 	a.ShowSidebar()
 	a.refreshDebugPanel()
@@ -287,6 +335,8 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		cancel()
 		deliver(func() {
 			a.closeDebugTerminals(r)
+			a.Root.DebugToolbar = nil
+			a.debugger.edited = nil
 			a.debugger.run = nil
 			a.debugger.selected = nil
 			a.debugger.peers = nil
@@ -304,6 +354,9 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 
 func (a *App) clearDebugBreakpoints() {
 	clear(a.debugger.points)
+	clear(a.debugger.sources)
+	clear(a.debugger.closedSources)
+	a.persistBreakpoints()
 	if r := a.debugger.run; r != nil {
 		a.queueDebugPoints(r)
 	}

@@ -171,7 +171,7 @@ func TestDebugFileOutsideWorkspaceKeepsOnlyItsBreakpoints(t *testing.T) {
 		t.Fatal(target, ok)
 	}
 	run := debugRun{file: target.File, folder: target.Folder, languages: []string{"c"}, points: make(chan map[string][]int, 1)}
-	a.debugger.points = map[string][]int{file: {1}, filepath.Join(target.Folder, "other.c"): {3}}
+	a.debugger.points = map[string]map[int]*debugBreakpoint{file: {1: {}}, filepath.Join(target.Folder, "other.c"): {3: {}}}
 	a.queueDebugPoints(&run)
 	if got := <-run.points; !reflect.DeepEqual(got, map[string][]int{file: {1}}) {
 		t.Fatal(got)

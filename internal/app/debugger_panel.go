@@ -42,6 +42,7 @@ type debugSidebar struct {
 	adapter                  *ui.WidgetAdapter
 	idle                     debugIdleAction
 	controls                 debugControlState
+	threadNodes              map[*widgets.TreeNode]int
 	frameNodes               map[*widgets.TreeNode]debugFrame
 	breakNodes               map[*widgets.TreeNode]debugLocation
 	epoch                    uint64
@@ -52,6 +53,7 @@ type debugLocation struct {
 }
 
 func (a *App) ensureDebugPanel() {
+	a.restoreBreakpoints()
 	p := &a.debugger.panel
 	if p.adapter != nil {
 		return
@@ -59,6 +61,10 @@ func (a *App) ensureDebugPanel() {
 	a.wireDebuggerGutter(a.EditorGroup)
 	config := widgets.TreeConfig{Indent: 2, OnExpand: a.expandDebugNode, OnCommand: func(cmd string, n *widgets.TreeNode) {
 		if cmd != "activate" {
+			return
+		}
+		if tid, ok := p.threadNodes[n]; ok {
+			a.selectDebugThread(tid)
 			return
 		}
 		if f, ok := p.frameNodes[n]; ok && !p.stale && a.activeDebugPeer() != nil && !a.activeDebugPeer().stepping {
@@ -80,6 +86,7 @@ func (a *App) ensureDebugPanel() {
 	p.stack = section("stack", i18n.Text("debug.stack"))
 	p.points = widgets.NewTreeWidget(config)
 	title := widgets.NewLabelWidget(widgets.LabelConfig{Text: i18n.Text("debug.breakpoints"), Style: term.StyleHoverBold})
+	title.Box.PaddingLeft = 1
 	more := widgets.NewDropdownWidget(widgets.DropdownConfig{
 		Entries: []widgets.MenuEntry{{Label: i18n.Text("debug.clearBreakpoints"), Command: "debug.clearBreakpoints"}},
 		OnMenu: func(entries []widgets.MenuEntry, x, y int) {
@@ -89,10 +96,11 @@ func (a *App) ensureDebugPanel() {
 	header := widgets.NewHStackWidget(title, more)
 	header.FixedHeight = 1
 	p.toolbar = widgets.NewHStackWidget()
+	p.toolbar.Box.PaddingLeft, p.toolbar.Box.PaddingRight = 1, 1
 	p.toolbar.FixedHeight = 1
 	p.toolbar.Gap = 1
 	inspection := debugSectionSplit(p.variables, p.stack, 1.0/3, 2)
-	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, p.points), 0.25, 5)
+	sections := debugSectionSplit(inspection, widgets.NewVStackWidget(header, widgets.NewDividerWidget(widgets.DividerConfig{}), p.points), 0.25, 5)
 	a.refreshDebugConfiguration()
 	p.adapter = ui.NewWidgetAdapter(widgets.NewVStackWidget(p.toolbar, widgets.NewDividerWidget(widgets.DividerConfig{}), sections))
 	a.Sidebar.AddPanel("debug", i18n.Text("debug.panel"), p.adapter)
@@ -169,17 +177,48 @@ func (a *App) refreshDebugPanel() {
 	stack := p.stack.Config.Items[0]
 	stack.Children = nil
 	p.frameNodes = make(map[*widgets.TreeNode]debugFrame)
+	parent := stack
+	p.threadNodes = make(map[*widgets.TreeNode]int)
+	if r := a.activeDebugPeer(); r != nil && r.thread != nil && len(r.threads) > 1 {
+		for _, t := range r.threads {
+			node := &widgets.TreeNode{ID: fmt.Sprintf("thread:%d", t.ID), Label: t.Name, Expanded: t.ID == *r.thread}
+			stack.Children = append(stack.Children, node)
+			p.threadNodes[node] = t.ID
+			if node.Expanded {
+				parent = node
+			}
+		}
+	}
 	for _, f := range p.frames {
 		node := &widgets.TreeNode{ID: fmt.Sprintf("frame:%d", f.ID), Label: f.Name + "  " + filepath.Base(f.Source.Path) + ":" + strconv.Itoa(f.Line)}
-		stack.Children = append(stack.Children, node)
+		parent.Children = append(parent.Children, node)
 		p.frameNodes[node] = f
 	}
 	var points []*widgets.TreeNode
 	p.breakNodes = make(map[*widgets.TreeNode]debugLocation)
 	for _, path := range slices.Sorted(maps.Keys(a.debugger.points)) {
-		for _, line := range a.debugger.points[path] {
+		for _, line := range slices.Sorted(maps.Keys(a.debugger.points[path])) {
+			pt := a.debugger.points[path][line]
 			label := fmt.Sprintf("%s:%d", filepath.Base(path), line)
-			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: label, IconName: icons.Breakpoint, IconStyle: term.StyleDebugBreakpoint, SelectedIconStyle: term.StyleDebugBreakpoint}
+			b := a.bindingFor(path, pt)
+			switch {
+			case pt.confirm:
+				label += "  " + i18n.Text("debug.confirmLine")
+			case a.debugger.edited[path] && pt.runtimeLine == 0:
+				label += "  " + i18n.Text("debug.editedSource")
+			default:
+				if b.Line > 0 && (b.Line != pt.runtimeLine || b.Source.Path != "" && b.Source.Path != path) {
+					dest := b.Source.Path
+					if dest == "" {
+						dest = path
+					}
+					label += fmt.Sprintf(" %c %s:%d", icons.Rune(icons.ArrowRight), filepath.Base(dest), b.Line)
+				}
+				if b.Message != "" {
+					label += "  " + b.Message
+				}
+			}
+			n := &widgets.TreeNode{ID: fmt.Sprintf("%s:%d", path, line), Label: label, IconName: a.breakpointIcon(path, pt), IconStyle: term.StyleDebugBreakpoint, SelectedIconStyle: term.StyleDebugBreakpoint}
 			points = append(points, n)
 			p.breakNodes[n] = debugLocation{path, line}
 		}
@@ -372,6 +411,24 @@ func (a *App) showDebugVariableMenu(_ []widgets.MenuEntry, n *widgets.TreeNode, 
 	})
 }
 
+func (a *App) selectDebugThread(tid int) {
+	r := a.activeDebugPeer()
+	if r == nil || r.thread == nil || r.busy || r.stepping || *r.thread == tid {
+		return
+	}
+	a.beginDebugInspection()
+	debugQuery(a, r, "stackTrace", map[string]int{"threadId": tid, "levels": 50}, func(result struct{ StackFrames []debugFrame }) {
+		for i := range result.StackFrames {
+			p := result.StackFrames[i].Source.Path
+			if p != "" && !filepath.IsAbs(p) {
+				result.StackFrames[i].Source.Path = filepath.Join(r.folder, p)
+			}
+		}
+		r.frames = result.StackFrames
+		a.showDebugStop(r, tid, r.frames)
+	})
+}
+
 func (a *App) showDebugStop(r *debugRun, tid int, frames []debugFrame) {
 	r.generation++
 	r.busy = false
@@ -392,4 +449,62 @@ func (a *App) showDebugStop(r *debugRun, tid int, frames []debugFrame) {
 		a.StatusNotify(i18n.Format("debug.stoppedAt", i18n.Args{"file": filepath.Base(f.Source.Path), "line": f.Line}))
 	}
 	a.loadDebugFrame(r, next, f)
+}
+
+func (a *App) toggleDebugToolbar() {
+	r := a.debugger.run
+	if r == nil || a.Root.DebugToolbar != nil {
+		a.Root.DebugToolbar = nil
+		return
+	}
+	a.Root.DebugToolbar = &ui.DebugToolbar{
+		Corner:       a.debugger.toolbarCorner,
+		EditorBounds: func() ui.Rect { return a.EditorGroup.ContentRect() },
+		Borders:      a.Borders,
+		Attached:     r.attached,
+		CanStep: func() bool {
+			peer := a.activeDebugPeer()
+			return peer != nil && peer.session != nil && peer.thread != nil && !peer.busy && !peer.stepping
+		},
+		OnCommand: func(cmd string) { a.Reg.Execute(cmd) },
+		OnMenu:    a.showDebugToolbarDropdown,
+	}
+}
+
+type debugToolbarPosition struct {
+	corner         ui.ToolbarCorner
+	command, label string
+}
+
+func debugToolbarPositions() []debugToolbarPosition {
+	return []debugToolbarPosition{
+		{ui.ToolbarTopLeft, "debug.dockTopLeft", i18n.Text("debug.dockTopLeft")},
+		{ui.ToolbarTopRight, "debug.dockTopRight", i18n.Text("debug.dockTopRight")},
+		{ui.ToolbarBottomLeft, "debug.dockBottomLeft", i18n.Text("debug.dockBottomLeft")},
+		{ui.ToolbarBottomRight, "debug.dockBottomRight", i18n.Text("debug.dockBottomRight")},
+	}
+}
+
+func (a *App) debugToolbarMenu() []ui.ContextMenuItem {
+	label := i18n.Text("debug.showToolbar")
+	if a.Root.DebugToolbar != nil {
+		label = i18n.Text("debug.hideToolbar")
+	}
+	return []ui.ContextMenuItem{
+		{Label: label, Command: "debug.toggleToolbar", Disabled: a.debugger.run == nil},
+		{Label: i18n.Text("debug.toolbarPosition"), Submenu: a.debugToolbarPositionItems()},
+	}
+}
+
+func (a *App) debugToolbarPositionItems() []ui.ContextMenuItem {
+	var positions []ui.ContextMenuItem
+	for _, pos := range debugToolbarPositions() {
+		positions = append(positions, ui.ContextMenuItem{Label: pos.label, Command: pos.command, Checked: menuChecked(pos.corner == a.debugger.toolbarCorner)})
+	}
+	return positions
+}
+
+func (a *App) showDebugToolbarDropdown(x, y int) {
+	items := append(a.debugToolbarPositionItems(), ui.MenuSep(), ui.ContextMenuItem{Label: i18n.Text("debug.toolbarHidden"), Command: "debug.toggleToolbar"})
+	openContextMenu(a, items, x, y)
 }
