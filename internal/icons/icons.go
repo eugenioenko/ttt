@@ -25,7 +25,7 @@ const (
 	Commit         Name = "commit"
 	Lock           Name = "lock"
 	Pinned         Name = "pinned"
-  Bookmark       Name = "bookmark"
+	Bookmark       Name = "bookmark"
 
 	ChevronRight Name = "chevron-right"
 	ChevronLeft  Name = "chevron-left"
@@ -93,7 +93,7 @@ var table = map[Name]glyphs{
 	Commit:         {Plain: "●", Nerd: "\ueafc"},
 	Lock:           {Plain: "⚿", Nerd: ""},
 	Pinned:         {Plain: "♦", Nerd: ""},
-  Bookmark:       {Plain: "⚑", Nerd: "\uf02e"},
+	Bookmark:       {Plain: "⚑", Nerd: "\uf02e"},
 
 	ChevronRight: {Plain: string(PlainChevronRight), Nerd: ""},
 	ChevronLeft:  {Plain: string(PlainChevronLeft), Nerd: ""},
