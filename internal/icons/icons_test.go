@@ -90,3 +90,13 @@ func TestOverrideWins(t *testing.T) {
 		t.Errorf("chevron-down = %q, want the nerd default", got)
 	}
 }
+
+func TestDebugMarkersFitGutter(t *testing.T) {
+	for _, mode := range []string{"", config.IconsNerdFont} {
+		for _, name := range []Name{Breakpoint, DebugExecution} {
+			if glyph := Get(mode, name); textwidth.String(glyph) != 1 {
+				t.Fatalf("%s in %q mode uses more than one column: %q", name, mode, glyph)
+			}
+		}
+	}
+}

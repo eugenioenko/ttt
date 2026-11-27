@@ -167,7 +167,7 @@ func (a *App) StartDebugging() {
 }
 
 func (a *App) prepareDebugTarget(t dap.Target) {
-	if a.debugger.run != nil {
+	if a.debugger.run != nil || a.tasks.post == nil {
 		return
 	}
 	adapter, err := dap.LookupAdapter(a.Settings.Debug.Adapters, t.Type)

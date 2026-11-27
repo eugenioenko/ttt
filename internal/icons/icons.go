@@ -151,7 +151,9 @@ func Get(mode string, name Name) string {
 	}
 	g := table[name]
 	if mode == config.IconsNerdFont && g.Nerd != "" {
-		return g.Nerd
+		if (name != DebugExecution && name != Breakpoint) || textwidth.String(g.Nerd) == 1 {
+			return g.Nerd
+		}
 	}
 	if name == DebugExecution && textwidth.Rune('▶') > 1 {
 		return ">"

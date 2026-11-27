@@ -820,6 +820,7 @@
   "debug.toggleBreakpoint": "Toggle Breakpoint",
   "debug.noTargets": "Define a debug configuration in .ttt/launch.json.",
   "debug.unsupportedLaunch": "This workflow requires a generic stdio launch configuration.",
+  "debug.emptyCommand": "The debug adapter command is empty.",
   "debug.ended": "Debug session ended",
   "debug.stoppedAt": "Debugger stopped at {file}:{line}",
   "debug.missingAdapter": "Debug adapter '{type}' is not configured. Search Plugins for a debugger for your language, or configure debug.adapters in Settings.",

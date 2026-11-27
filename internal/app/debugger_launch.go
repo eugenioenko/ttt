@@ -26,7 +26,7 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 	initial := <-r.points
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
-	stops := make(chan int, 1)
+	stops := make(chan *int, 1)
 	session, err := dap.StartStdio(cmd, func(e dap.Event) {
 		switch e.Name {
 		case "initialized":
@@ -34,7 +34,7 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 		case "terminated":
 			endOnce.Do(func() { close(terminated) })
 		case "stopped":
-			var body struct{ ThreadID int }
+			var body struct{ ThreadID *int }
 			if json.Unmarshal(e.Body, &body) == nil {
 				select {
 				case <-stops:
@@ -54,7 +54,13 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 	}()
 	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	var caps struct{ SupportsConfigurationDoneRequest bool }
+	var caps struct {
+		SupportsConfigurationDoneRequest bool
+		ExceptionBreakpointFilters       []struct {
+			Filter  string
+			Default bool
+		}
+	}
 	if err = session.Call(startup, "initialize", map[string]any{"adapterID": adapter, "clientID": "ttt", "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
@@ -73,10 +79,25 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 			launch = nil
 		case <-initialized:
 			initialized = nil
+			select {
+			case initial = <-r.points:
+			default:
+			}
 			if err = syncDebugPoints(startup, session, nil, initial); err != nil {
 				return err
 			}
 			sent = initial
+			if len(caps.ExceptionBreakpointFilters) > 0 {
+				filters := make([]string, 0, len(caps.ExceptionBreakpointFilters))
+				for _, f := range caps.ExceptionBreakpointFilters {
+					if f.Default {
+						filters = append(filters, f.Filter)
+					}
+				}
+				if err = session.Call(startup, "setExceptionBreakpoints", map[string]any{"filters": filters}, nil); err != nil {
+					return err
+				}
+			}
 			if caps.SupportsConfigurationDoneRequest {
 				if err = session.Call(startup, "configurationDone", struct{}{}, nil); err != nil {
 					return err
@@ -115,29 +136,52 @@ func (r *debugRun) launch(ctx context.Context, cmd *exec.Cmd, adapter string, ar
 			sent = next
 		case id := <-stops:
 			request, finish := context.WithTimeout(ctx, 10*time.Second)
-			var trace struct {
-				StackFrames []struct {
-					Line   int
-					Source struct{ Path string }
-				}
-			}
-			err := session.Call(request, "stackTrace", map[string]int{"threadId": id, "levels": 1}, &trace)
+			path, line, err := stoppedLocation(request, session, id)
 			finish()
 			if err != nil {
 				return err
 			}
-			if len(trace.StackFrames) > 0 {
-				f := trace.StackFrames[0]
-				if f.Source.Path != "" && f.Line > 0 {
-					path := f.Source.Path
-					if !filepath.IsAbs(path) {
-						path = filepath.Join(r.folder, path)
-					}
-					stopped(filepath.Clean(path), f.Line)
+			if path != "" && line > 0 {
+				if !filepath.IsAbs(path) {
+					path = filepath.Join(r.folder, path)
 				}
+				stopped(filepath.Clean(path), line)
 			}
 		}
 	}
+}
+
+func stoppedLocation(ctx context.Context, session *dap.Session, id *int) (string, int, error) {
+	var threads struct{ Threads []struct{ ID int } }
+	if id == nil {
+		if err := session.Call(ctx, "threads", nil, &threads); err != nil {
+			return "", 0, err
+		}
+	} else {
+		threads.Threads = append(threads.Threads, struct{ ID int }{*id})
+	}
+	for _, thread := range threads.Threads {
+		var trace struct {
+			StackFrames []struct {
+				Line   int
+				Source struct{ Path string }
+			}
+		}
+		err := session.Call(ctx, "stackTrace", map[string]int{"threadId": thread.ID, "levels": 1}, &trace)
+		if err != nil {
+			if id != nil || ctx.Err() != nil {
+				return "", 0, err
+			}
+			continue
+		}
+		if len(trace.StackFrames) > 0 {
+			f := trace.StackFrames[0]
+			if f.Source.Path != "" && f.Line > 0 {
+				return f.Source.Path, f.Line, nil
+			}
+		}
+	}
+	return "", 0, nil
 }
 
 func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string][]int) error {
