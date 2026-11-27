@@ -174,16 +174,16 @@ func (s *Session) write(ctx context.Context, message func(int) any) error {
 }
 
 func (s *Session) Call(ctx context.Context, command string, args, out any) error {
-	return s.call(ctx, command, args, out, nil)
+	return s.call(ctx, command, args, out, nil, nil)
 }
 
 // CallWithResponse handles a successful response on the reader before subsequent events.
 // The callback must not wait for another packet.
-func (s *Session) CallWithResponse(ctx context.Context, command string, args any, onSuccess func(json.RawMessage)) error {
-	return s.call(ctx, command, args, nil, onSuccess)
+func (s *Session) CallWithResponse(ctx context.Context, command string, args any, beforeWrite func(), onSuccess func(json.RawMessage)) error {
+	return s.call(ctx, command, args, nil, beforeWrite, onSuccess)
 }
 
-func (s *Session) call(ctx context.Context, command string, args, out any, onSuccess func(json.RawMessage)) error {
+func (s *Session) call(ctx context.Context, command string, args, out any, beforeWrite func(), onSuccess func(json.RawMessage)) error {
 	var arguments json.RawMessage
 	if args != nil {
 		var err error
@@ -195,6 +195,9 @@ func (s *Session) call(ctx context.Context, command string, args, out any, onSuc
 	var id int
 	reply := make(chan packet, 1)
 	err := s.write(ctx, func(seq int) any {
+		if beforeWrite != nil {
+			beforeWrite()
+		}
 		id = seq
 		s.mu.Lock()
 		s.pending[id] = pendingCall{reply, onSuccess}

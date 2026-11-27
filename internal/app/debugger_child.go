@@ -135,13 +135,22 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			peer.frames = frames
 			a.showDebugStop(peer, tid, frames)
 		})
-	}, func() {
+	}, func(replacing bool) {
 		deliver(func() {
-			if peer.thread == nil {
+			if peer.thread == nil && !peer.busy {
 				return
 			}
 			peer.generation++
-			peer.busy = false
+			peer.busy = replacing
+			if replacing {
+				peer.thread = nil
+				peer.frames = nil
+				peer.threads = nil
+				if a.activeDebugPeer() == peer {
+					a.clearDebugInspection()
+				}
+				return
+			}
 			if a.activeDebugPeer() == peer {
 				a.debugResumed(peer)
 			} else {

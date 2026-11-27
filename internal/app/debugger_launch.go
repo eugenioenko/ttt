@@ -45,7 +45,7 @@ type debugRun struct {
 	cancel    context.CancelFunc
 }
 
-func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame, []debugThread), resumed func()) error {
+func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame, []debugThread), resumed func(bool)) error {
 	var initial map[string][]int
 	select {
 	case initial = <-r.points:
@@ -65,6 +65,8 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	var pausedThread *int
 	stops := make(chan stopEvent, 1)
 	var pausedIDs []int
+	stopGeneration := make(map[int]uint64)
+	var lastContinuation, lastAllStop uint64
 	queueStop := func(all bool, id *int, gen uint64) {
 		select {
 		case <-stops:
@@ -73,13 +75,24 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		stops <- stopEvent{all, id, gen}
 	}
 
-	applyContinuation := func(tid *int, all *bool) {
-		generation++
-		if tid != nil && all != nil && !*all {
-			pausedIDs = slices.DeleteFunc(pausedIDs, func(id int) bool { return id == *tid })
-		} else {
-			pausedIDs = nil
+	applyContinuation := func(tid *int, all *bool, through uint64) {
+		if through < lastContinuation || through < lastAllStop {
+			return
 		}
+		previous := len(pausedIDs)
+		pausedIDs = slices.DeleteFunc(pausedIDs, func(id int) bool {
+			remove := stopGeneration[id] <= through && (tid == nil || all == nil || *all || id == *tid)
+			if remove {
+				delete(stopGeneration, id)
+			}
+			return remove
+		})
+		if previous == len(pausedIDs) && previous > 0 {
+			return
+		}
+		generation++
+		lastContinuation = generation
+		resumed(len(pausedIDs) > 0)
 		if len(pausedIDs) > 0 {
 			id := pausedIDs[0]
 			if pausedThread != nil && slices.Contains(pausedIDs, *pausedThread) {
@@ -89,23 +102,22 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			queueStop(false, &id, generation)
 		} else {
 			paused = false
-			resumed()
 		}
 	}
 	r.resumeControl = func(request context.Context, s *dap.Session, cmd string, id int) error {
-		eventMu.Lock()
-		before := generation
-		eventMu.Unlock()
-		return s.CallWithResponse(request, cmd, map[string]int{"threadId": id}, func(raw json.RawMessage) {
+		var before uint64
+		return s.CallWithResponse(request, cmd, map[string]int{"threadId": id}, func() {
+			eventMu.Lock()
+			before = generation
+			eventMu.Unlock()
+		}, func(raw json.RawMessage) {
 			var result struct{ AllThreadsContinued *bool }
 			if len(raw) > 0 {
 				_ = json.Unmarshal(raw, &result)
 			}
 			eventMu.Lock()
 			defer eventMu.Unlock()
-			if generation == before {
-				applyContinuation(&id, result.AllThreadsContinued)
-			}
+			applyContinuation(&id, result.AllThreadsContinued, before)
 		})
 	}
 	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
@@ -123,7 +135,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				AllThreadsContinued *bool
 			}
 			_ = json.Unmarshal(e.Body, &body)
-			applyContinuation(body.ThreadID, body.AllThreadsContinued)
+			applyContinuation(body.ThreadID, body.AllThreadsContinued, generation)
 			eventMu.Unlock()
 		case "stopped":
 			var body struct {
@@ -133,6 +145,12 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 			if json.Unmarshal(e.Body, &body) == nil {
 				eventMu.Lock()
 				generation++
+				if body.AllThreadsStopped || body.ThreadID == nil {
+					lastAllStop = generation
+				}
+				if body.ThreadID != nil {
+					stopGeneration[*body.ThreadID] = generation
+				}
 				paused, pausedThread = true, body.ThreadID
 				if body.ThreadID != nil && !slices.Contains(pausedIDs, *body.ThreadID) {
 					pausedIDs = append(pausedIDs, *body.ThreadID)
@@ -356,7 +374,19 @@ func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string]
 			list[i] = map[string]int{"line": line}
 		}
 		var result struct{ Breakpoints []debugBinding }
-		if err := s.Call(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": list}, &result); err != nil {
+		var decodeErr error
+		err := s.CallWithResponse(ctx, "setBreakpoints", map[string]any{"source": map[string]string{"path": path}, "breakpoints": list}, nil, func(raw json.RawMessage) {
+			if apply != nil {
+				decodeErr = json.Unmarshal(raw, &result)
+				if decodeErr == nil {
+					apply(path, lines, result.Breakpoints)
+				}
+			}
+		})
+		if err == nil {
+			err = decodeErr
+		}
+		if err != nil {
 			if apply != nil && ctx.Err() == nil && len(lines) > 0 {
 				bindings := make([]debugBinding, len(lines))
 				for i := range bindings {
@@ -366,9 +396,6 @@ func syncDebugPoints(ctx context.Context, s *dap.Session, prev, next map[string]
 				continue
 			}
 			return fmt.Errorf("%s: %w", path, err)
-		}
-		if apply != nil {
-			apply(path, lines, result.Breakpoints)
 		}
 	}
 	return nil

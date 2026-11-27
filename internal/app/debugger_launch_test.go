@@ -18,7 +18,7 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 		simulateConfiguringAdapter(mode)
 		os.Exit(0)
 	}
-	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event"} {
+	for _, mode := range []string{"filters-only", "configuration-done", "superseded", "individual", "continue-response", "continue-partial", "continue-event", "continue-new-stop"} {
 		t.Run(mode, func(t *testing.T) {
 			cmd := exec.Command(os.Args[0], "-test.run=^TestDebugLaunchConfigurationAndThread$")
 			cmd.Env = append(os.Environ(), "TTT_TEST_DAP_CONFIGURE="+mode, "GORACE=atexit_sleep_ms=0")
@@ -31,8 +31,16 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 			hit := false
 			var session *dap.Session
 			continued := false
+			replacing := false
+			order := make(chan string, 2)
+			run.onBindings = func(_ string, _ []int, _ []debugBinding) { order <- "response" }
 			err := run.runSession(ctx, func(_ context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
-				return dap.StartStdio(cmd, onEvent, nil)
+				return dap.StartStdio(cmd, func(event dap.Event) {
+					if event.Name == "breakpoint" {
+						order <- "event"
+					}
+					onEvent(event)
+				}, nil)
 			}, dap.Target{Type: "fixture", Request: "launch"}, nil, func(s *dap.Session) { session = s }, func(id int, frames []debugFrame, threads []debugThread) {
 				if strings.HasPrefix(mode, "continue-") {
 					if !continued {
@@ -47,6 +55,9 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 					if mode == "continue-partial" {
 						want = 0
 					}
+					if mode == "continue-partial" && !replacing {
+						t.Error("replacement stack was delivered before invalidating the resumed thread")
+					}
 					if id != want || len(threads) != 1 {
 						return
 					}
@@ -56,7 +67,10 @@ func TestDebugLaunchConfigurationAndThread(t *testing.T) {
 				}
 				hit = len(frames) > 0 && frames[0].Line == 7
 				cancel()
-			}, func() {})
+			}, func(pending bool) { replacing = pending })
+			if len(order) != 2 || <-order != "response" || <-order != "event" {
+				t.Error("breakpoint event delivered before response")
+			}
 			if !hit || err != context.Canceled || !cmd.ProcessState.Success() {
 				t.Fatalf("hit=%v err=%v adapter=%v", hit, err, cmd.ProcessState)
 			}
@@ -98,6 +112,7 @@ func simulateConfiguringAdapter(mode string) {
 		fail()
 	}
 	reply(bp, nil)
+	send(map[string]any{"type": "event", "event": "breakpoint"})
 	filter := read("setExceptionBreakpoints")
 	if string(filter.Arguments) != `{"filters":["raised"]}` {
 		fail()
@@ -144,12 +159,17 @@ func simulateConfiguringAdapter(mode string) {
 		case "continue-event":
 			send(map[string]any{"type": "event", "event": "continued", "body": map[string]int{"threadId": 2}})
 			reply(control, nil)
+		case "continue-new-stop":
+			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
+			pending := read("stackTrace")
+			reply(control, nil)
+			reply(pending, nil)
 		case "continue-partial":
 			reply(control, map[string]bool{"allThreadsContinued": false})
 		default:
 			reply(control, nil)
 		}
-		if mode != "continue-partial" {
+		if mode != "continue-partial" && mode != "continue-new-stop" {
 			send(map[string]any{"type": "event", "event": "stopped", "body": map[string]int{"threadId": 3}})
 		}
 		reply(read("stackTrace"), map[string]any{"stackFrames": []any{map[string]int{"line": 7}}})
