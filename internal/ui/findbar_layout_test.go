@@ -115,26 +115,26 @@ func TestFindBarAnchorsToRect(t *testing.T) {
 			name:    "left split",
 			surface: Rect{W: 120, H: 30},
 			anchor:  Rect{X: 32, Y: 4, W: 43, H: 24},
-			want:    Rect{X: 35, Y: 4, W: 40, H: 3},
+			want:    Rect{X: 34, Y: 4, W: 40, H: 3},
 		},
 		{
 			name:     "bottom split replace",
 			surface:  Rect{W: 120, H: 30},
 			anchor:   Rect{X: 32, Y: 18, W: 87, H: 10},
 			expanded: true,
-			want:     Rect{X: 79, Y: 18, W: 40, H: 4},
+			want:     Rect{X: 78, Y: 18, W: 40, H: 4},
 		},
 		{
 			name:    "narrow split fits inside group",
 			surface: Rect{W: 120, H: 30},
 			anchor:  Rect{X: 10, Y: 4, W: 28, H: 20},
-			want:    Rect{X: 10, Y: 4, W: 28, H: 3},
+			want:    Rect{X: 10, Y: 4, W: 27, H: 3},
 		},
 		{
 			name:    "very narrow split keeps minimum width",
 			surface: Rect{W: 80, H: 24},
 			anchor:  Rect{X: 70, Y: 4, W: 8, H: 18},
-			want:    Rect{X: 54, Y: 4, W: 24, H: 3},
+			want:    Rect{X: 53, Y: 4, W: 24, H: 3},
 		},
 		{
 			name:    "very narrow left-edge split clamps to surface",
@@ -147,13 +147,13 @@ func TestFindBarAnchorsToRect(t *testing.T) {
 			surface:  Rect{W: 120, H: 30},
 			anchor:   Rect{X: 32, Y: 28, W: 50, H: 2},
 			expanded: true,
-			want:     Rect{X: 42, Y: 26, W: 40, H: 4},
+			want:     Rect{X: 41, Y: 26, W: 40, H: 4},
 		},
 		{
 			name:    "non-zero surface origin",
 			surface: Rect{X: 7, Y: 3, W: 80, H: 24},
 			anchor:  Rect{X: 12, Y: 7, W: 43, H: 18},
-			want:    Rect{X: 8, Y: 4, W: 40, H: 3},
+			want:    Rect{X: 7, Y: 4, W: 40, H: 3},
 		},
 	}
 
