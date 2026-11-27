@@ -500,6 +500,7 @@
   "general.replaceAll": "Replace All",
   "general.reset": "Reset",
   "general.save": "Save",
+  "general.saveAll": "Save All",
   "general.saveWorkspace": "Save Workspace",
   "general.search": "Search",
   "general.settings": "Settings",

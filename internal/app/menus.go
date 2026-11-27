@@ -33,6 +33,7 @@ func initMenuText() {
 			ui.MenuSep(),
 			{Label: i18n.Text("general.save"), Command: "file.save"},
 			{Label: i18n.Text("menu.saveAs"), Command: "file.saveAs"},
+			{Label: i18n.Text("general.saveAll"), Command: "file.saveAll"},
 			ui.MenuSep(),
 			{Label: i18n.Text("general.openFile"), Command: "file.open"},
 			{Label: i18n.Text("general.openFolder"), Command: "workspace.openFolder"},
