@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"slices"
 	"sync"
@@ -40,7 +41,7 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 		mu.Unlock()
 		childCtx, cancel := context.WithCancel(childrenCtx)
 		child := &debugRun{ctx: childCtx, cancel: cancel, attached: request == "attach", folder: root.folder, file: root.file, languages: root.languages, points: make(chan map[string][]int, 1)}
-		childTarget := dap.Target{Type: target.Type, Request: request, Folder: root.folder, Arguments: config}
+		childTarget := dap.Target{Name: target.Name, Type: target.Type, Request: request, Folder: root.folder, Arguments: config}
 		started := make(chan error, 1)
 		deliver(func() {
 			if childCtx.Err() == nil {
@@ -69,7 +70,16 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 		}
 	}
 	err := peer.runSession(peer.ctx, func(ctx context.Context, event func(dap.Event)) (*dap.Session, error) {
-		return open(ctx, event, options)
+		return open(ctx, func(e dap.Event) {
+			if e.Name != "output" {
+				event(e)
+				return
+			}
+			var body struct{ Category, Output string }
+			if json.Unmarshal(e.Body, &body) == nil && body.Output != "" {
+				deliver(func() { a.appendDebugOutput(peer, target.Name, body.Category, body.Output) })
+			}
+		}, options)
 	}, target, args, func(s *dap.Session) {
 		deliver(func() {
 			peer.session = s
@@ -102,6 +112,7 @@ func (a *App) runDebugPeer(root, peer *debugRun, target dap.Target, args map[str
 			}
 		})
 	})
+	deliver(func() { a.flushDebugOutput(peer, target.Name) })
 	if ready != nil {
 		failure := err
 		if failure == nil {

@@ -15,6 +15,7 @@ import (
 )
 
 type debugRun struct {
+	output         map[string]string
 	terminalIDs    []string
 	stopChildren   func()
 	frames         []debugFrame
