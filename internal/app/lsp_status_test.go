@@ -1,12 +1,16 @@
 package app
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/textwidth"
@@ -107,5 +111,101 @@ func TestLspStateLabel(t *testing.T) {
 		if got := lspStateLabel(tt.state, tt.binaryOK); got != tt.want {
 			t.Errorf("lspStateLabel(%v, %v) = %q, want %q", tt.state, tt.binaryOK, got, tt.want)
 		}
+	}
+}
+
+func TestLspStatusMessage(t *testing.T) {
+	tests := []struct {
+		name      string
+		input     string
+		wantMsg   string
+		truncated bool
+	}{
+		{
+			name:    "ascii 60 columns unchanged",
+			input:   strings.Repeat("a", 60),
+			wantMsg: strings.Repeat("a", 60),
+		},
+		{
+			name:      "ascii 61 columns truncated to 60 plus ellipsis",
+			input:     strings.Repeat("a", 61),
+			wantMsg:   strings.Repeat("a", 60) + "…",
+			truncated: true,
+		},
+		{
+			name:      "ascii 62 columns truncated to 60 plus ellipsis",
+			input:     strings.Repeat("a", 62),
+			wantMsg:   strings.Repeat("a", 60) + "…",
+			truncated: true,
+		},
+		{
+			name:      "issue repro wide char straddling cut dropped cleanly",
+			input:     strings.Repeat("a", 59) + "界b",
+			wantMsg:   strings.Repeat("a", 59) + "…",
+			truncated: true,
+		},
+		{
+			name:    "wide chars exactly 60 columns unchanged despite 90 bytes",
+			input:   strings.Repeat("界", 30),
+			wantMsg: strings.Repeat("界", 30),
+		},
+		{
+			name:      "wide chars 61 columns truncated cleanly to 60",
+			input:     strings.Repeat("界", 30) + "a",
+			wantMsg:   strings.Repeat("界", 30) + "…",
+			truncated: true,
+		},
+		{
+			name:      "wide chars 62 columns truncated cleanly to 60",
+			input:     strings.Repeat("界", 31),
+			wantMsg:   strings.Repeat("界", 30) + "…",
+			truncated: true,
+		},
+		{
+			name:    "ascii plus wide char ending exactly at 60 columns",
+			input:   strings.Repeat("a", 58) + "界",
+			wantMsg: strings.Repeat("a", 58) + "界",
+		},
+		{
+			name:      "ascii plus wide char ending at 60 with trailing rune",
+			input:     strings.Repeat("a", 58) + "界a",
+			wantMsg:   strings.Repeat("a", 58) + "界…",
+			truncated: true,
+		},
+		{
+			name:    "multibyte narrow char at column 60 unchanged",
+			input:   strings.Repeat("a", 59) + "ñ",
+			wantMsg: strings.Repeat("a", 59) + "ñ",
+		},
+		{
+			name:      "multibyte narrow char at cut kept whole",
+			input:     strings.Repeat("a", 59) + "ñb",
+			wantMsg:   strings.Repeat("a", 59) + "ñ…",
+			truncated: true,
+		},
+	}
+
+	wrapper := i18n.Format("lsp.lsp", i18n.Args{"msg": ""})
+	wrapperWidth := textwidth.String(wrapper)
+	ellipsisWidth := textwidth.String("…")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := lspStatusMessage(errors.New(tt.input))
+			if !utf8.ValidString(got) {
+				t.Fatalf("lspStatusMessage produced invalid UTF-8: %q", got)
+			}
+			want := i18n.Format("lsp.lsp", i18n.Args{"msg": tt.wantMsg})
+			if got != want {
+				t.Errorf("lspStatusMessage(%q) = %q, want %q", tt.input, got, want)
+			}
+			maxWidth := wrapperWidth + 60
+			if tt.truncated {
+				maxWidth += ellipsisWidth
+			}
+			if w := textwidth.String(got); w > maxWidth {
+				t.Errorf("display width = %d, want <= %d (got %q)", w, maxWidth, got)
+			}
+		})
 	}
 }

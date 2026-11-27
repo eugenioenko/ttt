@@ -17,6 +17,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/lsp"
+	"github.com/eugenioenko/ttt/internal/textwidth"
 	"github.com/eugenioenko/ttt/internal/ui"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -957,8 +958,8 @@ func (a *App) ApplySymbols(symbols []lsp.DocumentSymbol) {
 
 func lspStatusMessage(err error) string {
 	msg := err.Error()
-	if len(msg) > 60 {
-		msg = msg[:60] + "…"
+	if textwidth.String(msg) > 60 {
+		msg = textwidth.Truncate(msg, 60, "") + "…"
 	}
 	return i18n.Format("lsp.lsp", i18n.Args{"msg": msg})
 }
