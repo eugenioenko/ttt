@@ -34,7 +34,7 @@ for (const spec of cases) {
     const byAddress = mode === "address" || mode === "external adapter";
     const cfg = byAddress ? spec.addressAttach : spec.pidAttach;
     if (!cfg) continue;
-    test(`[${spec.name}] attach by ${mode}, inspect, step, detach`, async () => {
+    test(`[${spec.name}] attach by ${mode}, inspect, step, detach`, {skip: cfg.skip}, async () => {
       const dir = mkdtempSync(join(tmpdir(), "ttt-attach-"));
       const children = [];
       const start = argv => {

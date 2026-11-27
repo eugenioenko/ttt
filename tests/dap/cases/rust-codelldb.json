@@ -1,0 +1,99 @@
+{
+  "name": "rust-codelldb",
+  "requires": [
+    "install/codelldb.sh",
+    "install/gdb.sh"
+  ],
+  "source": "fixtures/rust-counter/main.rs",
+  "binary": "bin/linux-amd64/rust-counter",
+  "settings": {
+    "debug": {
+      "adapters": {
+        "lldb": {
+          "command": [
+            "codelldb",
+            "--port",
+            "${port}"
+          ],
+          "transport": "server",
+          "languages": [
+            "rust"
+          ]
+        }
+      }
+    }
+  },
+  "launch": {
+    "name": "rust-codelldb",
+    "type": "lldb",
+    "request": "launch",
+    "program": "${workspaceFolder}/rust-counter"
+  },
+  "pidAttach": {
+    "arguments": {
+      "pid": "${pid}"
+    }
+  },
+  "lifecycle": {
+    "program": "${workspaceFolder}/rust-attach"
+  },
+  "service": {
+    "source": "fixtures/rust-attach/main.rs",
+    "binary": "bin/linux-amd64/rust-attach",
+    "command": [
+      "./rust-attach"
+    ],
+    "line": 14,
+    "nextLine": 15,
+    "locals": {
+      "value": "42"
+    }
+  },
+  "addressAttach": {
+    "command": [
+      "python3",
+      "${fixtures}/loopback_stdio.py",
+      "gdbserver",
+      "--once",
+      "--attach",
+      "stdio",
+      "${pid}"
+    ],
+    "portPattern": "Listening on port (\\d+)",
+    "arguments": {
+      "program": "${workspaceFolder}/rust-attach",
+      "targetCreateCommands": [
+        "target create ${workspaceFolder}/rust-attach"
+      ],
+      "processCreateCommands": [
+        "gdb-remote 127.0.0.1:${port}"
+      ]
+    },
+    "continueOnAttach": true
+  },
+  "output": "count = 43",
+  "breakpoint": {
+    "line": 6
+  },
+  "inspection": [
+    {
+      "line": 6,
+      "variable": "count = 41"
+    },
+    {
+      "key": "f10",
+      "line": 7,
+      "variable": "count = 42"
+    },
+    {
+      "key": "f11",
+      "line": 2,
+      "variable": "value = 42"
+    },
+    {
+      "key": "shift+f11",
+      "line": 7,
+      "variable": "count = 42"
+    }
+  ]
+}
