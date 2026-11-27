@@ -12,6 +12,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/asynctask"
 	"github.com/eugenioenko/ttt/internal/command"
 	"github.com/eugenioenko/ttt/internal/dap"
+	"github.com/eugenioenko/ttt/internal/dap/providers"
 	"github.com/eugenioenko/ttt/internal/highlight"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
@@ -21,12 +22,14 @@ import (
 )
 
 type debuggerState struct {
-	picker *asynctask.Task[[]dap.Process]
-	panel  debugSidebar
-	points map[string][]int
-	run    *debugRun
-	file   string
-	line   int
+	picker   *asynctask.Task[[]dap.Process]
+	panel    debugSidebar
+	points   map[string][]int
+	run      *debugRun
+	selected *debugRun
+	peers    []*debugRun
+	file     string
+	line     int
 }
 
 func registerDebuggerCommands(a *App) {
@@ -126,6 +129,11 @@ func (a *App) queueDebugPoints(r *debugRun) {
 			points[path] = slices.Clone(lines)
 		}
 	}
+	for _, peer := range append([]*debugRun{r}, a.debugger.peers...) {
+		offerDebugPoints(peer, points)
+	}
+}
+func offerDebugPoints(r *debugRun, points map[string][]int) {
 	select {
 	case <-r.points:
 	default:
@@ -204,22 +212,25 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 		a.StatusError(err.Error())
 		return
 	}
-	if adapter.Provider != "generic" || (adapter.Transport != "" && adapter.Transport != "stdio" && adapter.Transport != "tcp") {
-		a.StatusError(i18n.Text("debug.unsupportedLaunch"))
-		return
-	}
-	args, err := adapter.Arguments(t)
-	if err != nil {
-		a.StatusError(err.Error())
-		return
-	}
 	if t.Request == "attach" {
 		for _, key := range []string{"pid", "processId"} {
-			if args[key] == "${command:pickProcess}" {
+			if t.Arguments[key] == "${command:pickProcess}" {
+				if adapter.Provider == "generic" {
+					if _, err := adapter.Arguments(t); err != nil {
+						a.StatusError(err.Error())
+						return
+					}
+				}
 				a.pickDebugProcess(t, key)
 				return
 			}
 		}
+	}
+	provider := providers.For(adapter)
+	args, err := provider.Arguments(t)
+	if err != nil {
+		a.StatusError(err.Error())
+		return
 	}
 	for _, g := range a.editorGroups() {
 		for _, path := range g.OpenFilePaths() {
@@ -268,29 +279,17 @@ func (a *App) prepareDebugTarget(t dap.Target) {
 
 	go func() {
 		defer close(r.closed)
-		err := r.runSession(ctx, func(ctx context.Context, onEvent func(dap.Event)) (*dap.Session, error) {
-			return adapter.Open(ctx, t.Folder, onEvent, func(requestCtx context.Context, req dap.TerminalRequest) (int, error) {
-				return a.runDebugTerminal(requestCtx, r, req, deliver)
-			})
-		}, t, args, func(session *dap.Session) { deliver(func() { r.session = session; a.refreshDebugControls() }) }, func(tid int, frames []debugFrame) {
-			deliver(func() {
-				a.showDebugStop(r, tid, frames)
-			})
-		}, func() {
-			deliver(func() {
-				if r.thread != nil {
-					r.generation++
-					r.busy = false
-					a.debugResumed(r)
-				}
-			})
-		})
+		err := a.runDebugPeer(r, r, t, args, func(ctx context.Context, event func(dap.Event), options dap.SessionOptions) (*dap.Session, error) {
+			return provider.Open(ctx, t, args, event, options)
+		}, deliver, nil)
 
 		canceled := ctx.Err() != nil
 		cancel()
 		deliver(func() {
 			a.closeDebugTerminals(r)
 			a.debugger.run = nil
+			a.debugger.selected = nil
+			a.debugger.peers = nil
 			a.debugger.file = ""
 			a.debugger.line = 0
 			a.clearDebugInspection()

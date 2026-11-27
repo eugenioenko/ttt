@@ -9,6 +9,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/tidwall/jsonc"
@@ -104,7 +105,7 @@ func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string,
 	if program, err := filepath.Rel(folder, source); source != "" && adapter != "" && err == nil && filepath.IsLocal(program) {
 		config := map[string]any{"program": filepath.ToSlash(program)}
 		if t, ok := settings.FileTarget("${workspaceFolder}", "${workspaceFolder}/"+filepath.ToSlash(program), adapter); ok {
-			expanded, err := t.expand(t.Arguments)
+			expanded, err := t.Expand(t.Arguments)
 			if err != nil {
 				return "", err
 			}
@@ -134,7 +135,7 @@ func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string,
 	return path, nil
 }
 
-func (t Target) expand(value any) (any, error) {
+func (t Target) Expand(value any) (any, error) {
 	switch v := value.(type) {
 	case string:
 		if strings.Contains(v, "${input:") {
@@ -150,7 +151,7 @@ func (t Target) expand(value any) (any, error) {
 	case []any:
 		dst := make([]any, len(v))
 		for i, item := range v {
-			x, err := t.expand(item)
+			x, err := t.Expand(item)
 			if err != nil {
 				return nil, err
 			}
@@ -160,7 +161,7 @@ func (t Target) expand(value any) (any, error) {
 	case map[string]any:
 		dst := make(map[string]any, len(v))
 		for k, item := range v {
-			x, err := t.expand(item)
+			x, err := t.Expand(item)
 			if err != nil {
 				return nil, err
 			}
@@ -178,9 +179,26 @@ func (a Adapter) Arguments(t Target) (map[string]any, error) {
 	if _, ok := t.Arguments["preLaunchTask"]; ok {
 		return nil, fmt.Errorf("preLaunchTask is unsupported")
 	}
-	out, err := t.expand(t.Arguments)
+	out, err := t.Expand(t.Arguments)
 	if err != nil {
 		return nil, err
 	}
 	return out.(map[string]any), nil
+}
+
+func (t Target) Fields(defaults map[string]any, allowed ...string) (map[string]any, error) {
+	for key, v := range t.Arguments {
+		if key == "request" || key == "name" || key == "type" || key == "presentation" {
+			continue
+		}
+		if !slices.Contains(allowed, key) {
+			return nil, fmt.Errorf("%s: unsupported %s %s field %q", t.Name, t.Type, t.Request, key)
+		}
+		x, err := t.Expand(v)
+		if err != nil {
+			return nil, err
+		}
+		defaults[key] = x
+	}
+	return defaults, nil
 }

@@ -61,10 +61,10 @@ func (a *App) ensureDebugPanel() {
 		if cmd != "activate" {
 			return
 		}
-		if f, ok := p.frameNodes[n]; ok && !p.stale && a.debugger.run != nil && !a.debugger.run.stepping {
+		if f, ok := p.frameNodes[n]; ok && !p.stale && a.activeDebugPeer() != nil && !a.activeDebugPeer().stepping {
 			next := p.debugInspection
 			a.beginDebugInspection()
-			a.loadDebugFrame(a.debugger.run, &next, f)
+			a.loadDebugFrame(a.activeDebugPeer(), &next, f)
 		}
 		if b, ok := p.breakNodes[n]; ok {
 			a.revealDebugLocation(b.path, b.line)
@@ -120,8 +120,8 @@ func (a *App) refreshDebugControls() {
 		return
 	}
 	state := debugControlState{idle: p.idle}
-	if r := a.debugger.run; r != nil {
-		state = debugControlState{active: true, attached: r.attached, paused: r.thread != nil, ready: r.session != nil && !r.busy}
+	if r := a.activeDebugPeer(); r != nil {
+		state = debugControlState{active: true, attached: a.debugger.run.attached, paused: r.thread != nil, ready: r.session != nil && !r.busy}
 	} else {
 		_, state.fileReady = a.currentFileDebugTarget()
 	}
@@ -215,6 +215,9 @@ func (a *App) clearDebugInspection() {
 
 func (a *App) debugResumed(r *debugRun) {
 	r.thread = nil
+	if a.selectPausedPeer() {
+		return
+	}
 	if r.stepping {
 		a.beginDebugInspection()
 		a.debugger.file = ""
@@ -234,7 +237,7 @@ func debugQuery[T any](a *App, r *debugRun, method string, args any, apply func(
 		var result T
 		err := r.session.Call(ctx, method, args, &result)
 		_ = post(func() {
-			if a.debugger.run != r || a.debugger.panel.epoch != epoch || r.ctx.Err() != nil {
+			if a.activeDebugPeer() != r || a.debugger.panel.epoch != epoch || r.ctx.Err() != nil {
 				return
 			}
 			if err != nil {
@@ -313,7 +316,7 @@ func (a *App) loadDebugVariables(r *debugRun, inspection *debugInspection, n *wi
 
 func (a *App) expandDebugNode(n *widgets.TreeNode) {
 	p := &a.debugger.panel
-	r := a.debugger.run
+	r := a.activeDebugPeer()
 	if p.stale || r == nil || r.thread == nil || r.stepping {
 		return
 	}

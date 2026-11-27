@@ -7,7 +7,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/dap"
 )
 
-func (a *App) runDebugTerminal(ctx context.Context, r *debugRun, req dap.TerminalRequest, deliver func(func())) (int, error) {
+func (a *App) runDebugTerminal(ctx context.Context, root, r *debugRun, req dap.TerminalRequest, deliver func(func())) (int, error) {
 	type result struct {
 		pid int
 		err error
@@ -34,7 +34,7 @@ func (a *App) runDebugTerminal(ctx context.Context, r *debugRun, req dap.Termina
 		if err == nil {
 			pid = a.terminalByID(id).Term.PID()
 			if !r.attached {
-				r.terminalIDs = append(r.terminalIDs, id)
+				root.terminalIDs = append(root.terminalIDs, id)
 			}
 		}
 		done <- result{pid, err}

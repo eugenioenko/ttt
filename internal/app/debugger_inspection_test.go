@@ -177,3 +177,21 @@ func TestDebugFileOutsideWorkspaceKeepsOnlyItsBreakpoints(t *testing.T) {
 		t.Fatal(got)
 	}
 }
+
+func TestContinueSelectsAnotherPausedPeer(t *testing.T) {
+	a, root, _, _ := inspectionTestPeer(t)
+	thread := 7
+	root.thread = &thread
+	child := &debugRun{ctx: root.ctx, thread: &thread}
+	a.debugger.peers = []*debugRun{child}
+	a.debugger.selected = child
+	a.debugResumed(child)
+	if a.activeDebugPeer() != root || child.thread != nil {
+		t.Fatal("resuming child lost the paused root")
+	}
+	child.thread = &thread
+	a.debugResumed(root)
+	if a.activeDebugPeer() != child || root.thread != nil {
+		t.Fatal("resuming root lost the paused child")
+	}
+}

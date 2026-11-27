@@ -19,10 +19,10 @@ func TestTCPAdapterDisconnectLeavesServerAvailable(t *testing.T) {
 	defer cancel()
 	adapter := Adapter{Transport: "tcp", Address: listener.Addr().String()}
 	for range 2 {
-		session, err := adapter.Open(ctx, "", nil, func(context.Context, TerminalRequest) (int, error) {
+		session, err := adapter.Open(ctx, Target{}, nil, nil, SessionOptions{RunInTerminal: func(context.Context, TerminalRequest) (int, error) {
 			t.Error("TCP peer invoked local terminal")
 			return 0, nil
-		})
+		}})
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -10,6 +10,10 @@ import (
 // StartStdio owns the command and its pipes. Callers may set Dir, Env and Stderr
 // before starting the adapter.
 func StartStdio(cmd *exec.Cmd, onEvent func(Event), run RunInTerminal) (*Session, error) {
+	return startStdio(cmd, onEvent, SessionOptions{RunInTerminal: run})
+}
+
+func startStdio(cmd *exec.Cmd, onEvent func(Event), options SessionOptions) (*Session, error) {
 	if cmd.Stdout != nil {
 		return nil, errors.New("DAP adapter stdout already set")
 	}
@@ -44,7 +48,7 @@ func StartStdio(cmd *exec.Cmd, onEvent func(Event), run RunInTerminal) (*Session
 			_ = cmd.Process.Kill()
 			<-exited
 		}
-	}, onEvent, run)
+	}, onEvent, options)
 	go func() {
 		_ = cmd.Wait()
 		close(exited)

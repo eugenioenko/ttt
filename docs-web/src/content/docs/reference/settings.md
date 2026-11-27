@@ -374,7 +374,7 @@ The last attempt is stored as `lastUpdateCheckAt` in `state.json`, not in `setti
 | Adapter field | Meaning |
 | --- | --- |
 | `command`, `cwd`, `env` | Adapter executable and arguments, optional working directory, and environment overrides. |
-| `transport` | `stdio` (default), `server` (command contains `${port}`), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
+| `transport` | `stdio` (default), `server` (command contains `${port}`, requires `lsof` on Unix to verify the adapter connection), `listen` (capture the address from output using `addressPattern`), or `tcp` (use `address`). |
 | `languages` | Language IDs associated with the adapter. |
 | `provider` | Defaults to `generic`. Adapter-specific hooks use an explicit `delve`, `jsdebug`, or `debugpy` value. |
 | `fileLaunch` | Optional launch arguments for a single file. Recipes support `${file}`, `${fileDirname}`, and `${workspaceFolder}`. |
@@ -395,7 +395,11 @@ For a GDB process picker, add the following entry to the launch file's `configur
 
 To attach to a running gdbserver, replace `pid` with `"target": "127.0.0.1:2345"` and supply `program` for the local binary with debug symbols. The sidebar's Detach action requests that the adapter leave the target running. When the *DAP adapter itself* is already listening, configure its `debug.adapters` entry with `"transport": "tcp"` and `"address": "host:port"`.
 
-Local stdio adapters can use DAP `runInTerminal` to open the debuggee in ttt’s integrated terminal. The request supplies the working directory, literal argument list, and environment overrides. A null environment value removes an inherited variable. External terminal requests and shell-interpreted arguments are unsupported. TCP adapters cannot start local terminal processes.
+Local stdio adapters and adapters using a ttt-owned private socket can use DAP `runInTerminal` to open the debuggee in ttt’s integrated terminal. The request supplies the working directory, literal argument list, and environment overrides. A null environment value removes an inherited variable. External terminal requests and shell-interpreted arguments are unsupported. TCP adapters cannot start local terminal processes.
+
+Adapters can request a child session with `startDebugging`. Each child reconnects to the same adapter endpoint or starts another instance of the configured stdio command. Breakpoints are shared, while stepping and variable inspection use the session that stopped.
+
+The `delve` provider supports local PID attach, headless server attach, and Go launches with `console: "externalTerminal"`. The `jsdebug` provider supports Node and source-mapped TypeScript. To attach by PID, start Node with a loopback inspector and set `port` if it differs from 9229. The `debugpy` provider uses the workspace’s `.venv` interpreter when available and accepts a `python` override. Use `${python}` in the adapter command to run debugpy with that interpreter.
 
 ## Search
 

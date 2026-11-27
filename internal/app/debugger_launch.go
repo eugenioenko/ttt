@@ -16,6 +16,8 @@ import (
 
 type debugRun struct {
 	terminalIDs    []string
+	stopChildren   func()
+	frames         []debugFrame
 	ctx            context.Context
 	session        *dap.Session
 	thread         *int
@@ -33,7 +35,12 @@ type debugRun struct {
 }
 
 func (r *debugRun) runSession(ctx context.Context, open func(context.Context, func(dap.Event)) (*dap.Session, error), target dap.Target, args map[string]any, ready func(*dap.Session), stopped func(int, []debugFrame), resumed func()) error {
-	initial := <-r.points
+	var initial map[string][]int
+	select {
+	case initial = <-r.points:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 	initSignal, terminated := make(chan struct{}), make(chan struct{})
 	var initOnce, endOnce sync.Once
 	type stopEvent struct {
@@ -42,8 +49,10 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	}
 	var eventMu sync.Mutex
 	var generation uint64
+	var paused bool
+	var pausedThread *int
 	stops := make(chan stopEvent, 1)
-	startup, cancel := context.WithTimeout(ctx, 20*time.Second)
+	startup, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 	session, err := open(startup, func(e dap.Event) {
 		switch e.Name {
@@ -54,6 +63,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 		case "continued":
 			eventMu.Lock()
 			generation++
+			paused = false
 			resumed()
 			eventMu.Unlock()
 		case "stopped":
@@ -65,6 +75,7 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 				}
 				eventMu.Lock()
 				generation++
+				paused, pausedThread = true, body.ThreadID
 				stops <- stopEvent{body.ThreadID, generation}
 				eventMu.Unlock()
 			}
@@ -73,19 +84,51 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	if err != nil {
 		return err
 	}
-	defer func() {
-		stop, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = session.Disconnect(stop, !r.attached)
-	}()
 	var caps struct {
-		SupportsConfigurationDoneRequest bool
-		ExceptionBreakpointFilters       []struct {
+		SupportsConfigurationDoneRequest, SupportsTerminateRequest bool
+		ExceptionBreakpointFilters                                 []struct {
 			Filter  string
 			Default bool
 		}
 	}
-	if err = session.Call(startup, "initialize", map[string]any{"adapterID": target.Type, "clientID": "ttt", "supportsRunInTerminalRequest": session.SupportsRunInTerminal(), "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
+	var sent map[string][]int
+	defer func() {
+		if r.stopChildren != nil {
+			r.stopChildren()
+		}
+		stop, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		defer cancel()
+		if r.attached && session.ResumeBeforeDetach() {
+			_ = syncDebugPoints(stop, session, sent, nil)
+			eventMu.Lock()
+			isPaused, tid := paused, pausedThread
+			eventMu.Unlock()
+			if isPaused {
+				if tid == nil {
+					var threads struct{ Threads []struct{ ID int } }
+					if session.Call(stop, "threads", nil, &threads) == nil && len(threads.Threads) > 0 {
+						tid = &threads.Threads[0].ID
+					}
+				}
+				if tid != nil {
+					_ = session.Call(stop, "continue", map[string]int{"threadId": *tid}, nil)
+				}
+			}
+		}
+		if !r.attached && caps.SupportsTerminateRequest {
+			term, finish := context.WithTimeout(stop, 500*time.Millisecond)
+			if session.Call(term, "terminate", struct{}{}, nil) == nil {
+				select {
+				case <-terminated:
+				case <-session.Done():
+				case <-term.Done():
+				}
+			}
+			finish()
+		}
+		_ = session.Disconnect(stop, !r.attached)
+	}()
+	if err = session.Call(startup, "initialize", map[string]any{"adapterID": target.Type, "clientID": "ttt", "supportsStartDebuggingRequest": session.SupportsStartDebugging(), "supportsRunInTerminalRequest": session.SupportsRunInTerminal(), "linesStartAt1": true, "columnsStartAt1": true, "pathFormat": "path"}, &caps); err != nil {
 		return err
 	}
 	launch := make(chan error, 1)
@@ -93,7 +136,6 @@ func (r *debugRun) runSession(ctx context.Context, open func(context.Context, fu
 	// Some adapters acknowledge launch only after configurationDone.
 	initialized := initSignal
 	configured := false
-	var sent map[string][]int
 	for !configured || launch != nil {
 		select {
 		case err := <-launch:
@@ -244,7 +286,7 @@ func (a *App) DebugStepOver() { a.debugControl("next") }
 func (a *App) DebugStepIn()   { a.debugControl("stepIn") }
 func (a *App) DebugStepOut()  { a.debugControl("stepOut") }
 func (a *App) debugControl(cmd string) {
-	r := a.debugger.run
+	r := a.activeDebugPeer()
 	if r == nil || r.session == nil || r.busy || (cmd == "pause") != (r.thread == nil) {
 		return
 	}
@@ -278,7 +320,7 @@ func (a *App) debugControl(cmd string) {
 		}
 
 		_ = post(func() {
-			if a.debugger.run != r || r.ctx.Err() != nil || r.generation != generation {
+			if r.ctx.Err() != nil || r.generation != generation {
 				return
 			}
 			r.busy = false
@@ -292,7 +334,11 @@ func (a *App) debugControl(cmd string) {
 			}
 			if cmd != "pause" {
 				r.generation++
-				a.debugResumed(r)
+				if a.activeDebugPeer() == r {
+					a.debugResumed(r)
+				} else {
+					r.thread = nil
+				}
 			}
 		})
 	}()

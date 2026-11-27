@@ -29,7 +29,10 @@ type Event struct {
 }
 
 type Session struct {
-	runInTerminal  RunInTerminal
+	options        SessionOptions
+	cleanupMu      sync.Mutex
+	cleaned        bool
+	cleanups       []func()
 	reverseCtx     context.Context
 	cancelReverse  context.CancelFunc
 	codec          *jsonrpc.Codec
@@ -47,12 +50,12 @@ type Session struct {
 // NewSession takes ownership of the stream. Closing it must interrupt both reads
 // and writes. onEvent runs on the reader and must not wait for another packet.
 func NewSession(stream io.ReadWriteCloser, onEvent func(Event)) *Session {
-	return newSession(stream, stream, func() { _ = stream.Close() }, onEvent, nil)
+	return newSession(stream, stream, func() { _ = stream.Close() }, onEvent, SessionOptions{})
 }
 
-func newSession(r io.Reader, w io.Writer, closeTransport func(), onEvent func(Event), run RunInTerminal) *Session {
+func newSession(r io.Reader, w io.Writer, closeTransport func(), onEvent func(Event), options SessionOptions) *Session {
 	ctx, cancel := context.WithCancel(context.Background())
-	s := &Session{runInTerminal: run, reverseCtx: ctx, cancelReverse: cancel, codec: jsonrpc.NewCodec(r, w), closeTransport: closeTransport, onEvent: onEvent,
+	s := &Session{options: options, reverseCtx: ctx, cancelReverse: cancel, codec: jsonrpc.NewCodec(r, w), closeTransport: closeTransport, onEvent: onEvent,
 		done: make(chan struct{}), writer: make(chan struct{}, 1), pending: make(map[int]chan packet)}
 	s.codec.SetMaxContentLength(32 << 20)
 	go s.read()
@@ -68,6 +71,14 @@ func (s *Session) finish(err error) {
 		s.cancelReverse()
 		s.err = err
 		s.closeTransport()
+		s.cleanupMu.Lock()
+		s.cleaned = true
+		cleanups := s.cleanups
+		s.cleanups = nil
+		s.cleanupMu.Unlock()
+		for _, cleanup := range cleanups {
+			cleanup()
+		}
 		close(s.done)
 	})
 }
@@ -110,7 +121,7 @@ func (s *Session) read() {
 				s.onEvent(Event{Name: p.Event, Body: p.Body})
 			}
 		case "request":
-			if p.Command != "runInTerminal" || !s.SupportsRunInTerminal() {
+			if !(p.Command == "runInTerminal" && s.SupportsRunInTerminal() || p.Command == "startDebugging" && s.SupportsStartDebugging()) {
 				p.Arguments = nil
 			}
 			p.Body = nil

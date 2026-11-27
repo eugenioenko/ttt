@@ -20,7 +20,7 @@ function reply(p, body) {
 function handle(p) {
   if (p.type === "response") {
     if (p.request_seq !== terminalRequest || !p.success) throw Error(JSON.stringify(p));
-    fs.writeFileSync(path.join(launch.arguments.cwd, "adapter-pid"), String(p.body.processId));
+    if (!launch.arguments.childRequest) fs.writeFileSync(path.join(launch.arguments.cwd, "adapter-pid"), String(p.body.processId));
     reply(launch);
     return;
   }
@@ -32,6 +32,12 @@ function handle(p) {
     case "launch":
       launch = p;
       send({type: "event", event: "initialized"});
+      if (p.arguments.childRequest) {
+        terminalRequest = send({type: "request", command: "startDebugging", arguments: {
+          request: p.arguments.childRequest, configuration: {cwd: p.arguments.cwd}
+        }});
+        return;
+      }
       terminalRequest = send({type: "request", command: "runInTerminal", arguments: {
         kind: "integrated", title: "Debug target", cwd: launch.arguments.cwd,
         args: [process.execPath, "-e",
@@ -49,6 +55,7 @@ function handle(p) {
       }});
       return;
     case "disconnect":
+      fs.writeFileSync(path.join(launch.arguments.cwd, launch.arguments.childRequest ? "root-disconnect" : "target-disconnect"), JSON.stringify(p.arguments.terminateDebuggee));
       reply(p);
       return process.stdin.pause();
     default:
