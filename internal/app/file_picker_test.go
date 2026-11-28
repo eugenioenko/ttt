@@ -231,3 +231,28 @@ func TestFilePickerSyncFromInputEntersWhitespaceDirectory(t *testing.T) {
 		})
 	}
 }
+
+func TestFilePickerEnterLeavesTheInputReadyForAName(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "notes")
+	if err := os.Mkdir(dir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"todo.txt", "ideas.txt"} {
+		if err := os.WriteFile(filepath.Join(dir, name), nil, 0644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	fp := &filePicker{
+		input: widgets.NewInputWidget(widgets.InputConfig{}),
+		list:  widgets.NewListWidgetFromConfig(widgets.ListConfig{}),
+	}
+	fp.enter(dir)
+	if got, want := fp.input.Text(), dir+string(os.PathSeparator); got != want {
+		t.Fatalf("input = %q, want %q", got, want)
+	}
+
+	fp.syncFromInput(fp.input.Text() + "to")
+	if fp.dir != dir || fp.filter != "to" {
+		t.Fatalf("directory, filter = %q, %q, want %q, %q", fp.dir, fp.filter, dir, "to")
+	}
+}
