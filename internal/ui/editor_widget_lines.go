@@ -346,64 +346,67 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 // non-empty postfix marks a language whose comments need both delimiters on
 // the same line, such as HTML's <!-- ... -->; otherwise the comment runs to the
 // end of the line and postfix is empty.
+//
+// The delimiters rely on language metadata from tabHighlighter so that they
+// remain available when SyntaxHighlight is off. The function does nothing for
+// plain text and languages that have no comment syntax.
 func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 	prefix = ""
-	if e.Highlighter != nil {
-		switch e.commentLanguage() {
-		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
-			"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
-			"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
-			"r", "ruby", "shellscript", "systemd", "toml", "yaml":
-			prefix = "#"
-		case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
-			prefix = "--"
-		// Markdown has no comment of its own; an HTML comment is what most
-		// parsers pass through, so it also takes the XML escaping below.
-		case "angular-html", "html", "html-derivative", "markdown", "svelte", "vue", "xml":
-			return "<!--", "-->"
-		case "css", "less", "scss":
-			return "/*", "*/"
-		// SAS has no line comment marker; a block comment is the only form
-		// that safely wraps a statement containing a semicolon. The
-		// "* ... ;" comment statement is still recognized when unwrapping.
-		case "sas":
-			return "/*", "*/"
-		case "coq", "ocaml":
-			return "(*", "*)"
-		case "handlebars":
-			return "{{!", "}}"
-		case "jinja", "twig":
-			return "{#", "#}"
-		case "smalltalk":
-			return "\"", "\""
-		case "asm":
-			prefix = e.assemblyCommentPrefix()
-		case "ahk", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
-			prefix = ";"
-		case "cobol":
-			prefix = "*>"
-		// WebAssembly text uses two semicolons; a single one is not a comment.
-		case "wasm":
-			prefix = ";;"
-		case "rst":
-			prefix = ".."
-		case "bat":
-			prefix = "REM"
-		case "erlang", "tex":
-			prefix = "%"
-		case "vb":
-			prefix = "'"
-		// Legacy Vim script uses a double quote; Vim9 script, selected by a
-		// leading vim9script command, uses a hash instead.
-		case "viml":
-			prefix = "\""
-		// For plain text and languages without a standard comment line prefix
-		// or comment syntax, treat them as having no prefix at all.
-		case "bibtex", "csv", "diff", "json", "shellsession":
-			prefix = ""
-		default:
-			prefix = "//"
-		}
+	lang := e.commentLanguage()
+	switch lang {
+	case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
+		"elixir", "fish", "gdscript", "gherkin", "graphql", "julia", "make",
+		"mojo", "nix", "nushell", "perl", "powershell", "puppet", "python",
+		"r", "ruby", "shellscript", "systemd", "toml", "yaml":
+		prefix = "#"
+	case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
+		prefix = "--"
+	// Markdown has no comment of its own; an HTML comment is what most
+	// parsers pass through, so it also takes the XML escaping below.
+	case "angular-html", "html", "html-derivative", "markdown", "svelte", "vue", "xml":
+		return "<!--", "-->"
+	case "css", "less", "scss":
+		return "/*", "*/"
+	// SAS has no line comment marker; a block comment is the only form
+	// that safely wraps a statement containing a semicolon. The
+	// "* ... ;" comment statement is still recognized when unwrapping.
+	case "sas":
+		return "/*", "*/"
+	case "coq", "ocaml":
+		return "(*", "*)"
+	case "handlebars":
+		return "{{!", "}}"
+	case "jinja", "twig":
+		return "{#", "#}"
+	case "smalltalk":
+		return "\"", "\""
+	case "asm":
+		prefix = e.assemblyCommentPrefix()
+	case "ahk", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
+		prefix = ";"
+	case "cobol":
+		prefix = "*>"
+	// WebAssembly text uses two semicolons; a single one is not a comment.
+	case "wasm":
+		prefix = ";;"
+	case "rst":
+		prefix = ".."
+	case "bat":
+		prefix = "REM"
+	case "erlang", "tex":
+		prefix = "%"
+	case "vb":
+		prefix = "'"
+	// Legacy Vim script uses a double quote; Vim9 script, selected by a
+	// leading vim9script command, uses a hash instead.
+	case "viml":
+		prefix = "\""
+	// For plain text and languages without a standard comment line prefix
+	// or comment syntax, treat them as having no prefix at all.
+	case "bibtex", "csv", "diff", "json", "shellsession":
+		prefix = ""
+	default:
+		prefix = "//"
 	}
 	return prefix, ""
 }
