@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/eugenioenko/ttt/internal/core/diff"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/gdamore/tcell/v3"
@@ -480,4 +481,65 @@ func TestDiffEditorSplitWrapUsesFullSymmetricWidth(t *testing.T) {
 			t.Fatalf("width %d: wraps at %d, want the full text width %d", w, rw, widest)
 		}
 	}
+}
+
+func TestDiffEditorLoadingUsesDisplayColumns(t *testing.T) {
+	t.Cleanup(func() { i18n.SetCatalog(nil) })
+
+	setLoadingText := func(text string) {
+		t.Helper()
+		catalog, err := i18n.ParseCatalog([]byte(fmt.Sprintf(`{"general.loadingDots": %q}`, text)), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i18n.SetCatalog(catalog)
+	}
+
+	renderLoading := func(w, h int) [][]term.Cell {
+		grid := makeGrid(w, h)
+		d := &DiffEditorWidget{Loading: true}
+		d.Render(NewRenderSurface(grid, Rect{W: w, H: h}))
+		return grid
+	}
+
+	t.Run("multibyte 1-col rune", func(t *testing.T) {
+		setLoadingText("éa")
+		grid := renderLoading(6, 2)
+		if got := grid[0][0].Ch; got != 'é' {
+			t.Fatalf("col 0 = %q, want 'é'", got)
+		}
+		if got := grid[0][1].Ch; got != 'a' {
+			t.Fatalf("col 1 = %q, want 'a'", got)
+		}
+	})
+
+	t.Run("wide rune advances by 2 cols", func(t *testing.T) {
+		setLoadingText("界a")
+		grid := renderLoading(6, 2)
+		if got := grid[0][0].Ch; got != '界' {
+			t.Fatalf("col 0 = %q, want '界'", got)
+		}
+		if got := grid[0][2].Ch; got != 'a' {
+			t.Fatalf("col 2 = %q, want 'a'", got)
+		}
+	})
+
+	t.Run("wide rune clipped at final column", func(t *testing.T) {
+		setLoadingText("a界")
+		grid := renderLoading(2, 2)
+		if got := grid[0][0].Ch; got != 'a' {
+			t.Fatalf("col 0 = %q, want 'a'", got)
+		}
+		if got := grid[0][1].Ch; got != ' ' {
+			t.Fatalf("col 1 = %q, want ' ' (clipped wide rune)", got)
+		}
+	})
+
+	t.Run("ascii", func(t *testing.T) {
+		setLoadingText("Loading...")
+		grid := renderLoading(12, 2)
+		if got := cellRow(grid, 0); got != "Loading...  " {
+			t.Fatalf("row 0 = %q, want %q", got, "Loading...  ")
+		}
+	})
 }
