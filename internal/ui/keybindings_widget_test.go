@@ -380,6 +380,10 @@ func TestDescribeKeyCombo(t *testing.T) {
 		{tcell.KeyTab, "", tcell.ModNone, "tab"},
 		{tcell.KeyUp, "", tcell.ModNone, "up"},
 		{tcell.KeyRune, " ", tcell.ModNone, "space"},
+		{tcell.KeyRune, "/", tcell.ModCtrl, "ctrl+/"},
+		{tcell.KeyRune, "_", tcell.ModCtrl, "ctrl+/"},
+		{tcell.KeyUS, "", tcell.ModCtrl, "ctrl+/"},
+		{tcell.KeyUS, "", tcell.ModNone, "ctrl+/"},
 	}
 
 	for _, tt := range tests {
