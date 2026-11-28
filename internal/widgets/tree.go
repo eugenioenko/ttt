@@ -405,14 +405,7 @@ func (t *TreeWidget) Render(surface Surface) {
 	}
 
 	if len(t.flatList) == 0 && t.Config.EmptyText != "" {
-		x := 1
-		for _, ch := range t.Config.EmptyText {
-			if x >= w {
-				break
-			}
-			surface.SetCell(x, 0, term.Cell{Ch: ch, Style: term.StyleDefault})
-			x++
-		}
+		surface.DrawText(1, 0, t.Config.EmptyText, w, term.StyleDefault)
 	}
 
 	rangeModel := newScrollRange(h, len(t.flatList), t.scrollTop)
