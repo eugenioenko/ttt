@@ -104,7 +104,10 @@ func TestLanguageSelectionTextTargetsAndMissingGrammar(t *testing.T) {
 	}
 	g.SyntaxHighlight = false
 	g.SetActiveLanguage("source.shell")
-	if g.Editor.Highlighter != nil || g.ActiveLanguageSelection() != "source.shell" {
+	// When syntax highlighting is disabled, the highlighter is still created
+	// so that comment toggling can read language metadata, but rendering
+	// remains disabled.
+	if g.ActiveLanguageSelection() != "source.shell" {
 		t.Fatal("disabled highlighting did not retain the selection")
 	}
 	g.SyntaxHighlight = true

@@ -36,8 +36,20 @@ func (g *EditorGroupWidget) SetActiveLanguage(selection string) {
 }
 
 func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter {
+	// When highlighting is off, still create a highlighter for the detected
+	// language so line-comment toggling can read language metadata. Plain
+	// text and languages without comment syntax remain no-ops.
 	if !g.SyntaxHighlight {
-		return nil
+		switch t.LanguageSelection {
+		case "", highlight.PlainText:
+			return nil
+		default:
+			h := highlight.NewForLanguage(t.LanguageSelection)
+			if h != nil {
+				h.SetFilename(t.FilePath)
+			}
+			return h
+		}
 	}
 	switch t.LanguageSelection {
 	case "":
@@ -45,7 +57,11 @@ func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter 
 	case highlight.PlainText:
 		return nil
 	default:
-		return highlight.NewForLanguage(t.LanguageSelection)
+		h := highlight.NewForLanguage(t.LanguageSelection)
+		if h != nil {
+			h.SetFilename(t.FilePath)
+		}
+		return h
 	}
 }
 

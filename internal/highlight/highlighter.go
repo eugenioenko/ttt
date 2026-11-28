@@ -44,8 +44,11 @@ type Highlighter struct {
 	grammar    *textmate.Grammar
 	language   string
 	languageID string
-	doc        lineDoc
-	dirty      bool
+	// filename is the name the grammar was selected from, empty when the
+	// grammar was chosen by language ID instead.
+	filename string
+	doc      lineDoc
+	dirty    bool
 	// buf, version and lines identify what SyncBuffer last handed the document.
 	buf      *buffer.Buffer
 	version  uint64
@@ -79,6 +82,13 @@ var extraFilenames = map[string]string{
 	"jenkinsfile": "groovy",
 }
 
+// Conventional extensions the grammar catalog does not declare for the
+// grammar that should claim them.
+var extraExtensions = map[string]string{
+	".wat":  "wasm",
+	".wast": "wasm",
+}
+
 var backupSuffixes = []string{".bak", ".orig", ".old", "~"}
 
 // New returns nil when no grammar matches the file name.
@@ -88,7 +98,7 @@ func New(filename string) *Highlighter {
 	if !ok {
 		return nil
 	}
-	return c.newHighlighter(ref)
+	return c.newHighlighter(ref, filename)
 }
 
 // NewForLanguage selects a grammar by language ID or alias, such as a Markdown
@@ -99,10 +109,10 @@ func NewForLanguage(lang string) *Highlighter {
 	if !ok {
 		return nil
 	}
-	return c.newHighlighter(ref)
+	return c.newHighlighter(ref, "")
 }
 
-func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
+func (c *grammarCatalog) newHighlighter(ref grammarRef, filename string) *Highlighter {
 	g, err := c.registry.LoadGrammar(ref.scopeName)
 	if err != nil || g == nil {
 		return nil
@@ -111,6 +121,7 @@ func (c *grammarCatalog) newHighlighter(ref grammarRef) *Highlighter {
 		grammar:    g,
 		languageID: ref.languageID,
 		language:   ref.language,
+		filename:   filename,
 		doc:        textmate.NewDocument(g, textmate.DocumentOptions{TokenizeOptions: tokenizeOptions}),
 		isolated:   &singleLineCache{},
 		dirty:      true,
@@ -124,6 +135,17 @@ func (h *Highlighter) Language() string {
 
 func (h *Highlighter) LanguageID() string {
 	return h.languageID
+}
+
+// Filename returns the name used to select the grammar, or "" when the
+// grammar was selected by language ID instead.
+func (h *Highlighter) Filename() string {
+	return h.filename
+}
+
+// SetFilename records the file behind a highlighter chosen by language ID.
+func (h *Highlighter) SetFilename(name string) {
+	h.filename = name
 }
 
 type singleLineCache struct{ m map[string][]Span }

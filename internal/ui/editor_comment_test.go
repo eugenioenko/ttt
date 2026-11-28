@@ -39,6 +39,1032 @@ func TestCommentSyntaxResolvesShellAliasToHash(t *testing.T) {
 	}
 }
 
+// The bundled x86 assembly grammar claims .asm, .s and related extensions and
+// uses ";" comments, so toggling must round-trip on each of them.
+func TestToggleLineCommentAssemblyUsesSemicolon(t *testing.T) {
+	for _, file := range []string{"a.asm", "a.nasm", "a.inc"} {
+		t.Run(file, func(t *testing.T) {
+			const original = "mov eax, 1"
+			e := newCommentEditor(t, file, []string{original}, 0, 0)
+
+			e.ToggleLineComment()
+			if got, want := e.Buf.Lines[0], "; mov eax, 1"; got != want {
+				t.Fatalf("commented line = %q, want %q", got, want)
+			}
+
+			e.ToggleLineComment()
+			if got := e.Buf.Lines[0]; got != original {
+				t.Fatalf("uncommented line = %q, want %q", got, original)
+			}
+		})
+	}
+}
+
+func TestToggleLineCommentGNUAssemblyUsesHash(t *testing.T) {
+	for _, file := range []string{"a.s", "a.S"} {
+		t.Run(file, func(t *testing.T) {
+			const original = "mov %eax, 1"
+			e := newCommentEditor(t, file, []string{original}, 0, 0)
+
+			e.ToggleLineComment()
+			if got, want := e.Buf.Lines[0], "# mov %eax, 1"; got != want {
+				t.Fatalf("commented line = %q, want %q", got, want)
+			}
+
+			e.ToggleLineComment()
+			if got := e.Buf.Lines[0]; got != original {
+				t.Fatalf("uncommented line = %q, want %q", got, original)
+			}
+		})
+	}
+}
+
+// COBOL's floating comment marker is "*>". Fixed-format code usually starts
+// in the indicator or area A/B columns, so the marker keeps the line's
+// indentation and round-trips.
+func TestToggleLineCommentCOBOLUsesFloatingMarker(t *testing.T) {
+	original := []string{"       DISPLAY 'HELLO'.", "       STOP RUN."}
+	e := newCommentEditor(t, "a.cob", slices.Clone(original), 1, len([]rune(original[1])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"       *> DISPLAY 'HELLO'.", "       *> STOP RUN."}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A fixed-format line can carry a six-column sequence number field. The marker
+// must land after it, not inside it, or the line is not a comment at all.
+func TestToggleLineCommentCOBOLSkipsSequenceNumberArea(t *testing.T) {
+	const original = "000100 MOVE WS-A TO WS-B."
+	e := newCommentEditor(t, "a.cob", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "000100*>  MOVE WS-A TO WS-B."; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A fixed-format sequence field can be alphanumeric, not just digits; its six
+// columns stay in place so the marker still lands in the indicator column.
+func TestToggleLineCommentCOBOLAlphanumericSequenceArea(t *testing.T) {
+	const original = "AB0001 MOVE WS-A TO WS-B."
+	e := newCommentEditor(t, "a.cob", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "AB0001*>  MOVE WS-A TO WS-B."; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Free-format source has no sequence area, so the marker follows the
+// indentation instead of the six-column fixed-format rule.
+func TestToggleLineCommentCOBOLFreeFormat(t *testing.T) {
+	original := []string{">>SOURCE FORMAT FREE", "  MOVE WS-A TO WS-B."}
+	e := newCommentEditor(t, "a.cob", slices.Clone(original), 1, 2)
+
+	e.ToggleLineComment()
+	want := []string{">>SOURCE FORMAT FREE", "  *> MOVE WS-A TO WS-B."}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// Handlebars' short comment form is "{{! ... }}", and unwrapping must find it
+// again even though the wrapped line now ends in "}}".
+func TestToggleLineCommentHandlebarsUsesBraceMarker(t *testing.T) {
+	const original = "  <p>Hello</p>"
+	e := newCommentEditor(t, "a.hbs", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "  {{! <p>Hello</p> }}"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// "{{! ... }}" closes at the first "}}", so an HTML line holding a Handlebars
+// expression must use the long form instead.
+func TestToggleLineCommentHandlebarsUsesLongFormForExpressions(t *testing.T) {
+	const original = "  <p>{{name}}</p>"
+	e := newCommentEditor(t, "a.hbs", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "  {{!-- <p>{{name}}</p> --}}"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// INI lines are commented with ";" by default and must round-trip.
+func TestToggleLineCommentINIUsesSemicolon(t *testing.T) {
+	const original = "key = value"
+	e := newCommentEditor(t, "a.ini", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "; key = value"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A parser may use "#" instead of ";", so an existing selection commented
+// with either marker must uncomment with that line's own marker.
+func TestToggleLineCommentINIUncommentsBothMarkers(t *testing.T) {
+	original := []string{"; key = value", "# other = 1"}
+	e := newCommentEditor(t, "a.ini", slices.Clone(original), 1, len([]rune(original[1])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"key = value", "other = 1"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, want)
+	}
+}
+
+// JSX code lines use // even when the line contains markup later on.
+func TestToggleLineCommentJSXCodeUsesSlashSlash(t *testing.T) {
+	const original = "const el = <div />;"
+	e := newCommentEditor(t, "a.jsx", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "// const el = <div />;"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A line that starts in JSX markup is wrapped in a comment expression.
+func TestToggleLineCommentJSXMarkupUsesExpressionComment(t *testing.T) {
+	const original = "  <div>Hello</div>"
+	e := newCommentEditor(t, "a.jsx", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "  {/* <div>Hello</div> */}"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A mixed selection picks the marker per line and restores every line.
+func TestToggleLineCommentTSXMixedSelection(t *testing.T) {
+	original := []string{"const x = 1;", "<div>", "  hello", "</div>"}
+	e := newCommentEditor(t, "a.tsx", slices.Clone(original), 3, len([]rune(original[3])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"// const x = 1;", "{/* <div> */}", "{/*   hello */}", "{/* </div> */}"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// Markdown has no comment syntax of its own, so a line toggle uses an HTML
+// comment, which the common parsers pass through.
+func TestToggleLineCommentMarkdownUsesHTMLComment(t *testing.T) {
+	const original = "# Title"
+	e := newCommentEditor(t, "a.md", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<!-- # Title -->"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Markdown prose often holds runs of hyphens, which are invalid inside an HTML
+// comment, so they must be encoded and restored like any other HTML context.
+func TestToggleLineCommentMarkdownEscapesHyphenRuns(t *testing.T) {
+	const original = "a -- b --- c"
+	e := newCommentEditor(t, "a.md", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<!-- a &#45;&#45; b &#45;&#45;&#45; c -->"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Close tags inside PHP strings and block comments are not real close tags,
+// but one inside a // comment does end the block, as PHP itself does.
+func TestPHPCodeStarts(t *testing.T) {
+	lines := []string{
+		"<h1>Hi</h1>",
+		"<?php",
+		"$s = '?>';",
+		"/* ?> */",
+		"// comment ?>",
+		"<p>html</p>",
+	}
+	want := []bool{false, false, true, true, true, false}
+	got := phpCodeStarts(lines, len(lines)-1)
+	if !slices.Equal(got, want) {
+		t.Fatalf("phpCodeStarts = %v, want %v", got, want)
+	}
+}
+
+// PHP code inside <?php ... ?> takes //, unlike the HTML around it.
+func TestToggleLineCommentPHPCodeUsesSlashSlash(t *testing.T) {
+	const original = "$name = 'x';"
+	e := newCommentEditor(t, "a.php", []string{"<?php", original}, 1, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[1], "// $name = 'x';"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[1]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Content after a closing tag is HTML, so // there would print text instead of
+// commenting the markup.
+func TestToggleLineCommentPHPHTMLUsesHTMLComment(t *testing.T) {
+	const original = "<div>hi</div>"
+	e := newCommentEditor(t, "a.php", []string{"<?php", "echo 'hi';", "?>", original}, 3, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[3], "<!-- <div>hi</div> -->"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[3]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Code on an opening-tag line is commented after the tag so the tag stays
+// effective, and the marker round-trips.
+func TestToggleLineCommentPHPCommentsAfterOpenTag(t *testing.T) {
+	const original = "<?php echo $name; ?>"
+	e := newCommentEditor(t, "a.php", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<?php // echo $name; ?>"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A lone opening tag has no line-comment position; it must be left intact.
+func TestToggleLineCommentPHPLeavesLoneOpenTag(t *testing.T) {
+	e := newCommentEditor(t, "a.php", []string{"<?php"}, 0, 0)
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != "<?php" {
+		t.Fatalf("line = %q, want it unchanged", got)
+	}
+}
+
+// A ?> inside a string does not close PHP today, but it would once a // marker
+// precedes it, because PHP ends a line comment at ?>. The line takes a block
+// comment instead, and the line after it stays PHP on the way back.
+func TestToggleLineCommentPHPQuotedCloseTagUsesBlockComment(t *testing.T) {
+	original := []string{"<?php", "echo \"?>\";", "echo $x;"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 2, len("echo $x;"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(1, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?php", "/* echo \"?>\"; */", "// echo $x;"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A line that cannot hold a block comment safely is left untouched, and the
+// selection still toggles back without stranding a comment on later lines.
+func TestToggleLineCommentPHPSkipsUnsafeQuotedCloseTag(t *testing.T) {
+	original := []string{"<?php", "$s = '*/ ?>';", "echo $x;"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 2, len("echo $x;"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(1, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?php", "$s = '*/ ?>';", "// echo $x;"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A real closing tag still closes PHP after a // marker, so it keeps the line
+// comment and the rest of that line is commented as before.
+func TestToggleLineCommentPHPRealCloseTagKeepsLineComment(t *testing.T) {
+	const original = "<?php echo $x; ?>"
+	e := newCommentEditor(t, "a.php", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<?php // echo $x; ?>"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+}
+
+// <?= implies echo, so a // after the tag would leave an echo without an
+// expression. The line is left alone, and the rest of the selection still
+// toggles back cleanly.
+func TestToggleLineCommentPHPLeavesShortEcho(t *testing.T) {
+	original := []string{"<?= $name ?>", "<div>hi</div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 1, len("<div>hi</div>"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?= $name ?>", "<!-- <div>hi</div> -->"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A line containing both HTML and a PHP tag anywhere (not just at the start)
+// cannot be safely wrapped as an HTML comment, so it is left untouched.
+func TestToggleLineCommentPHPMixedLineIsSkipped(t *testing.T) {
+	original := []string{"<div><?php echo $x; ?></div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("mixed HTML/PHP line = %q, want unchanged %q", e.Buf.Lines[0], original[0])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("second toggle changed mixed line = %q, want %q", e.Buf.Lines[0], original[0])
+	}
+}
+
+// A pure HTML line with no PHP tags is still wrapped with an HTML comment.
+func TestToggleLineCommentPHPPureHTMLIsWrapped(t *testing.T) {
+	original := []string{"<div>no php here</div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<!-- <div>no php here</div> -->"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("pure HTML line = %q, want %q", e.Buf.Lines[0], want[0])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented line = %q, want %q", e.Buf.Lines[0], original[0])
+	}
+}
+
+// A mixed file picks the marker per line and restores every line.
+func TestToggleLineCommentPHPMixedSelection(t *testing.T) {
+	original := []string{"<?php", "$name = 'x';", "?>", "<div>hi</div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 3, len([]rune(original[3])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?php", "// $name = 'x';", "// ?>", "<!-- <div>hi</div> -->"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A single reStructuredText line is commented with the ".. " marker.
+func TestToggleLineCommentRSTSingleLine(t *testing.T) {
+	const original = "Some text."
+	e := newCommentEditor(t, "a.rst", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], ".. Some text."; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A multi-line toggle makes one comment block: the marker on the first line
+// and the rest indented under it, not a separate comment per line.
+func TestToggleLineCommentRSTBlock(t *testing.T) {
+	original := []string{"First line.", "Second line."}
+	e := newCommentEditor(t, "a.rst", slices.Clone(original), 1, len([]rune(original[1])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{".. First line.", "   Second line."}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// An indented block keeps its indentation and its continuation lines stay
+// aligned under the marker's text.
+func TestToggleLineCommentRSTIndentedBlock(t *testing.T) {
+	original := []string{"  item one", "  item two"}
+	e := newCommentEditor(t, "a.rst", slices.Clone(original), 1, len([]rune(original[1])))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 2)
+
+	e.ToggleLineComment()
+	want := []string{"  .. item one", "     item two"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// An existing comment block is recognized and unwrapped as one comment.
+func TestToggleLineCommentRSTUncommentsBlock(t *testing.T) {
+	e := newCommentEditor(t, "a.rst", []string{".. Comment.", "   More comment."}, 1, 15)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"Comment.", "More comment."}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, want)
+	}
+}
+
+// Lines individually commented with ".. " each carry their own marker.
+func TestToggleLineCommentRSTPerLineComments(t *testing.T) {
+	e := newCommentEditor(t, "a.rst", []string{".. one", ".. two"}, 1, 6)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"one", "two"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, want)
+	}
+}
+
+// Ordinary inline comments such as ".. Keep this" are preserved as comments
+// and toggle normally.
+func TestToggleLineCommentRSTPreservesInlineComment(t *testing.T) {
+	e := newCommentEditor(t, "a.rst", []string{".. Keep this"}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "Keep this"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], ".. Keep this"; got != want {
+		t.Fatalf("recommented line = %q, want %q", got, want)
+	}
+}
+
+// When a payload could form an explicit markup construct (directive, substitution
+// reference, footnote, citation, or target), the comment marker is kept on its
+// own line and the payload is indented under it instead of being exposed.
+func TestToggleLineCommentRSTExplicitMarkupBecomesBlockComment(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{"directive", ".. directive:: name", "..\n   directive:: name"},
+		{"substitution", ".. |sub| replacement", "..\n   |sub| replacement"},
+		{"footnote", ".. [1] This is a footnote", "..\n   [1] This is a footnote"},
+		{"citation", ".. [Cit2002] This is a citation", "..\n   [Cit2002] This is a citation"},
+		{"target", ".. _target:", "..\n   _target:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newCommentEditor(t, "a.rst", []string{tt.input}, 0, 0)
+
+			e.ToggleLineComment()
+			if got, want := e.Buf.Lines[0], tt.output; got != want {
+				t.Fatalf("uncommented line = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
+// SAS statements may contain semicolons, so the block comment is the only
+// safe per-line form.
+func TestToggleLineCommentSASWrapsWithBlockComment(t *testing.T) {
+	const original = "data x; y = 1; run;"
+	e := newCommentEditor(t, "a.sas", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "/* data x; y = 1; run; */"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// A statement commented with "* ... ;" is recognized when unwrapping.
+func TestToggleLineCommentSASUncommentsStatement(t *testing.T) {
+	e := newCommentEditor(t, "a.sas", []string{"* show the input data;"}, 0, 5)
+
+	e.ToggleLineComment()
+	// SAS statement comments are recognized by the trailing semicolon, but the
+	// semicolon is part of the SAS statement syntax and is preserved when
+	// uncommenting. Only the leading "*" and its separator are removed.
+	if got, want := e.Buf.Lines[0], "show the input data;"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
+// Every selected line is wrapped separately, keeping the statement on one line.
+func TestToggleLineCommentSASWrapsSelection(t *testing.T) {
+	e := newCommentEditor(t, "a.sas", []string{"data x;", "run;"}, 1, 4)
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"/* data x; */", "/* run; */"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+}
+
+func TestToggleLineCommentSvelteUsesMarkupComment(t *testing.T) {
+	original := []string{"<div>", "  <p>Hello</p>", "</div>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 1, 6)
+
+	e.ToggleLineComment()
+	want := []string{"<div>", "  <!-- <p>Hello</p> -->", "</div>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentSvelteUsesLineCommentInScript(t *testing.T) {
+	original := []string{"<script>", "  let x = 1;", "</script>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<script>", "  // let x = 1;", "</script>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentSvelteUsesBlockCommentInStyle(t *testing.T) {
+	original := []string{"<style>", "  .a { color: red; }", "</style>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<style>", "  /* .a { color: red; } */", "</style>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentSvelteUsesLineCommentInExpression(t *testing.T) {
+	original := []string{"<div>", "  {items.map((item) => (", "    item.name", "  ))}", "</div>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 2, 6)
+
+	e.ToggleLineComment()
+	want := []string{"<div>", "  {items.map((item) => (", "    // item.name", "  ))}", "</div>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// The closing line of a multi-line template expression must stay untouched:
+// a // marker there would comment out the } and leave the template open.
+func TestToggleLineCommentSvelteSkipsExpressionClosingLine(t *testing.T) {
+	original := []string{"<div>", "  {items.map((item) => (", "    item.name", "  ))}", "</div>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 3, len("  ))}"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(2, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<div>", "  {items.map((item) => (", "    // item.name", "  ))}", "</div>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestSvelteExpressionCloses(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{"  ))}", true},
+		{"}", true},
+		{"  item.name", false},
+		{"  {a: 1}", false},
+		{"  '}'", false},
+		{"  `}`", false},
+		{"  `} `", false},
+		{"  x'}", false},
+		{"  // }", false},
+	} {
+		if got := svelteExpressionCloses(tc.line); got != tc.want {
+			t.Errorf("svelteExpressionCloses(%q) = %v, want %v", tc.line, got, tc.want)
+		}
+	}
+}
+
+func TestToggleLineCommentTwigUsesTwigComment(t *testing.T) {
+	original := []string{"<div>", "  <p>Hello</p>", "</div>"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, 6)
+
+	e.ToggleLineComment()
+	want := []string{"<div>", "  {# <p>Hello</p> #}", "</div>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentTwigUsesLineCommentInScript(t *testing.T) {
+	original := []string{"<script>", "  let x = 1;", "</script>"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<script>", "  // let x = 1;", "</script>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentTwigUsesBlockCommentInStyle(t *testing.T) {
+	original := []string{"<style>", "  .a { color: red; }", "</style>"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<style>", "  /* .a { color: red; } */", "</style>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentTwigUsesHTMLCommentInVerbatim(t *testing.T) {
+	original := []string{"{% verbatim %}", "  <p>literal</p>", "{% endverbatim %}"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, 6)
+
+	e.ToggleLineComment()
+	want := []string{"{% verbatim %}", "  <!-- <p>literal</p> -->", "{% endverbatim %}"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentTwigUncommentsHTMLComment(t *testing.T) {
+	e := newCommentEditor(t, "a.twig", []string{"  <!-- <p>Hello</p> -->"}, 0, 8)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "  <p>Hello</p>"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
+// Twig comments inside a verbatim block are literal text, not actual comments,
+// so they must not be recognized or removed when toggling.
+func TestToggleLineCommentTwigLeavesLiteralCommentInVerbatim(t *testing.T) {
+	original := []string{"{% verbatim %}", "  {# this is literal #}", "{% endverbatim %}"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, len("{# this is literal #}"+"  "))
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("verbatim line with literal Twig comment = %q, want unchanged %q", e.Buf.Lines[1], original[1])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("second toggle left verbatim line changed = %q, want %q", e.Buf.Lines[1], original[1])
+	}
+}
+
+func TestToggleLineCommentVimLegacyUsesDoubleQuote(t *testing.T) {
+	original := []string{"\" a header", "let x = 1"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 1, 0)
+
+	e.ToggleLineComment()
+	want := []string{"\" a header", "\" let x = 1"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVim9UsesHash(t *testing.T) {
+	original := []string{"vim9script", "", "var x = 1"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 2, 0)
+
+	e.ToggleLineComment()
+	want := []string{"vim9script", "", "# var x = 1"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// Lines before the vim9script directive are still legacy Vim script and need
+// the double quote; the directive itself must stay intact or the file's mode
+// would change.
+func TestToggleLineCommentVim9KeepsDirectiveAndUsesLegacyMarkerBeforeIt(t *testing.T) {
+	original := []string{"\" header", "vim9script", "set number"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 2, len("set number"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"\" \" header", "vim9script", "# set number"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVim9DirectiveAloneIsUnchanged(t *testing.T) {
+	original := []string{"vim9script", "set number"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("lines = %q, want unchanged %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVim9UncommentsHash(t *testing.T) {
+	e := newCommentEditor(t, "a.vim", []string{"vim9script", "# var x = 1"}, 1, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[1], "var x = 1"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+}
+
+func TestIsVim9Script(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		lines []string
+		want  bool
+	}{
+		{"first line", []string{"vim9script"}, true},
+		{"indented", []string{"  vim9script  "}, true},
+		{"after comments", []string{"\" header", "", "vim9script"}, true},
+		{"legacy", []string{"\" header", "let x = 1"}, false},
+		{"not first command", []string{"let x = 1", "vim9script"}, false},
+		{"longer word", []string{"vim9scriptx"}, false},
+		{"empty", nil, false},
+	} {
+		if got := isVim9Script(tc.lines); got != tc.want {
+			t.Errorf("%s: isVim9Script(%q) = %v, want %v", tc.name, tc.lines, got, tc.want)
+		}
+	}
+}
+
+func TestToggleLineCommentVueUsesMarkupComment(t *testing.T) {
+	original := []string{"<template>", "  <p>Hello</p>", "</template>"}
+	e := newCommentEditor(t, "a.vue", slices.Clone(original), 1, 6)
+
+	e.ToggleLineComment()
+	want := []string{"<template>", "  <!-- <p>Hello</p> -->", "</template>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVueUsesLineCommentInScript(t *testing.T) {
+	original := []string{"<script setup lang=\"ts\">", "  const x = 1;", "</script>"}
+	e := newCommentEditor(t, "a.vue", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<script setup lang=\"ts\">", "  // const x = 1;", "</script>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVueUsesBlockCommentInStyle(t *testing.T) {
+	original := []string{"<style scoped>", "  .a { color: red; }", "</style>"}
+	e := newCommentEditor(t, "a.vue", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<style scoped>", "  /* .a { color: red; } */", "</style>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVueElementSelectorInStyle(t *testing.T) {
+	original := []string{"<style scoped>", "  body { margin: 0; }", "</style>"}
+	e := newCommentEditor(t, "a.vue", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<style scoped>", "  /* body { margin: 0; } */", "</style>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentWebAssemblyUsesDoubleSemicolon(t *testing.T) {
+	original := "(func (export \"f\"))"
+	e := newCommentEditor(t, "a.wat", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], ";; (func (export \"f\"))"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+func TestToggleLineCommentSkipsLanguagesWithoutSyntax(t *testing.T) {
+	e := newCommentEditor(t, "a.json", []string{"{", "  \"a\": 1", "}"}, 1, 0)
+	e.Undo = &undo.UndoStack{}
+	e.addCursorVertical(1)
+	if !e.isMultiActive() {
+		t.Fatal("setup: expected more than one cursor")
+	}
+	lines := slices.Clone(e.Buf.Lines)
+
+	e.ToggleLineComment()
+
+	if !slices.Equal(e.Buf.Lines, lines) {
+		t.Fatalf("lines = %q, want unchanged %q", e.Buf.Lines, lines)
+	}
+	if !e.isMultiActive() {
+		t.Fatal("toggle collapsed multicursors without a comment marker")
+	}
+	if !e.Undo.AtSavePoint() {
+		t.Fatal("toggle pushed an undo step without a comment marker")
+	}
+	if e.bufferDirty {
+		t.Fatal("toggle marked the buffer dirty without a comment marker")
+	}
+}
+
 func newCommentEditor(t *testing.T, filename string, lines []string, line, col int) *EditorPaneWidget {
 	t.Helper()
 	h := highlight.New(filename)
