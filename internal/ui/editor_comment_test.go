@@ -42,13 +42,32 @@ func TestCommentSyntaxResolvesShellAliasToHash(t *testing.T) {
 // The bundled x86 assembly grammar claims .asm, .s and related extensions and
 // uses ";" comments, so toggling must round-trip on each of them.
 func TestToggleLineCommentAssemblyUsesSemicolon(t *testing.T) {
-	for _, file := range []string{"a.asm", "a.s", "a.nasm", "a.inc"} {
+	for _, file := range []string{"a.asm", "a.nasm", "a.inc"} {
 		t.Run(file, func(t *testing.T) {
 			const original = "mov eax, 1"
 			e := newCommentEditor(t, file, []string{original}, 0, 0)
 
 			e.ToggleLineComment()
 			if got, want := e.Buf.Lines[0], "; mov eax, 1"; got != want {
+				t.Fatalf("commented line = %q, want %q", got, want)
+			}
+
+			e.ToggleLineComment()
+			if got := e.Buf.Lines[0]; got != original {
+				t.Fatalf("uncommented line = %q, want %q", got, original)
+			}
+		})
+	}
+}
+
+func TestToggleLineCommentGNUAssemblyUsesHash(t *testing.T) {
+	for _, file := range []string{"a.s", "a.S"} {
+		t.Run(file, func(t *testing.T) {
+			const original = "mov %eax, 1"
+			e := newCommentEditor(t, file, []string{original}, 0, 0)
+
+			e.ToggleLineComment()
+			if got, want := e.Buf.Lines[0], "# mov %eax, 1"; got != want {
 				t.Fatalf("commented line = %q, want %q", got, want)
 			}
 

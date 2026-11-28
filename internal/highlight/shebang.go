@@ -11,7 +11,7 @@ func NewForLines(filename string, lines []string) *Highlighter {
 	if !ok {
 		return nil
 	}
-	return c.newHighlighter(ref)
+	return c.newHighlighter(ref, filename)
 }
 
 func DetectLanguageID(filename string, lines []string) string {

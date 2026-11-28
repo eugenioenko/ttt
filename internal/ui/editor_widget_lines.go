@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -375,9 +376,9 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 			return "{#", "#}"
 		case "smalltalk":
 			return "\"", "\""
-		// Assembly comment prefixes vary by dialect; the bundled x86 grammar
-		// uses ";" for every file it claims.
-		case "ahk", "asm", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
+		case "asm":
+			prefix = e.assemblyCommentPrefix()
+		case "ahk", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
 			prefix = ";"
 		case "cobol":
 			prefix = "*>"
@@ -405,6 +406,18 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 		}
 	}
 	return prefix, ""
+}
+
+// assemblyCommentPrefix returns "#" for GNU assembly and ";" for NASM. The
+// bundled x86 grammar claims .s, .asm, .inc, and .nasm alike, so the extension
+// is the only dialect signal; GNU as reads ";" as a statement separator, which
+// leaves the instruction after it executable. Files without a name, such as a
+// language override, keep NASM's marker.
+func (e *EditorPaneWidget) assemblyCommentPrefix() string {
+	if strings.EqualFold(filepath.Ext(e.Highlighter.Filename()), ".s") {
+		return "#"
+	}
+	return ";"
 }
 
 // commentLanguage returns the canonical language ID that refines comment

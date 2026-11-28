@@ -45,7 +45,11 @@ func (g *EditorGroupWidget) tabHighlighter(t *editorTab) *highlight.Highlighter 
 	case highlight.PlainText:
 		return nil
 	default:
-		return highlight.NewForLanguage(t.LanguageSelection)
+		h := highlight.NewForLanguage(t.LanguageSelection)
+		if h != nil {
+			h.SetFilename(t.FilePath)
+		}
+		return h
 	}
 }
 
