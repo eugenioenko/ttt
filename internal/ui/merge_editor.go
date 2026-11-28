@@ -146,8 +146,8 @@ func (m *MergeEditorWidget) CanComplete() bool {
 	if m.Remaining() != 0 || !m.session.valid {
 		return false
 	}
-	for _, line := range m.session.buf.Lines {
-		if k := gitMarker(line, m.session.markerSize); k == '<' || k == '>' || k == '|' {
+	for i, line := range m.session.buf.Lines {
+		if k := gitMarker(line, m.session.markerSize); k == '<' || k == '>' || k == '|' || alternateConflictAt(m.session.buf.Lines, i, m.session.markerSize) {
 			return false
 		}
 	}

@@ -54,7 +54,7 @@ func newMergeSession(buf *buffer.Buffer, inputs scm.ConflictInputs) (*mergeSessi
 		line := buf.Lines[i]
 		kind := gitMarker(line, m.markerSize)
 		if kind != '<' {
-			if kind == '>' || kind == '|' {
+			if kind == '>' || kind == '|' || alternateConflictAt(buf.Lines, i, m.markerSize) {
 				return nil, panes
 			}
 			for side := range panes {

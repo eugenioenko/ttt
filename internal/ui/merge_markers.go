@@ -6,18 +6,39 @@ import "strings"
 // Requiring the same width and delimiter avoids treating source lines such
 // as "======= title" or indented examples as a marker in a visual merge.
 func gitMarker(line string, width int) byte {
-	if width < 1 || len(line) < width || !strings.ContainsRune("<|=>", rune(line[0])) {
+	if width > 0 && len(line) >= width && gitMarkerWidth(line) == width {
+		return line[0]
+	}
+	return 0
+}
+func gitMarkerWidth(line string) int {
+	if len(line) == 0 || !strings.ContainsRune("<|=>", rune(line[0])) {
 		return 0
 	}
 	n := 1
 	for n < len(line) && line[n] == line[0] {
 		n++
 	}
-	if n != width || (n < len(line) && (line[n] != ' ' || line[0] == '=')) {
+	if n < len(line) && (line[n] != ' ' || line[0] == '=') {
 		return 0
 	}
-	return line[0]
+	return n
 }
+
+// A changed attribute does not rewrite markers Git already materialized.
+func alternateConflictAt(lines []string, i, configuredWidth int) bool {
+	line := lines[i]
+	if len(line) == 0 || line[0] != '<' {
+		return false
+	}
+	width := gitMarkerWidth(line)
+	if width == 0 || width == configuredWidth {
+		return false
+	}
+	_, ok := gitConflictAt(lines, i, width)
+	return ok
+}
+
 func gitConflictAt(lines []string, start, width int) (mergeConflict, bool) {
 	if start < 0 || start >= len(lines) {
 		return mergeConflict{}, false

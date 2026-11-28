@@ -185,3 +185,19 @@ func TestMergeKeyboardFocusAndSearchCleanup(t *testing.T) {
 		t.Fatal("stale result highlight")
 	}
 }
+
+func TestMergeCompletionDetectsInsertedAlternateWidthConflict(t *testing.T) {
+	g, m, _ := openTestMerge(t)
+	m.ApplyAction("incoming")
+	m.Navigate(1)
+	m.ApplyAction("incoming")
+	buf := g.Editor.Buf
+	buf.Splice(len(buf.Lines), 0, "<<< HEAD", "example")
+	if !m.CanComplete() {
+		t.Fatal("isolated literal blocked completion")
+	}
+	buf.Splice(len(buf.Lines), 0, "===", ">>> branch")
+	if m.CanComplete() {
+		t.Fatal("unresolved alternate width conflict can be staged")
+	}
+}

@@ -23,8 +23,7 @@ func conflictAt(lines []string, header int) (mergeConflict, bool) {
 		return mergeConflict{}, false
 	}
 	if !strings.HasPrefix(strings.TrimSpace(lines[header]), "<<<<<<<") {
-		width := strings.IndexByte(lines[header], ' ')
-		return gitConflictAt(lines, header, width)
+		return gitConflictAt(lines, header, gitMarkerWidth(lines[header]))
 	}
 	c := mergeConflict{start: header, separator: -1, end: -1, base: -1}
 	for i := header + 1; i < len(lines); i++ {
@@ -51,8 +50,7 @@ func conflictHeader(line string) bool {
 		if strings.HasPrefix(line[i:], "<<<<<<<") {
 			return true
 		}
-		width := strings.IndexByte(line, ' ')
-		return i == 0 && width > 0 && width < 7 && gitMarker(line, width) == '<'
+		return i == 0 && line[i] == '<' && gitMarkerWidth(line) != 0
 	}
 	return false
 }
@@ -65,7 +63,7 @@ func conflictMarker(line string) bool {
 			continue
 		}
 		rest := line[i:]
-		return strings.HasPrefix(rest, "<<<<<<<") || strings.HasPrefix(rest, "|||||||") ||
+		return (i == 0 && gitMarkerWidth(rest) != 0) || strings.HasPrefix(rest, "<<<<<<<") || strings.HasPrefix(rest, "|||||||") ||
 			strings.HasPrefix(rest, "=======") || strings.HasPrefix(rest, ">>>>>>>")
 	}
 	return false

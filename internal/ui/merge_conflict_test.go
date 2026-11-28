@@ -240,3 +240,23 @@ func TestConflictAtRequiresCompleteBlock(t *testing.T) {
 		t.Fatalf("conflict = %+v, %v", c, ok)
 	}
 }
+
+func TestIncompleteShortConflictRecognizesInsertedMarkers(t *testing.T) {
+	for _, tc := range []struct {
+		lines  []string
+		at     int
+		marker string
+	}{
+		{[]string{"<<< HEAD", "==="}, 2, ">>> branch"},
+		{[]string{"<<< HEAD", ">>> branch"}, 1, "==="},
+	} {
+		e := newRowsEditor(tc.lines, 70, 10)
+		if len(e.conflictBlocks()) != 0 {
+			t.Fatal("incomplete block detected")
+		}
+		e.Buf.Splice(tc.at, 0, tc.marker)
+		if len(e.conflictBlocks()) != 1 {
+			t.Fatal("stale cached conflict", e.Buf.Lines)
+		}
+	}
+}

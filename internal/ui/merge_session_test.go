@@ -75,3 +75,15 @@ func TestMergeTextEditsAtEmptyBoundaryAndUndo(t *testing.T) {
 		t.Fatal(m.blocks)
 	}
 }
+
+func TestMergeChangedMarkerSizeFallsBackForCompleteBlocks(t *testing.T) {
+	buf := &buffer.Buffer{Lines: []string{"<<<<<<< HEAD", "a", "=======", "b", ">>>>>>> branch"}}
+	inputs := scm.ConflictInputs{MarkerSize: 3, Current: scm.FileContent{Exists: true, Content: "a"}, Incoming: scm.FileContent{Exists: true, Content: "b"}}
+	if m, _ := newMergeSession(buf, inputs); m != nil {
+		t.Fatal("stale marker width accepted")
+	}
+	buf.SetLines([]string{"<<<<<<< example", "ordinary text"})
+	if m, _ := newMergeSession(buf, inputs); m == nil {
+		t.Fatal("isolated literal rejected")
+	}
+}
