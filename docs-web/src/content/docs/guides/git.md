@@ -45,7 +45,15 @@ Which entry you select decides what the diff compares:
 - **Changes:** the staged version (the index) against the working tree, so only the changes you have not staged yet. It opens in the file's own editor tab in diff mode, with the tab title ending in `(diff)`. You can edit and save there as in any editor tab. The diff updates as you type and recomputes shortly after you stop, on save, when the file reloads from disk, and when you stage, unstage, or commit. In the unified layout, removed lines appear above the lines that replaced them and cannot be edited. In the split layout, the staged version is shown read-only on the left and the file on the right, scrolling together; click the left side to move around and select in it, and click the file side to go back to editing. Find (`Ctrl+F`) searches both sides. In the changes-only context, typing or pasting on a `⋯ N lines ⋯` row expands it first. Code folds are not shown in diff mode and come back when you leave it.
 - **Staged Changes:** `HEAD` against the staged version, so only what the next commit will contain. The tab title ends in `(staged)`, so a file's staged and unstaged diffs can be open at the same time.
 
-A file with unresolved merge conflicts has no single staged version to compare against, so it opens as a plain file with a status message instead. If a file gets merge conflicts while its diff is open, diff mode turns off.
+## Resolve merge conflicts
+
+Open a conflicted Git text file from Changes to compare **Incoming** and **Current** above an editable **Result**. From the normal editor, choose **Open Merge Editor** in the banner, context menu, or command palette.
+
+Click the gutter checkbox at the start of a conflict to include that side. Selecting both inserts Incoming first. Use **Actions > Swap Order** to reverse them, or **Keep Neither** to remove the block. The arrows navigate between conflicts. These actions are also available from the command palette.
+
+Edit Result to write a custom resolution, then choose **Mark Resolved**. Save at any point to keep your progress. Pending blocks keep conflict markers on disk. **Complete Merge** saves and stages the file when all blocks are resolved.
+
+Use **View** to place Result between the two sources or switch to **Text** for inline conflict actions. To set the default for future files, use **Options > Diff Views > Merge Conflict View** or the Diff section in Settings. Files with missing source versions, binary conflicts, and jj conflicts retain their existing workflow.
 
 Run **Git: Toggle Inline Diff** from the command palette to turn diff mode on or off for any tracked file.
 

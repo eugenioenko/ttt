@@ -444,6 +444,9 @@ func openEditorContextMenu(app *App, mx, my int) {
 
 	items := make([]ui.ContextMenuItem, len(editorContextMenu))
 	copy(items, editorContextMenu)
+	if app.EditorGroup.HasMergeBanner() {
+		items = append(items, ui.ContextMenuItem{Label: i18n.Text("merge.open"), Command: "merge.openEditor"})
+	}
 
 	callbacks := map[string]func(){}
 	if ok && app.PluginManager != nil {

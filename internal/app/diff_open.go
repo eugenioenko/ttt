@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/eugenioenko/ttt/internal/config"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/scm"
@@ -89,6 +90,11 @@ func readChangeDiff(ctx context.Context, source repositorySource, change scm.Cha
 
 func (a *App) openConflictedFile(fullPath, relPath string) {
 	if err := a.EditorGroup.OpenFile(fullPath); err != nil {
+		return
+	}
+	if a.Settings.Editor.MergeConflictView != config.MergeText && a.EditorGroup.ActiveBuffer() != nil {
+		a.OpenMergeEditor()
+		a.FocusEditorIfEnabled()
 		return
 	}
 	a.StatusNotify(i18n.Format("status.hasMergeConflictsOpenedWithoutADiff", i18n.Args{"relPath": relPath}))

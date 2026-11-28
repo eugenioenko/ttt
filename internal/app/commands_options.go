@@ -579,6 +579,7 @@ func menuChecked(checked bool) int {
 
 func (a *App) BuildDiffViewOptions() []ui.ContextMenuItem {
 	return []ui.ContextMenuItem{
+		{Label: i18n.Text("merge.setting"), Command: "options.mergeConflictView"},
 		{Label: i18n.Text("menu.split"), Command: "options.useSplitDiff", Checked: menuChecked(a.Settings.Editor.DiffMode != config.DiffModeUnified)},
 		{Label: i18n.Text("menu.unified"), Command: "options.useUnifiedDiff", Checked: menuChecked(a.Settings.Editor.DiffMode == config.DiffModeUnified)},
 		ui.MenuSep(),
@@ -616,6 +617,7 @@ func (a *App) buildGitFileOptions(expandCommand, collapseCommand string) []ui.Co
 }
 
 func registerOptionsCommands(app *App) {
+	app.registerMergeCommands()
 	reg := app.Reg
 	reg.Register(command.Command{
 		ID: "options.toggleExplorerShowHiddenFiles", Title: i18n.Text("command.toggleExplorerShowHiddenFiles"),

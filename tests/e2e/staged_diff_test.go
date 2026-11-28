@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -179,7 +180,7 @@ func TestStagingUpdatesOpenUnstagedDiff(t *testing.T) {
 	}
 }
 
-func TestConflictedFileOpensWithoutADiff(t *testing.T) {
+func TestConflictedFileOpensMergeEditorAndStagesOnlyOnCompletion(t *testing.T) {
 	h := newTestHarness(t, 100, 30)
 	defer h.stop()
 	path := filepath.Join(h.dir, "conflict.txt")
@@ -205,7 +206,20 @@ func TestConflictedFileOpensWithoutADiff(t *testing.T) {
 	if got := h.app.EditorGroup.ActiveFilePath(); got != path {
 		t.Fatalf("active file = %q, want %q", got, path)
 	}
-	h.assertContains("has merge conflicts")
+	h.assertContains("1 unresolved")
+	h.exec("merge.incoming")
+	h.exec("file.save")
+	if !git.IsUnmergedContext(context.Background(), h.dir, "conflict.txt") {
+		t.Fatal("ordinary Save staged the resolution")
+	}
+	h.exec("merge.complete")
+	if git.IsUnmergedContext(context.Background(), h.dir, "conflict.txt") {
+		t.Fatal("Complete Merge left the index unmerged")
+	}
+	got, err := git.ShowIndexFileContext(context.Background(), h.dir, "conflict.txt")
+	if err != nil || got != "other\n" {
+		t.Fatalf("staged %q, %v", got, err)
+	}
 }
 
 func TestConflictDuringAnOpenDiffClosesIt(t *testing.T) {

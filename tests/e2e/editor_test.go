@@ -124,7 +124,7 @@ func TestCommandPaletteResponsiveWidths(t *testing.T) {
 func paletteItemCount(h *testHarness) int {
 	count := 0
 	for _, cmd := range h.reg.List() {
-		if !cmd.PaletteHidden {
+		if !cmd.PaletteHidden && (cmd.PaletteWhen == nil || cmd.PaletteWhen()) {
 			count++
 		}
 	}

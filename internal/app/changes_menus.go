@@ -47,6 +47,9 @@ func (a *App) ShowChangesFileContextMenu(dir string, status scm.Change, sx, sy i
 	} else {
 		items = append(items, changesContextMenuUnstaged...)
 	}
+	if status.Kind == scm.Conflicted && !a.Changes.isJujutsu(dir) {
+		items = append([]ui.ContextMenuItem{{Label: i18n.Text("merge.open"), Command: "changes.openMergeEditor"}}, items...)
+	}
 	if !a.Changes.supportsStaging(dir) {
 		filtered := items[:0]
 		for _, item := range items {
