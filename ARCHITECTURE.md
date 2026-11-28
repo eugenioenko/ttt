@@ -143,6 +143,19 @@ while other code still mutates them is not decomposition.
 existing and future tasks. Uninitialized/headless Apps, including the E2E
 harness, run tasks synchronously.
 
+`internal/app/callbacks.go` is reserved for callback registration: it connects
+widgets to application handlers. New callbacks must keep feature implementations
+in their feature files (for example, `search_replace.go`, `diff_open.go`, `pr.go`,
+and `changes_menus.go`). Keep small forwarding closures with the registrations;
+place new menu construction, file operations, and async lifecycle behavior in
+named handlers in the owning feature files.
+
+Existing exceptions remain in the registration closures: editor-tab, Explorer,
+sidebar overflow, bottom-panel, and terminal menus, plus panel and focus routing.
+The mechanical handler split preserved these inline bodies; extracting them into
+their owning feature files is separate cleanup. They are not precedent for new
+feature logic in `callbacks.go`.
+
 ### Plugin host
 
 Package: `internal/plugin`.
