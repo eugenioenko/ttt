@@ -125,3 +125,49 @@ func TestPlaceNodesKeepsPlacesAndFavorites(t *testing.T) {
 		t.Errorf("ids = %v, headings must have no ID", gotIDs)
 	}
 }
+
+func TestPickerInputTextEndsWithSeparator(t *testing.T) {
+	sep := string(os.PathSeparator)
+	dir := filepath.Join(t.TempDir(), "repos")
+	for in, want := range map[string]string{dir: dir + sep, dir + sep: dir + sep, sep: sep, "": ""} {
+		if got := pickerInputText(in); got != want {
+			t.Errorf("pickerInputText(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFolderPickerPathDropsTrailingSeparator(t *testing.T) {
+	sep := string(os.PathSeparator)
+	dir := filepath.Join(t.TempDir(), "repos")
+	for in, want := range map[string]string{dir + sep: dir, " " + dir + sep + " ": dir, dir: dir, sep: sep, "~" + sep: "~", "  ": ""} {
+		if got := folderPickerPath(in); got != want {
+			t.Errorf("folderPickerPath(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
+
+func TestFolderPickerEnterLeavesTheInputReadyForAName(t *testing.T) {
+	dir := t.TempDir()
+	for _, name := range []string{"repos", filepath.Join("repos", "ttt"), filepath.Join("repos", "tools")} {
+		if err := os.Mkdir(filepath.Join(dir, name), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	repos := filepath.Join(dir, "repos")
+	fp := &folderPicker{
+		input: widgets.NewInputWidget(widgets.InputConfig{}),
+		list:  widgets.NewListWidgetFromConfig(widgets.ListConfig{}),
+	}
+	fp.enter(repos)
+	if got, want := fp.input.Text(), repos+string(os.PathSeparator); got != want {
+		t.Fatalf("input = %q, want %q", got, want)
+	}
+
+	fp.syncFromInput(fp.input.Text() + "tt")
+	if fp.dir != repos || fp.filter != "tt" {
+		t.Fatalf("directory, filter = %q, %q, want %q, %q", fp.dir, fp.filter, repos, "tt")
+	}
+	if got := folderPickerPath(fp.input.Text()); got != repos {
+		t.Fatalf("confirming right away picks %q, want %q", got, repos)
+	}
+}

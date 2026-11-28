@@ -51,7 +51,7 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 	fp := &folderPicker{app: a}
 
 	submit := func(text string) {
-		path := strings.TrimSpace(text)
+		path := folderPickerPath(text)
 		if path == "" {
 			return
 		}
@@ -91,7 +91,7 @@ func (a *App) ShowFolderPicker(title, confirmLabel, initial string, onPick func(
 		initial = a.Workspace.Primary()
 	}
 	fp.setDir(initial)
-	fp.input.SetText(fp.dir)
+	fp.input.SetText(pickerInputText(fp.dir))
 
 	dialog := widgets.NewDialogWidget(64)
 	dialog.Title = title
@@ -128,7 +128,7 @@ func (fp *folderPicker) enter(dir string) {
 		return
 	}
 	fp.setDir(dir)
-	fp.input.SetText(fp.dir)
+	fp.input.SetText(pickerInputText(fp.dir))
 }
 
 // syncFromInput follows along as the path is typed: the listing tracks the
@@ -262,6 +262,22 @@ func placeNodes(favs []favoriteDir, places []workspace.Place) []*widgets.TreeNod
 		nodes = append(nodes, &widgets.TreeNode{ID: p.Path, Label: p.Name})
 	}
 	return nodes
+}
+
+func pickerInputText(dir string) string {
+	if dir == "" || strings.HasSuffix(dir, string(os.PathSeparator)) {
+		return dir
+	}
+	return dir + string(os.PathSeparator)
+}
+
+// Open Folder, Add Folder and Clone expect the folder without the separator the path box adds.
+func folderPickerPath(text string) string {
+	path := strings.TrimSpace(text)
+	if strings.HasSuffix(path, string(os.PathSeparator)) {
+		path = filepath.Clean(path)
+	}
+	return path
 }
 
 func expandFolderPath(path string) string {

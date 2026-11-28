@@ -109,7 +109,7 @@ func (a *App) ShowFilePicker(title, confirmLabel, initial string, onPick func(st
 		initial = "."
 	}
 	fp.setDir(initial)
-	fp.input.SetText(fp.dir)
+	fp.input.SetText(pickerInputText(fp.dir))
 
 	dialog := widgets.NewDialogWidget(64)
 	dialog.Title = title
@@ -137,7 +137,7 @@ func (fp *filePicker) enter(dir string) {
 		return
 	}
 	fp.setDir(dir)
-	fp.input.SetText(fp.dir)
+	fp.input.SetText(pickerInputText(fp.dir))
 }
 
 // syncFromInput follows along as the path is typed: the listing tracks the
