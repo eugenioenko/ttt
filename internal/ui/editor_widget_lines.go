@@ -346,7 +346,7 @@ func (e *EditorPaneWidget) InsertLineAbove() {
 // the same line, such as HTML's <!-- ... -->; otherwise the comment runs to the
 // end of the line and postfix is empty.
 func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
-	prefix = "//"
+	prefix = ""
 	if e.Highlighter != nil {
 		switch e.commentLanguage() {
 		case "awk", "cmake", "coffee", "crystal", "desktop", "docker", "dotenv",
@@ -396,6 +396,12 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 		// leading vim9script command, uses a hash instead.
 		case "viml":
 			prefix = "\""
+		// For plain text and languages without a standard comment line prefix
+		// or comment syntax, treat them as having no prefix at all.
+		case "bibtex", "csv", "diff", "json", "shellsession":
+			prefix = ""
+		default:
+			prefix = "//"
 		}
 	}
 	return prefix, ""
