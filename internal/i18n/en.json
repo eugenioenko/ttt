@@ -24,6 +24,7 @@
   "merge.neither": "Keep Neither",
   "merge.next": "Next Merge Conflict",
   "merge.open": "Open Merge Editor",
+  "merge.openSelected": "Open Selected Change in Merge Editor",
   "merge.previous": "Previous Merge Conflict",
   "merge.remaining": "{count} unresolved",
   "merge.result": "Result",

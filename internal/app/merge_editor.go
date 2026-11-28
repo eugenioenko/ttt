@@ -160,7 +160,7 @@ func (a *App) setMergeDefault() {
 	a.ShowSelectDialog(i18n.Text("merge.setting"), mergeViewItems(), func(id string) { a.Settings.Editor.MergeConflictView = id; a.SaveAndApplySettings() }, nil)
 }
 func (a *App) registerMergeCommands() {
-	a.Reg.Register(command.Command{ID: "changes.openMergeEditor", Title: i18n.Text("merge.open"), Handler: a.openSelectedMerge, PaletteHidden: true})
+	a.Reg.Register(command.Command{ID: "changes.openMergeEditor", Title: i18n.Text("merge.openSelected"), Handler: a.openSelectedMerge, PaletteHidden: true})
 	a.Reg.Register(command.Command{ID: "merge.openEditor", Title: i18n.Text("merge.open"), Handler: a.OpenMergeEditor, PaletteWhen: func() bool { return a.EditorGroup != nil && a.EditorGroup.HasMergeBanner() }})
 	a.Reg.Register(command.Command{ID: "options.mergeConflictView", Title: i18n.Text("merge.setting"), Handler: a.setMergeDefault})
 	for _, c := range []struct{ id, title string }{
