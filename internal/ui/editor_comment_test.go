@@ -453,6 +453,40 @@ func TestToggleLineCommentPHPLeavesShortEcho(t *testing.T) {
 	}
 }
 
+// A line containing both HTML and a PHP tag anywhere (not just at the start)
+// cannot be safely wrapped as an HTML comment, so it is left untouched.
+func TestToggleLineCommentPHPMixedLineIsSkipped(t *testing.T) {
+	original := []string{"<div><?php echo $x; ?></div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("mixed HTML/PHP line = %q, want unchanged %q", e.Buf.Lines[0], original[0])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("second toggle changed mixed line = %q, want %q", e.Buf.Lines[0], original[0])
+	}
+}
+
+// A pure HTML line with no PHP tags is still wrapped with an HTML comment.
+func TestToggleLineCommentPHPPureHTMLIsWrapped(t *testing.T) {
+	original := []string{"<div>no php here</div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<!-- <div>no php here</div> -->"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("pure HTML line = %q, want %q", e.Buf.Lines[0], want[0])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented line = %q, want %q", e.Buf.Lines[0], original[0])
+	}
+}
+
 // A mixed file picks the marker per line and restores every line.
 func TestToggleLineCommentPHPMixedSelection(t *testing.T) {
 	original := []string{"<?php", "$name = 'x';", "?>", "<div>hi</div>"}

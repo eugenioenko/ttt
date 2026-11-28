@@ -968,8 +968,38 @@ func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startL
 			delims[i].skip = true
 			continue
 		}
+		// Detect PHP transitions anywhere on the line (e.g. <div><?php echo $x; ?></div>).
+		// Lines with embedded PHP cannot be safely wrapped as HTML comments.
+		if phpContainsAnywhere(line) {
+			delims[i] = lineCommentDelims{skip: true, col: -1}
+			continue
+		}
 		delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
 	}
+}
+
+// phpContainsAnywhere reports whether line contains a PHP opening or closing tag
+// anywhere, not just at the start. This detects mixed HTML/PHP lines like
+// <div><?php echo $x; ?></div> that cannot be safely wrapped as HTML comments.
+func phpContainsAnywhere(line string) bool {
+	runes := []rune(line)
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '<' && i+1 < len(runes) && runes[i+1] == '?' {
+			// Check for <?php or <?=
+			if i+4 < len(runes) && strings.EqualFold(string(runes[i:]), "<?php") ||
+				i+2 < len(runes) && string(runes[i:i+3]) == "<?=" {
+				return true
+			}
+			// Also check for <? (short open tag, though deprecated)
+			if i+2 < len(runes) {
+				return true
+			}
+		}
+		if runes[i] == '?' && i+1 < len(runes) && runes[i+1] == '>' {
+			return true
+		}
+	}
+	return false
 }
 
 // phpCodeDelims picks the marker for one PHP code line. A // comment ends at
