@@ -1581,7 +1581,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				}
 			}
 			col := visualColToBufCol(e.Buf.Lines[l], commentCol, tabW)
-			if lang == "cobol" && col < 6 && isCOBOLSequenceArea(e.Buf.Lines[l]) {
+			if lang == "cobol" && col < 6 && fixedAt(l) && isCOBOLSequenceArea(e.Buf.Lines[l]) {
 				col = 6
 			}
 			if d.col >= 0 {
