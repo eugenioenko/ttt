@@ -689,6 +689,8 @@ func TestSvelteExpressionCloses(t *testing.T) {
 		{"  {a: 1}", false},
 		{"  '}'", false},
 		{"  `}`", false},
+		{"  `} `", false},
+		{"  x'}", false},
 		{"  // }", false},
 	} {
 		if got := svelteExpressionCloses(tc.line); got != tc.want {

@@ -893,6 +893,7 @@ func (e *EditorPaneWidget) applySvelteDelimiters(delims []lineCommentDelims, sta
 func svelteExpressionCloses(line string) bool {
 	depth := 0
 	for i := 0; i < len(line); i++ {
+		iBeforeLiteral := i
 		switch c := line[i]; {
 		case c == '/' && i+1 < len(line) && line[i+1] == '/':
 			return false
@@ -904,6 +905,9 @@ func svelteExpressionCloses(line string) bool {
 			i += end + 3
 		case c == '\'' || c == '"' || c == '`':
 			i = skipScriptLiteral(line, i)
+			if i <= iBeforeLiteral {
+				i = iBeforeLiteral + 1
+			}
 		case c == '{':
 			depth++
 		case c == '}':
@@ -925,7 +929,7 @@ func skipScriptLiteral(text string, i int) int {
 		case '\\':
 			i++
 		case quote:
-			return i + 1
+			return i
 		}
 	}
 	return len(text)
