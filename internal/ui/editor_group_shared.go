@@ -67,6 +67,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 	cur, vp, sel := *t.Cur, *t.Vp, *t.Sel
 	clone.ID = ""
 	clone.Cur, clone.Vp, clone.Sel = &cur, &vp, &sel
+	clone.Merge = nil
 	clone.Multi, clone.autoClosing = nil, nil
 	clone.Highlighter, clone.Diff, clone.Annotations = nil, nil, nil
 	clone.Placeholder = false

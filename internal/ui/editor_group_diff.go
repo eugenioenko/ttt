@@ -83,6 +83,9 @@ func (g *EditorGroupWidget) activeInlineDiff() *DiffEditorWidget {
 // keyEditor is the pane editor commands act on: the one that has the keys,
 // which in an editable split diff is the read-only base pane once clicked.
 func (g *EditorGroupWidget) keyEditor() *EditorPaneWidget {
+	if m := g.visualMerge(); m != nil {
+		return m.pane(m.focus)
+	}
 	if d := g.activeInlineDiff(); d != nil {
 		return d.keyPane()
 	}

@@ -587,6 +587,9 @@ func (g *EditorGroupWidget) IsActiveVirtual() bool {
 }
 
 func (g *EditorGroupWidget) IsActiveReadOnly() bool {
+	if m := g.visualMerge(); m != nil {
+		return m.pane(m.focus).ReadOnly
+	}
 	if t := g.activeTab(); t != nil {
 		return t.ReadOnly
 	}

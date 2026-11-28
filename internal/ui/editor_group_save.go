@@ -48,6 +48,9 @@ func (g *EditorGroupWidget) Save() bool {
 	if t.Virtual || t.ReadOnly {
 		return false
 	}
+	if m := g.visualMerge(); m != nil {
+		m.flushProjection()
+	}
 	g.applySaveCleanups(t)
 	if err := t.Buf.SaveFile(t.FilePath); err != nil {
 		g.reportError(i18n.Format("editorGroup.failedToSave", i18n.Args{"filePath": t.FilePath, "error": saveErrorText(err)}))
@@ -98,6 +101,9 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 	if err != nil {
 		g.reportError(err.Error())
 		return false
+	}
+	if m := g.visualMerge(); m != nil {
+		m.flushProjection()
 	}
 	g.applySaveSettings(t.Buf, path)
 	g.applySaveCleanups(t)

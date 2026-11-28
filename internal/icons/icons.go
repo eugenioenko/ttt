@@ -27,25 +27,27 @@ const (
 	Lock              Name = "lock"
 	Pinned            Name = "pinned"
 
-	ChevronRight Name = "chevron-right"
-	ChevronLeft  Name = "chevron-left"
-	ChevronDown  Name = "chevron-down"
-	ChevronUp    Name = "chevron-up"
-	Submenu      Name = "submenu"
-	ArrowLeft    Name = "arrow-left"
-	ArrowRight   Name = "arrow-right"
-	ArrowUp      Name = "arrow-up"
-	ArrowDown    Name = "arrow-down"
-	Close        Name = "close"
-	Dirty        Name = "dirty"
-	More         Name = "more"
-	Add          Name = "add"
-	Remove       Name = "remove"
-	Discard      Name = "discard"
-	Replace      Name = "replace"
-	ReplaceAll   Name = "replace-all"
-	Reload       Name = "reload"
-	Ellipsis     Name = "ellipsis"
+	MergeUnchecked Name = "merge-unchecked"
+	MergeChecked   Name = "merge-checked"
+	ChevronRight   Name = "chevron-right"
+	ChevronLeft    Name = "chevron-left"
+	ChevronDown    Name = "chevron-down"
+	ChevronUp      Name = "chevron-up"
+	Submenu        Name = "submenu"
+	ArrowLeft      Name = "arrow-left"
+	ArrowRight     Name = "arrow-right"
+	ArrowUp        Name = "arrow-up"
+	ArrowDown      Name = "arrow-down"
+	Close          Name = "close"
+	Dirty          Name = "dirty"
+	More           Name = "more"
+	Add            Name = "add"
+	Remove         Name = "remove"
+	Discard        Name = "discard"
+	Replace        Name = "replace"
+	ReplaceAll     Name = "replace-all"
+	Reload         Name = "reload"
+	Ellipsis       Name = "ellipsis"
 
 	Function  Name = "function"
 	Class     Name = "class"
@@ -127,12 +129,14 @@ var table = map[Name]glyphs{
 	Snippet:   {Plain: "■", Nerd: ""},
 	Symbol:    {Plain: "•", Nerd: ""},
 
-	PanelExplorer: {Plain: "⌂", Nerd: "\ueaf0"},
-	PanelSearch:   {Plain: "⌕", Nerd: "\uea6d"},
-	PanelChanges:  {Plain: "⎇", Nerd: "\uea68"},
-	PanelOutline:  {Plain: "ƒ", Nerd: "\ueb86"},
-	PanelPlugins:  {Plain: "⧉", Nerd: "\ueae6"},
-	PanelApps:     {Plain: "⏵", Nerd: "\U000f003b"},
+	MergeUnchecked: {Plain: "☐", Nerd: "󰄱"},
+	MergeChecked:   {Plain: "☑", Nerd: "󰄲"},
+	PanelExplorer:  {Plain: "⌂", Nerd: "\ueaf0"},
+	PanelSearch:    {Plain: "⌕", Nerd: "\uea6d"},
+	PanelChanges:   {Plain: "⎇", Nerd: "\uea68"},
+	PanelOutline:   {Plain: "ƒ", Nerd: "\ueb86"},
+	PanelPlugins:   {Plain: "⧉", Nerd: "\ueae6"},
+	PanelApps:      {Plain: "⏵", Nerd: "\U000f003b"},
 }
 
 var (

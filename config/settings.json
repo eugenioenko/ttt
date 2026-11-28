@@ -38,6 +38,7 @@
         "wordWrap": true
       }
     },
+    "mergeConflictView": "two-column",
     "diffMode": "split",
     "diffContext": "changes",
     "diffWordWrap": false,

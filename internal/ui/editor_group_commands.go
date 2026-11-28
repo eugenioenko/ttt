@@ -42,7 +42,10 @@ func (e *EditorPaneWidget) applyUndoCursor(pos *undo.CursorPos, sel selection.Se
 
 func (g *EditorGroupWidget) Undo() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	if m := g.visualMerge(); m != nil {
+		m.flushProjection()
+	}
+	if t == nil || (g.visualMerge() == nil && g.editableKeyEditor() == nil) {
 		return
 	}
 	// Undo has no concept of e.Multi; collapsing first avoids stranding
@@ -64,7 +67,10 @@ func (g *EditorGroupWidget) Undo() {
 
 func (g *EditorGroupWidget) Redo() {
 	t := g.activeTab()
-	if t == nil || g.editableKeyEditor() == nil {
+	if m := g.visualMerge(); m != nil {
+		m.flushProjection()
+	}
+	if t == nil || (g.visualMerge() == nil && g.editableKeyEditor() == nil) {
 		return
 	}
 	if g.IsEditorActive() && g.Editor.isMultiActive() {
