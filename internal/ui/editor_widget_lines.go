@@ -928,11 +928,13 @@ func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startL
 	for i := range delims {
 		line := e.Buf.Lines[startLine+i]
 		if starts[startLine+i] {
-			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+			runes := []rune(line)
+			indent := len(runes) - len([]rune(strings.TrimLeft(line, " \t")))
+			delims[i] = phpCodeDelims(line, indent, true)
 			continue
 		}
 		if col, ok := phpOpenTagContent(line); ok {
-			delims[i] = lineCommentDelims{prefix: "//", col: col}
+			delims[i] = phpCodeDelims(line, col, false)
 			continue
 		}
 		if phpLeadingOpenTag(line) {
@@ -941,6 +943,91 @@ func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startL
 		}
 		delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
 	}
+}
+
+// phpCodeDelims picks the marker for one PHP code line. A // comment ends at
+// the first ?>, even one inside a string or block comment, so a line carrying
+// such a quoted close tag must use a block comment or be left alone: adding
+// // would close the PHP block and leave the rest of the selection as output.
+func phpCodeDelims(line string, col int, align bool) lineCommentDelims {
+	runes := []rune(line)
+	if col < 0 || col > len(runes) {
+		col = min(max(col, 0), len(runes))
+	}
+	text := strings.TrimRight(string(runes[col:]), " \t")
+	if phpBlockCommented(text) {
+		return lineCommentDelims{prefix: "/*", postfix: "*/", col: col}
+	}
+	protected, real, balanced := phpCloseTagContext(text)
+	if protected {
+		// A nested */ would close the wrapper early, and a real closing tag
+		// must stay effective, so those lines are skipped instead.
+		if !real && balanced && !strings.Contains(text, "*/") {
+			return lineCommentDelims{prefix: "/*", postfix: "*/", col: col}
+		}
+		return lineCommentDelims{skip: true, col: col}
+	}
+	if align {
+		// The batch aligns plain line comments at the shallowest indent.
+		col = -1
+	}
+	return lineCommentDelims{prefix: "//", col: col}
+}
+
+// phpBlockCommented reports whether text is one block comment covering the
+// whole line, as phpCodeDelims leaves a line it wrapped.
+func phpBlockCommented(text string) bool {
+	if len(text) < 4 || !strings.HasPrefix(text, "/*") || !strings.HasSuffix(text, "*/") {
+		return false
+	}
+	return strings.Index(text[2:], "*/") == len(text)-4
+}
+
+// phpCloseTagContext reports whether text has a ?> that PHP ignores because it
+// is inside a string or block comment, whether it also has a real closing tag,
+// and whether the strings and block comments balance on the line.
+func phpCloseTagContext(text string) (protected, real, balanced bool) {
+	block := false
+	var quote byte
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if c == '?' && i+1 < len(text) && text[i+1] == '>' {
+			if block || quote != 0 {
+				protected = true
+			} else {
+				real = true
+			}
+			i++
+			continue
+		}
+		if block {
+			if c == '*' && i+1 < len(text) && text[i+1] == '/' {
+				block = false
+				i++
+			}
+			continue
+		}
+		if quote != 0 {
+			if c == '\\' {
+				i++
+				continue
+			}
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
+		switch {
+		case c == '\'' || c == '"':
+			quote = c
+		case c == '/' && i+1 < len(text) && text[i+1] == '/':
+			return protected, real, true
+		case c == '/' && i+1 < len(text) && text[i+1] == '*':
+			block = true
+			i++
+		}
+	}
+	return protected, real, !block && quote == 0
 }
 
 // phpLeadingOpenTag reports whether line starts with a PHP opening tag.

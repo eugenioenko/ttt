@@ -379,6 +379,59 @@ func TestToggleLineCommentPHPLeavesLoneOpenTag(t *testing.T) {
 	}
 }
 
+// A ?> inside a string does not close PHP today, but it would once a // marker
+// precedes it, because PHP ends a line comment at ?>. The line takes a block
+// comment instead, and the line after it stays PHP on the way back.
+func TestToggleLineCommentPHPQuotedCloseTagUsesBlockComment(t *testing.T) {
+	original := []string{"<?php", "echo \"?>\";", "echo $x;"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 2, len("echo $x;"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(1, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?php", "/* echo \"?>\"; */", "// echo $x;"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A line that cannot hold a block comment safely is left untouched, and the
+// selection still toggles back without stranding a comment on later lines.
+func TestToggleLineCommentPHPSkipsUnsafeQuotedCloseTag(t *testing.T) {
+	original := []string{"<?php", "$s = '*/ ?>';", "echo $x;"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 2, len("echo $x;"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(1, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?php", "$s = '*/ ?>';", "// echo $x;"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+// A real closing tag still closes PHP after a // marker, so it keeps the line
+// comment and the rest of that line is commented as before.
+func TestToggleLineCommentPHPRealCloseTagKeepsLineComment(t *testing.T) {
+	const original = "<?php echo $x; ?>"
+	e := newCommentEditor(t, "a.php", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "<?php // echo $x; ?>"; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+}
+
 // A mixed file picks the marker per line and restores every line.
 func TestToggleLineCommentPHPMixedSelection(t *testing.T) {
 	original := []string{"<?php", "$name = 'x';", "?>", "<div>hi</div>"}
