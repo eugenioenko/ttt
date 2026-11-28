@@ -824,3 +824,49 @@ func TestPluginEditorAPIFollowsTheActiveEditorGroup(t *testing.T) {
 		t.Fatalf("FilePath() after focusing the first group = %q, want %q", got, left)
 	}
 }
+
+func TestPluginEditorAPIEndsTheUndoGroupOnTheGroupThatBeganIt(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	dir := t.TempDir()
+	left := filepath.Join(dir, "left.txt")
+	right := filepath.Join(dir, "right.txt")
+	for _, path := range []string{left, right} {
+		if err := os.WriteFile(path, []byte("text"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	api := NewPluginEditorAPI(a)
+	first := a.EditorGroup
+	if err := first.OpenFile(left); err != nil {
+		t.Fatal(err)
+	}
+	a.SplitEditor()
+	second := a.EditorGroup
+	if err := second.OpenFile(right); err != nil {
+		t.Fatal(err)
+	}
+
+	// the focus moves to the other pane while a plugin holds an undo group open
+	a.activateEditorGroup(first)
+	api.BeginUndoGroup()
+	api.Insert(0, 0, "a")
+	a.activateEditorGroup(second)
+	api.EndUndoGroup()
+
+	// a later undo group in the first pane must still collapse into one undo step
+	a.activateEditorGroup(first)
+	api.BeginUndoGroup()
+	api.Insert(0, 0, "b")
+	api.Insert(0, 0, "c")
+	api.EndUndoGroup()
+
+	ed := first.Editor
+	ed.Undo.Undo(ed.Buf)
+	if got := ed.Buf.Lines[0]; got != "atext" {
+		t.Fatalf("after one undo the first pane reads %q, want %q", got, "atext")
+	}
+}

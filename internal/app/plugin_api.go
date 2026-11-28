@@ -26,6 +26,9 @@ const maxResponseBody = 10 * 1024 * 1024 // 10 MB
 // PluginEditorAPI implements plugin.EditorAPI using the App's editor state.
 type PluginEditorAPI struct {
 	app *App
+	// undoGroups holds the undo stack each open BeginUndoGroup started on,
+	// so EndUndoGroup ends it there even if another pane is active by then.
+	undoGroups []*undo.UndoStack
 }
 
 func NewPluginEditorAPI(app *App) *PluginEditorAPI {
@@ -271,19 +274,27 @@ func (e *PluginEditorAPI) ClearSelection() {
 }
 
 func (e *PluginEditorAPI) BeginUndoGroup() {
-	ed := e.group().Editor
-	if ed == nil || ed.Undo == nil {
-		return
+	var stack *undo.UndoStack
+	if ed := e.group().Editor; ed != nil {
+		stack = ed.Undo
 	}
-	ed.Undo.BeginTransaction()
+	// a nil entry keeps BeginUndoGroup and EndUndoGroup paired
+	e.undoGroups = append(e.undoGroups, stack)
+	if stack != nil {
+		stack.BeginTransaction()
+	}
 }
 
 func (e *PluginEditorAPI) EndUndoGroup() {
-	ed := e.group().Editor
-	if ed == nil || ed.Undo == nil {
+	n := len(e.undoGroups)
+	if n == 0 {
 		return
 	}
-	ed.Undo.EndTransaction()
+	stack := e.undoGroups[n-1]
+	e.undoGroups = e.undoGroups[:n-1]
+	if stack != nil {
+		stack.EndTransaction()
+	}
 }
 
 func (e *PluginEditorAPI) AddCursor(line, col int) {
