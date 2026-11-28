@@ -62,10 +62,33 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 		}},
 		{Label: i18n.Text("general.allowButton"), Handler: func() {
 			a.DismissDialog()
-			if err := a.PluginManager.ApproveAndLoad(p); err == nil {
-				a.WirePlugin(p)
-				a.installPluginGrammars(p)
+			isUpdate := a.pluginUpdateApprovals[p]
+			if err := a.PluginManager.ApproveAndLoad(p); err != nil {
+				title := i18n.Text("plugins.installFailed")
+				message := err.Error()
+				if isUpdate {
+					title = i18n.Text("plugins.updateFailed")
+					message = i18n.Format("plugins.updateFailedReason", i18n.Args{"name": p.Name, "reason": err.Error()})
+				}
+				closeFailure := func() {
+					a.DismissDialog()
+					delete(a.pluginUpdateApprovals, p)
+					a.updatePluginDetailButtons()
+					if a.PluginsPanel != nil {
+						a.PluginsPanel.Refresh()
+					}
+					a.showNextPluginApproval()
+				}
+				failureDialog := a.ShowConfirmDialogEx(title, message, []string{i18n.Text("general.close")}, []func(){closeFailure})
+				failureDialog.OnDismiss = closeFailure
+				return
 			}
+			a.WirePlugin(p)
+			a.installPluginGrammars(p)
+			if isUpdate {
+				a.StatusNotify(i18n.Format("status.pluginUpToDate", i18n.Args{"name": p.Name}))
+			}
+			delete(a.pluginUpdateApprovals, p)
 			a.updatePluginDetailButtons()
 			if a.PluginsPanel != nil {
 				a.PluginsPanel.Refresh()
@@ -133,6 +156,7 @@ func (a *App) requestPluginApproval(p *plugin.Plugin) {
 // ttt-installed clone (or disables an on-disk one) so it stops prompting,
 // resets the install button, and advances to the next pending approval.
 func (a *App) denyPluginApproval(p *plugin.Plugin) {
+	delete(a.pluginUpdateApprovals, p)
 	if err := a.PluginManager.DenyPlugin(p); err != nil {
 		slog.Error("deny plugin", "error", err)
 	}

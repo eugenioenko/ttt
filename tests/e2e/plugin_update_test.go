@@ -152,6 +152,7 @@ func TestPluginUpdateSwapsLuaStateOnUIGoroutine(t *testing.T) {
 	h.assertContains("pdf sidebar 2.0.0")
 	h.assertContains("pdf page 2.0.0")
 	h.assertNotContains("Binary file")
+	h.assertContains("pdfview is up to date.")
 }
 
 func TestDisabledPluginUpdateRefreshesActiveTheme(t *testing.T) {
@@ -225,6 +226,58 @@ func TestPluginUpdateNeedingApprovalReleasesPanels(t *testing.T) {
 	}
 	h.assertContains("pdfview requests")
 	h.assertNotContains("pdf page")
+	h.assertNotContains("is up to date.")
+
+	clickDialogButton(t, h, "Allow")
+	h.assertContains("pdfview is up to date.")
+}
+
+func TestPluginUpdateApprovalFailureShowsErrorBeforeNextApproval(t *testing.T) {
+	h, _, pdf := newUpdatablePluginHarness(t, `, "fs.read": true`)
+	defer h.stop()
+
+	h.awaitPluginUpdate("pdfview", pdf)
+	if len(h.app.PendingPluginApprovals) != 1 {
+		t.Fatalf("pending approvals = %d, want the updated plugin", len(h.app.PendingPluginApprovals))
+	}
+	updated := h.app.PendingPluginApprovals[0]
+	installHook := `local ttt = require("ttt")
+ttt.on_install(function()
+	error("approval reload failed")
+end)`
+	if err := os.WriteFile(filepath.Join(updated.Dir, "init.lua"), []byte(installHook), 0644); err != nil {
+		t.Fatal(err)
+	}
+	next := &plugin.Plugin{Name: "next", Manifest: plugin.Manifest{Name: "next"}}
+	h.app.PendingPluginApprovals = append(h.app.PendingPluginApprovals, next)
+
+	clickDialogButton(t, h, "Allow")
+	h.assertContains("Update Failed")
+	h.assertContains("Could not update pdfview:")
+	h.assertContains("approval reload failed")
+	h.assertNotContains("pdfview is up to date.")
+	h.assertNotContains("next requests")
+	if len(h.app.PendingPluginApprovals) != 2 {
+		t.Fatalf("pending approvals while failure is shown = %d, want 2", len(h.app.PendingPluginApprovals))
+	}
+
+	clickDialogButton(t, h, "Close")
+	h.assertContains("next requests")
+	if len(h.app.PendingPluginApprovals) != 1 || h.app.PendingPluginApprovals[0] != next {
+		t.Fatalf("pending approvals after failure dismissal = %+v, want next approval", h.app.PendingPluginApprovals)
+	}
+}
+
+func TestPluginUpdateFailureNamesPluginAndReason(t *testing.T) {
+	h, _, pdf := newUpdatablePluginHarness(t, "")
+	defer h.stop()
+	gitIn(t, filepath.Join(h.dir, "config", "plugins", "pdfview"), "remote", "set-url", "origin", filepath.Join(h.dir, "missing-remote"))
+
+	h.awaitPluginUpdate("pdfview", pdf)
+
+	h.assertContains("Update Failed")
+	h.assertContains("Could not update pdfview:")
+	h.assertNotContains("is up to date.")
 }
 
 func clickDialogButton(t *testing.T, h *testHarness, label string) {
