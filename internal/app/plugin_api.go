@@ -25,15 +25,21 @@ const maxResponseBody = 10 * 1024 * 1024 // 10 MB
 
 // PluginEditorAPI implements plugin.EditorAPI using the App's editor state.
 type PluginEditorAPI struct {
-	eg *ui.EditorGroupWidget
+	app *App
 }
 
 func NewPluginEditorAPI(app *App) *PluginEditorAPI {
-	return &PluginEditorAPI{eg: app.EditorGroup}
+	return &PluginEditorAPI{app: app}
+}
+
+// group is read on every call, because splitting or focusing another pane
+// replaces app.EditorGroup after the plugins are loaded.
+func (e *PluginEditorAPI) group() *ui.EditorGroupWidget {
+	return e.app.EditorGroup
 }
 
 func (e *PluginEditorAPI) BufferText() string {
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil {
 		return ""
 	}
@@ -41,7 +47,7 @@ func (e *PluginEditorAPI) BufferText() string {
 }
 
 func (e *PluginEditorAPI) BufferLines() []string {
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil {
 		return nil
 	}
@@ -51,11 +57,11 @@ func (e *PluginEditorAPI) BufferLines() []string {
 }
 
 func (e *PluginEditorAPI) CurrentLine() string {
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil {
 		return ""
 	}
-	line, _ := e.eg.ActiveCursor()
+	line, _ := e.group().ActiveCursor()
 	if line >= 0 && line < len(buf.Lines) {
 		return buf.Lines[line]
 	}
@@ -63,7 +69,7 @@ func (e *PluginEditorAPI) CurrentLine() string {
 }
 
 func (e *PluginEditorAPI) GetLine(n int) string {
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil || n < 0 || n >= len(buf.Lines) {
 		return ""
 	}
@@ -71,7 +77,7 @@ func (e *PluginEditorAPI) GetLine(n int) string {
 }
 
 func (e *PluginEditorAPI) LineCount() int {
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil {
 		return 0
 	}
@@ -79,38 +85,38 @@ func (e *PluginEditorAPI) LineCount() int {
 }
 
 func (e *PluginEditorAPI) CursorPos() (int, int) {
-	return e.eg.ActiveCursor()
+	return e.group().ActiveCursor()
 }
 
 func (e *PluginEditorAPI) Selection() (bool, int, int, int, int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Selection == nil || !ed.Selection.Active {
 		return false, 0, 0, 0, 0
 	}
-	line, col := e.eg.ActiveCursor()
+	line, col := e.group().ActiveCursor()
 	start, end := ed.Selection.Range(line, col)
 	return true, start.Line, start.Col, end.Line, end.Col
 }
 
 func (e *PluginEditorAPI) SelectionText() string {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Selection == nil || !ed.Selection.Active || ed.Buf == nil {
 		return ""
 	}
-	line, col := e.eg.ActiveCursor()
+	line, col := e.group().ActiveCursor()
 	return ed.Selection.Text(ed.Buf.Lines, line, col)
 }
 
 func (e *PluginEditorAPI) FilePath() string {
-	return e.eg.ActiveFilePath()
+	return e.group().ActiveFilePath()
 }
 
 func (e *PluginEditorAPI) FileName() string {
-	return e.eg.ActiveFileName()
+	return e.group().ActiveFileName()
 }
 
 func (e *PluginEditorAPI) Language() string {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Highlighter == nil {
 		return ""
 	}
@@ -118,14 +124,14 @@ func (e *PluginEditorAPI) Language() string {
 }
 
 func (e *PluginEditorAPI) Viewport() (int, int, int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Viewport == nil {
 		return 0, 0, 0
 	}
 	top := ed.Viewport.TopLine
 	height := ed.Viewport.Height
 	bottom := top + height - 1
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf != nil && bottom >= len(buf.Lines) {
 		bottom = len(buf.Lines) - 1
 	}
@@ -133,7 +139,7 @@ func (e *PluginEditorAPI) Viewport() (int, int, int) {
 }
 
 func (e *PluginEditorAPI) ScrollTo(line int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Viewport == nil {
 		return
 	}
@@ -144,7 +150,7 @@ func (e *PluginEditorAPI) ScrollTo(line int) {
 }
 
 func (e *PluginEditorAPI) ScrollBy(delta int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Viewport == nil {
 		return
 	}
@@ -156,7 +162,7 @@ func (e *PluginEditorAPI) ScrollBy(delta int) {
 }
 
 func (e *PluginEditorAPI) SetLine(line int, text string) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Buf == nil || ed.Undo == nil {
 		return
 	}
@@ -168,7 +174,7 @@ func (e *PluginEditorAPI) SetLine(line int, text string) {
 }
 
 func (e *PluginEditorAPI) Insert(line, col int, text string) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Buf == nil || ed.Undo == nil {
 		return
 	}
@@ -193,7 +199,7 @@ func (e *PluginEditorAPI) Insert(line, col int, text string) {
 }
 
 func (e *PluginEditorAPI) Replace(startLine, startCol, endLine, endCol int, text string) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Buf == nil || ed.Undo == nil {
 		return
 	}
@@ -235,7 +241,7 @@ func (e *PluginEditorAPI) Replace(startLine, startCol, endLine, endCol int, text
 }
 
 func (e *PluginEditorAPI) SetCursor(line, col int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Cursor == nil {
 		return
 	}
@@ -246,7 +252,7 @@ func (e *PluginEditorAPI) SetCursor(line, col int) {
 }
 
 func (e *PluginEditorAPI) SetSelection(startLine, startCol, endLine, endCol int) {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Selection == nil || ed.Cursor == nil {
 		return
 	}
@@ -257,7 +263,7 @@ func (e *PluginEditorAPI) SetSelection(startLine, startCol, endLine, endCol int)
 }
 
 func (e *PluginEditorAPI) ClearSelection() {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Selection == nil {
 		return
 	}
@@ -265,7 +271,7 @@ func (e *PluginEditorAPI) ClearSelection() {
 }
 
 func (e *PluginEditorAPI) BeginUndoGroup() {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Undo == nil {
 		return
 	}
@@ -273,7 +279,7 @@ func (e *PluginEditorAPI) BeginUndoGroup() {
 }
 
 func (e *PluginEditorAPI) EndUndoGroup() {
-	ed := e.eg.Editor
+	ed := e.group().Editor
 	if ed == nil || ed.Undo == nil {
 		return
 	}
@@ -281,13 +287,13 @@ func (e *PluginEditorAPI) EndUndoGroup() {
 }
 
 func (e *PluginEditorAPI) AddCursor(line, col int) {
-	e.eg.AddCursor(line, col)
+	e.group().AddCursor(line, col)
 }
 
 func (e *PluginEditorAPI) GetCursors() []plugin.CursorPosition {
-	states := e.eg.GetCursors()
+	states := e.group().GetCursors()
 	if states == nil {
-		line, col := e.eg.ActiveCursor()
+		line, col := e.group().ActiveCursor()
 		return []plugin.CursorPosition{{Line: line, Col: col}}
 	}
 	result := make([]plugin.CursorPosition, len(states))
@@ -298,28 +304,28 @@ func (e *PluginEditorAPI) GetCursors() []plugin.CursorPosition {
 }
 
 func (e *PluginEditorAPI) ClearCursors() {
-	e.eg.CollapseMultiCursor()
+	e.group().CollapseMultiCursor()
 }
 
 func (e *PluginEditorAPI) SetSearch(pattern string, useRegex bool) {
-	if !e.eg.IsEditorActive() {
+	if !e.group().IsEditorActive() {
 		return
 	}
-	buf := e.eg.ActiveBuffer()
+	buf := e.group().ActiveBuffer()
 	if buf == nil {
 		return
 	}
 	opts := ui.SearchOptions{UseRegex: useRegex, CaseSensitive: true}
 	matches, _ := ui.FindInLines(buf.Lines, pattern, opts)
-	e.eg.SetSearch(pattern, opts, matches)
+	e.group().SetSearch(pattern, opts, matches)
 }
 
 func (e *PluginEditorAPI) ClearSearch() {
-	e.eg.ClearSearch()
+	e.group().ClearSearch()
 }
 
 func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
-	hunks, _, goTo := activeDiffHunks(e.eg)
+	hunks, _, goTo := activeDiffHunks(e.group())
 	if goTo == nil {
 		return nil
 	}
@@ -333,12 +339,12 @@ func (e *PluginEditorAPI) DiffHunks() []plugin.DiffHunkTarget {
 }
 
 func (e *PluginEditorAPI) DiffHunkAt() int {
-	_, at, _ := activeDiffHunks(e.eg)
+	_, at, _ := activeDiffHunks(e.group())
 	return at
 }
 
 func (e *PluginEditorAPI) GoToDiffHunk(index int) error {
-	hunks, _, goTo := activeDiffHunks(e.eg)
+	hunks, _, goTo := activeDiffHunks(e.group())
 	if goTo == nil {
 		return fmt.Errorf("the active tab is not a diff")
 	}

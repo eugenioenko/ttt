@@ -786,3 +786,41 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 		t.Errorf("requests = %v, want %v", paths, want)
 	}
 }
+
+func TestPluginEditorAPIFollowsTheActiveEditorGroup(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	dir := t.TempDir()
+	left := filepath.Join(dir, "left.txt")
+	right := filepath.Join(dir, "right.md")
+	for path, text := range map[string]string{left: "left text", right: "# right text"} {
+		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// plugins get their editor API when they load, before any split
+	api := NewPluginEditorAPI(a)
+	first := a.EditorGroup
+	if err := first.OpenFile(left); err != nil {
+		t.Fatal(err)
+	}
+	a.SplitEditor()
+	if err := a.EditorGroup.OpenFile(right); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := api.FilePath(); got != right {
+		t.Fatalf("FilePath() in the new group = %q, want %q", got, right)
+	}
+	if got := api.BufferText(); strings.TrimSuffix(got, "\n") != "# right text" {
+		t.Fatalf("BufferText() in the new group = %q, want the text of %q", got, right)
+	}
+
+	a.activateEditorGroup(first)
+	if got := api.FilePath(); got != left {
+		t.Fatalf("FilePath() after focusing the first group = %q, want %q", got, left)
+	}
+}
