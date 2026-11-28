@@ -588,6 +588,49 @@ func TestToggleLineCommentRSTPerLineComments(t *testing.T) {
 	}
 }
 
+// Ordinary inline comments such as ".. Keep this" are preserved as comments
+// and toggle normally.
+func TestToggleLineCommentRSTPreservesInlineComment(t *testing.T) {
+	e := newCommentEditor(t, "a.rst", []string{".. Keep this"}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "Keep this"; got != want {
+		t.Fatalf("uncommented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], ".. Keep this"; got != want {
+		t.Fatalf("recommented line = %q, want %q", got, want)
+	}
+}
+
+// When a payload could form an explicit markup construct (directive, substitution
+// reference, footnote, citation, or target), the comment marker is kept on its
+// own line and the payload is indented under it instead of being exposed.
+func TestToggleLineCommentRSTExplicitMarkupBecomesBlockComment(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		output string
+	}{
+		{"directive", ".. directive:: name", "..\n   directive:: name"},
+		{"substitution", ".. |sub| replacement", "..\n   |sub| replacement"},
+		{"footnote", ".. [1] This is a footnote", "..\n   [1] This is a footnote"},
+		{"citation", ".. [Cit2002] This is a citation", "..\n   [Cit2002] This is a citation"},
+		{"target", ".. _target:", "..\n   _target:"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := newCommentEditor(t, "a.rst", []string{tt.input}, 0, 0)
+
+			e.ToggleLineComment()
+			if got, want := e.Buf.Lines[0], tt.output; got != want {
+				t.Fatalf("uncommented line = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 // SAS statements may contain semicolons, so the block comment is the only
 // safe per-line form.
 func TestToggleLineCommentSASWrapsWithBlockComment(t *testing.T) {

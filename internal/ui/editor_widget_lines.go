@@ -1318,13 +1318,52 @@ func hasCommentPrefix(trimmed, prefix string) bool {
 }
 
 // isRSTCommentMarker reports whether trimmed starts a reStructuredText
-// comment: two periods followed by whitespace or the end of the line.
+// comment: two periods followed by whitespace or the end of the line, and the
+// payload is not itself an explicit markup construct such as a directive,
+// substitution reference, footnote, citation, or target.
 func isRSTCommentMarker(trimmed string) bool {
 	if !strings.HasPrefix(trimmed, "..") {
 		return false
 	}
 	rest := trimmed[2:]
-	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
+	if rest == "" || rest[0] == ' ' || rest[0] == '\t' {
+		return !isRSTExplicitMarkup(strings.TrimSpace(rest))
+	}
+	return false
+}
+
+// isRSTExplicitMarkup reports whether text, after trimming, looks like a
+// reStructuredText explicit markup construct (directive, substitution reference,
+// footnote, citation, or target) rather than an ordinary comment payload.
+func isRSTExplicitMarkup(text string) bool {
+	if text == "" {
+		return false
+	}
+	// Directive: .. directive-name:: rest   (the :: is the key marker)
+	// Also handles .. directive-name:: (bare directive with no content)
+	if idx := strings.Index(text, "::"); idx >= 0 {
+		before := strings.TrimSpace(text[:idx])
+		if before != "" && !strings.HasPrefix(before, "..") {
+			return true
+		}
+	}
+	// Substitution reference: .. |name| replacement
+	if strings.HasPrefix(text, "|") {
+		if idx := strings.Index(text[1:], "|"); idx >= 0 {
+			return true
+		}
+	}
+	// Footnote, citation, or labeled reference: .. [label] text
+	if strings.HasPrefix(text, "[") {
+		if idx := strings.Index(text, "]"); idx > 0 {
+			return true
+		}
+	}
+	// Target: .. _target: (optionally followed by replacement text)
+	if strings.HasPrefix(text, "_") {
+		return true
+	}
+	return false
 }
 
 // toggleRSTComment toggles an explicit markup comment block. The marker goes
@@ -1421,11 +1460,61 @@ func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo
 		return n
 	}
 
+	// Determine the comment state of each line. A line starting with ".. "
+	// whose payload is an explicit markup construct is treated as a "masked"
+	// markup line, not a plain comment, so it is converted to block form when
+	// toggled rather than having its marker stripped.
+	masked := make(map[int]bool, len(nonBlank))
+	for _, l := range nonBlank {
+		t := strings.TrimLeft(e.Buf.Lines[l], " \t")
+		if strings.HasPrefix(t, ".. ") {
+			payload := strings.TrimSpace(t[3:])
+			if payload != "" && isRSTExplicitMarkup(payload) {
+				masked[l] = true
+			}
+		}
+	}
+
 	switch {
-	case perLine:
+	case perLine && len(masked) == 0:
+		// All lines are plain comments; strip the marker from each.
 		for _, l := range nonBlank {
 			remove(l, indent(l), markerLen(l))
 		}
+	case len(masked) > 0:
+					// At least one line carries masked markup. Convert each masked line to
+			// block comment form (marker on its own line, payload indented under it)
+			// and leave plain-comment and non-comment lines alone.
+			for _, l := range nonBlank {
+				if masked[l] {
+					t := strings.TrimLeft(e.Buf.Lines[l], " \t")
+					payload := strings.TrimSpace(t[3:])
+					base := indent(l)
+					// Remove the existing ".. " marker.
+					remove(l, base, markerLen(l))
+					// Build the new content: "..\n   <payload>"
+					newContent := "..\n   " + payload
+					// Use a replace command to set the new line content.
+					cmd := &undo.ReplaceLinesCommand{
+						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{newContent},
+					}
+					cmd.Apply(e.Buf)
+					cmds = append(cmds, cmd)
+					// Update column mapping for the changed line.
+					oldLen := len([]rune(e.Buf.Lines[l]))
+					newLen := len([]rune(newContent))
+					delta := newLen - oldLen
+					mapColumns(l, func(c int, isStart bool) int {
+						if c > base && c <= base+2 {
+							return base + 2
+						}
+						if c > base+2 {
+							return c + delta
+						}
+						return c
+					})
+				}
+			}
 	case block:
 		base := indent(first)
 		remove(first, base, markerLen(first))
