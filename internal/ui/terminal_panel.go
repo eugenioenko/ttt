@@ -168,14 +168,7 @@ func (tp *TerminalPanelWidget) Render(surface Surface) {
 
 	if len(tp.widgets) == 0 {
 		msg := i18n.Text("terminalPanel.noTerminalsPressToCreateOne")
-		x := 1
-		for _, ch := range msg {
-			if x >= w {
-				break
-			}
-			surface.SetCell(x, 0, term.Cell{Ch: ch, Style: term.StyleMuted})
-			x++
-		}
+		surface.DrawText(1, 0, msg, w, term.StyleMuted)
 		return
 	}
 
