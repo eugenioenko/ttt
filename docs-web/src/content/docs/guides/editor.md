@@ -167,6 +167,8 @@ TTT supports editing with multiple cursors simultaneously. Place cursors at mult
 
 Press **Ctrl+/** to toggle line comments on the current line or selection.
 
+If **Ctrl+/** has no effect in Apple Terminal on macOS, keep the default binding and press **Ctrl+Shift+-**. You can also run **Toggle Line Comment** from the command palette.
+
 ## Code Folding
 
 TTT supports indent-based code folding:
