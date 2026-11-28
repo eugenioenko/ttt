@@ -78,7 +78,7 @@ func paletteCommands(reg *command.Registry) []command.Command {
 	all := reg.List()
 	cmds := make([]command.Command, 0, len(all))
 	for _, cmd := range all {
-		if cmd.PaletteHidden {
+		if cmd.PaletteHidden || (cmd.PaletteWhen != nil && !cmd.PaletteWhen()) {
 			continue
 		}
 		cmds = append(cmds, cmd)

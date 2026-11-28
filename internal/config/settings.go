@@ -18,6 +18,7 @@ var (
 	TabBarStyles        = []string{"extended", "hidden", "auto-hide"}
 	GutterStyles        = []string{"minimal", "compact", "extended"}
 	BorderStyles        = []string{"default", "theme", "rounded", "sharp", "double", "bold", "ascii", "none"}
+	MergeViews          = []string{MergeTwo, MergeThree, MergeText}
 	DiffModes           = []string{"split", "unified"}
 	WordWrapBreaks      = []string{WordWrapBreakWord, WordWrapBreakCharacter}
 	DiffContexts        = []string{"changes", "full"}
@@ -31,6 +32,9 @@ var (
 const (
 	WordWrapBreakWord        = "word"
 	WordWrapBreakCharacter   = "character"
+	MergeTwo                 = "two-column"
+	MergeThree               = "three-column"
+	MergeText                = "text"
 	DiffModeSplit            = "split"
 	DiffModeUnified          = "unified"
 	DiffContextChanges       = "changes"
@@ -157,6 +161,7 @@ type EditorSettings struct {
 	// built-in limit. Unlisted: raise it only where every line must finish, such
 	// as slow CI runners.
 	HighlightTimeLimit      int                `json:"highlightTimeLimit,omitempty"`
+	MergeConflictView       string             `json:"mergeConflictView"`
 	DiffMode                string             `json:"diffMode"`
 	DiffContext             string             `json:"diffContext"`
 	DiffWordWrap            bool               `json:"diffWordWrap"`
@@ -328,6 +333,7 @@ func DefaultEditorSettings() EditorSettings {
 		TabSize:                 4,
 		InsertSpaces:            true,
 		WordWrapBreak:           WordWrapBreakWord,
+		MergeConflictView:       MergeTwo,
 		DiffMode:                DiffModeSplit,
 		DiffContext:             DiffContextChanges,
 		DiffSignsColor:          true,
@@ -738,6 +744,9 @@ func normalizeSettings(s *Settings) {
 		s.Sidebar.TabStyle = SidebarTabStyleLabel
 	}
 	s.Appearance.migrateChevrons()
+	if !slices.Contains(MergeViews, s.Editor.MergeConflictView) {
+		s.Editor.MergeConflictView = MergeTwo
+	}
 	if !slices.Contains(DiffModes, s.Editor.DiffMode) {
 		s.Editor.DiffMode = DiffModeSplit
 	}

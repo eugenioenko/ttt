@@ -13,6 +13,7 @@ type Command struct {
 	// PaletteHidden keeps the command out of the command palette only.
 	// Registry.List() does not filter on it, so keybindings and plugins still see it.
 	PaletteHidden bool
+	PaletteWhen   func() bool
 }
 
 func (c Command) PaletteTitle() string {

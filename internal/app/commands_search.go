@@ -73,12 +73,13 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.AnchorRect = a.activeEditorContentRect
+	findBar.SearchTargetChanged = a.EditorGroup.SearchTargetChanged
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		if !a.EditorGroup.IsEditorActive() {
 			a.EditorGroup.SetFindSearch(query, nil, opts)
 			return nil
 		}
-		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
+		matches, err := ui.FindInLines(a.EditorGroup.SearchPane().Buf.Lines, query, opts)
 		if err != nil {
 			a.EditorGroup.ClearSearch()
 			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
@@ -88,13 +89,13 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 		return matches
 	}
 	findBar.OnNavigate = func(match ui.FindMatch) {
-		a.EditorGroup.Editor.ResetCursorGoal()
+		a.EditorGroup.SearchPane().ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(findBar.Current)
-		a.EditorGroup.Editor.Selection.Clear()
-		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
-		a.EditorGroup.Editor.Cursor.Line = match.Line
-		a.EditorGroup.Editor.Cursor.Col = match.Col
-		a.EditorGroup.ScrollToCursor()
+		a.EditorGroup.SearchPane().Selection.Clear()
+		a.EditorGroup.SearchPane().ExpandFoldContaining(match.Line)
+		a.EditorGroup.SearchPane().Cursor.Line = match.Line
+		a.EditorGroup.SearchPane().Cursor.Col = match.Col
+		a.EditorGroup.SearchPane().EnsureCursorVisible()
 	}
 	findBar.OnDismiss = func() {
 		findBar.Debounce.Stop()
@@ -147,7 +148,7 @@ func (a *App) showDiffFindBar(dv *ui.DiffEditorWidget) {
 }
 
 func (a *App) scheduleFindRefresh() {
-	if a.findBar() == nil && a.EditorGroup.Editor.SearchQuery == "" {
+	if a.findBar() == nil && a.EditorGroup.SearchPane().SearchQuery == "" {
 		return
 	}
 	a.findStale = true
@@ -168,7 +169,7 @@ func (a *App) refreshFind() {
 		bar.Refresh()
 		a.EditorGroup.SetSearchActive(bar.CurrentMatch())
 	} else if a.EditorGroup.IsEditorActive() {
-		a.EditorGroup.Editor.RefreshSearch()
+		a.EditorGroup.SearchPane().RefreshSearch()
 	}
 }
 
@@ -260,8 +261,9 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar.ReplaceInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.Borders = a.Borders
 	bar.AnchorRect = a.activeEditorContentRect
+	bar.SearchTargetChanged = a.EditorGroup.SearchTargetChanged
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
-		matches, err := ui.FindInLines(a.EditorGroup.Editor.Buf.Lines, query, opts)
+		matches, err := ui.FindInLines(a.EditorGroup.SearchPane().Buf.Lines, query, opts)
 		if err != nil {
 			a.EditorGroup.ClearSearch()
 			a.StatusWarn(i18n.Format("status.invalidRegex", i18n.Args{"error": err.Error()}))
@@ -271,13 +273,13 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 		return matches
 	}
 	bar.OnNavigate = func(match ui.FindMatch) {
-		a.EditorGroup.Editor.ResetCursorGoal()
+		a.EditorGroup.SearchPane().ResetCursorGoal()
 		a.EditorGroup.SetSearchActive(bar.Current)
-		a.EditorGroup.Editor.Selection.Clear()
-		a.EditorGroup.Editor.ExpandFoldContaining(match.Line)
-		a.EditorGroup.Editor.Cursor.Line = match.Line
-		a.EditorGroup.Editor.Cursor.Col = match.Col
-		a.EditorGroup.ScrollToCursor()
+		a.EditorGroup.SearchPane().Selection.Clear()
+		a.EditorGroup.SearchPane().ExpandFoldContaining(match.Line)
+		a.EditorGroup.SearchPane().Cursor.Line = match.Line
+		a.EditorGroup.SearchPane().Cursor.Col = match.Col
+		a.EditorGroup.SearchPane().EnsureCursorVisible()
 	}
 	bar.OnReplace = func(match ui.FindMatch, replacement string) {
 		a.EditorGroup.ReplaceMatch(match, replacement)

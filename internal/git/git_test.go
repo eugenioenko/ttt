@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -231,6 +232,19 @@ func TestIsUnmergedContextDetectsConflicts(t *testing.T) {
 	}
 	if !IsUnmergedContext(context.Background(), dir, "f.txt") {
 		t.Fatal("conflicted file not reported as unmerged")
+	}
+	inputs, err := (repository{root: dir}).ReadConflict(context.Background(), "f.txt")
+	if err != nil || inputs.Base.Content != "base\n" || inputs.Current.Content != "mine\n" || inputs.Incoming.Content != "other\n" || inputs.Identity == "" {
+		t.Fatalf("merge inputs = %+v, %v", inputs, err)
+	}
+	writeFile(t, dir, ".gitattributes", "f.txt conflict-marker-size=3\n")
+	inputs, err = (repository{root: dir}).ReadConflict(context.Background(), "f.txt")
+	if err != nil || inputs.MarkerSize != 3 {
+		t.Fatal(inputs.MarkerSize, err)
+	}
+	writeFile(t, dir, ".gitattributes", "f.txt -merge\n")
+	if _, err = (repository{root: dir}).ReadConflict(context.Background(), "f.txt"); !errors.Is(err, errors.ErrUnsupported) {
+		t.Fatal(err)
 	}
 	if IsUnmergedContext(context.Background(), dir, "clean.txt") {
 		t.Fatal("clean file reported as unmerged")

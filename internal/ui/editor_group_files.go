@@ -439,6 +439,10 @@ func (g *EditorGroupWidget) ReloadFile(path string) bool {
 				g.reportError(i18n.Format("editorGroup.failedToReload", i18n.Args{"path": path, "error": err}))
 				return false
 			}
+			if m := g.tabs[i].Merge; m != nil {
+				m.close()
+				g.tabs[i].Merge = nil
+			}
 			g.tabs[i].Buf.Dirty = false
 			g.tabs[i].Undo = g.newUndoStack()
 			if g.tabs[i].Folds != nil {
@@ -587,6 +591,9 @@ func (g *EditorGroupWidget) IsActiveVirtual() bool {
 }
 
 func (g *EditorGroupWidget) IsActiveReadOnly() bool {
+	if m := g.visualMerge(); m != nil {
+		return m.pane(m.focus).ReadOnly
+	}
 	if t := g.activeTab(); t != nil {
 		return t.ReadOnly
 	}

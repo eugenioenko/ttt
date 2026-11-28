@@ -553,6 +553,9 @@ func (g *EditorGroupWidget) notifyContentTabClose(tab editorTab) {
 }
 
 func (g *EditorGroupWidget) releaseTabResources(tab editorTab) {
+	if tab.Merge != nil {
+		tab.Merge.close()
+	}
 	tab.Highlighter.Close()
 	if tab.autoClosing != nil {
 		tab.autoClosing.syntax.Close()

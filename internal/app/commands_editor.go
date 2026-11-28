@@ -376,7 +376,7 @@ func (a *App) doSaveFile(onSaved func()) {
 	if a.confirmCreateSaveDirectory(path, func() { a.doSaveFile(onSaved) }) {
 		return
 	}
-	if lang != "" {
+	if lang != "" && a.EditorGroup.MergeEditor() == nil {
 		a.RunCodeActionsOnSave(path, lang)
 		if a.Settings.Editor.FormatOnSave {
 			if !a.FormatExternalOnSave(path) {

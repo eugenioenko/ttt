@@ -14,6 +14,7 @@ import (
 	"github.com/eugenioenko/ttt/internal/core/selection"
 	"github.com/eugenioenko/ttt/internal/core/undo"
 	"github.com/eugenioenko/ttt/internal/highlight"
+	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/term"
 	"github.com/eugenioenko/ttt/internal/view"
 	"github.com/eugenioenko/ttt/internal/widgets"
@@ -54,7 +55,8 @@ type editorTab struct {
 	// Keep document lifecycle and language servers independent of the highlighting selection.
 	DetectedLanguage string
 	// Diff shows the tab's own buffer as an editable diff against its base.
-	Diff *DiffEditorWidget
+	Diff  *DiffEditorWidget
+	Merge *MergeEditorWidget
 	// Annotations shows the decorations for the tab's file when it is not
 	// showing a diff.
 	Annotations    *DiffOverlay
@@ -146,6 +148,8 @@ type EditorGroupWidget struct {
 	pendingNotify []string
 	focused       bool
 	find          findSession
+	searchedPane  *EditorPaneWidget
+	leftPressed   bool
 	// diagSources holds diagnostics keyed by source ("lsp:<server>", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -157,6 +161,8 @@ type EditorGroupWidget struct {
 	bookmarkSyncPath  string
 	OnBookmarkChanged func(path string, line int, action string, icon rune, style term.Style)
 	OnGutterClick     func(path string, line int) bool
+	OnOpenMerge       func()
+	mergeBanner       Rect
 	LinkWorkDir       func() string
 	ControlModifiers  *tcell.ModMask
 	NativeLinks       bool
@@ -320,6 +326,10 @@ func (g *EditorGroupWidget) CursorPosition() (int, int, bool) {
 		}
 	}
 	if g.IsEditorActive() {
+		if m := g.visualMerge(); m != nil {
+			p := m.pane(m.focus)
+			return p.CursorX, p.CursorY, editorCursorVisible(p)
+		}
 		if d := g.activeInlineDiff(); d != nil && d.headFocused() {
 			return d.left.CursorX, d.left.CursorY, editorCursorVisible(d.left)
 		}
@@ -478,7 +488,12 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 	if detail, ok := t.Content.(*CommitDetailWidget); ok {
 		detail.configurePaneLinks = g.configurePaneLinks
 	}
-	if t.Content != nil {
+	g.mergeBanner = Rect{}
+	if m := g.visualMerge(); m != nil {
+		m.result = g.Editor
+		m.SetRect(contentRect)
+		m.Render(contentSurface)
+	} else if t.Content != nil {
 		t.Content.SetRect(contentRect)
 		t.Content.Render(contentSurface)
 	} else if t.Diff != nil {
@@ -491,6 +506,13 @@ func (g *EditorGroupWidget) Render(surface Surface) {
 			path = ""
 		}
 		g.configurePaneLinks(g.Editor, path)
+		if g.HasMergeBanner() && contentRect.H > 1 {
+			n := contentSurface.DrawText(0, 0, i18n.Text("merge.banner"), w, term.StyleButton)
+			g.mergeBanner = Rect{X: contentRect.X, Y: contentRect.Y, W: n, H: 1}
+			contentRect.Y++
+			contentRect.H--
+			contentSurface = contentSurface.Sub(Rect{Y: 1, W: w, H: contentRect.H})
+		}
 		g.Editor.SetRect(contentRect)
 		g.Editor.Render(contentSurface)
 	}
@@ -551,6 +573,8 @@ func (g *EditorGroupWidget) contentOwnsPointerCapture() bool {
 	switch {
 	case t == nil:
 		return false
+	case g.visualMerge() != nil:
+		return t.Merge.captured != nil
 	case t.Content != nil:
 		owner, ok := t.Content.(widgets.PointerCaptureOwner)
 		return ok && owner.OwnsPointerCapture()
@@ -569,6 +593,12 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
+	pressed := false
+	if mouse, ok := ev.(*tcell.EventMouse); ok {
+		left := mouse.Buttons()&tcell.Button1 != 0
+		pressed = left && !g.leftPressed
+		g.leftPressed = left
+	}
 	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2|tcell.Button3) != 0 {
 		x, y := mouse.Position()
 		if g.GetRect().Contains(x, y) && g.OnActivate != nil {
@@ -620,7 +650,16 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 		return EventIgnored
 	}
 	var result EventResult
-	if t.Diff != nil {
+	if me, ok := ev.(*tcell.EventMouse); ok && me.Buttons() == tcell.Button1 {
+		x, y := me.Position()
+		if pressed && !g.contentOwnsPointerCapture() && g.mergeBanner.Contains(x, y) && g.OnOpenMerge != nil {
+			g.OnOpenMerge()
+			return EventConsumed
+		}
+	}
+	if m := g.visualMerge(); m != nil {
+		result = m.HandleEvent(ev)
+	} else if t.Diff != nil {
 		result = t.Diff.HandleEvent(ev)
 	} else {
 		result = g.Editor.HandleEvent(ev)

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/eugenioenko/ttt/internal/asynctask"
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/core/diff"
 	"github.com/eugenioenko/ttt/internal/i18n"
 	"github.com/eugenioenko/ttt/internal/icons"
@@ -668,16 +669,21 @@ func (a *App) ApplyCommitDetail(result *CommitDetailResult) {
 }
 
 type diffOpenResult struct {
-	Canceled bool
-	Conflict string
-	Warn     string
-	TabName  string
-	Title    string
-	Path     string
-	Diff     diff.FileDiff
-	OldLines []string
-	NewLines []string
-	Extended bool
+	MergeGroup   *ui.EditorGroupWidget
+	MergeTarget  *buffer.Buffer
+	MergeVersion uint64
+	Merge        *scm.ConflictInputs
+	MergeView    string
+	Canceled     bool
+	Conflict     string
+	Warn         string
+	TabName      string
+	Title        string
+	Path         string
+	Diff         diff.FileDiff
+	OldLines     []string
+	NewLines     []string
+	Extended     bool
 }
 
 func (a *App) cancelPendingDiff() {
@@ -723,6 +729,10 @@ func (a *App) applyDiffOpen(origin string, result *diffOpenResult) {
 	}
 	if result.Warn != "" {
 		a.StatusWarn(result.Warn)
+		return
+	}
+	if result.Merge != nil {
+		a.showMerge(result)
 		return
 	}
 	if result.Conflict != "" {

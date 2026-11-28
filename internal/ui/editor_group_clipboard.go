@@ -107,6 +107,9 @@ func (g *EditorGroupWidget) Cut() {
 	if t == nil || e == nil {
 		return
 	}
+	if m := g.visualMerge(); m != nil {
+		defer m.flushProjection()
+	}
 	// Cut from every cursor when multicursor mode is active.
 	if e.isMultiActive() {
 		pieces := e.multiCopyPieces()
@@ -116,18 +119,18 @@ func (g *EditorGroupWidget) Cut() {
 		e.multiCut()
 		return
 	}
-	if t.Sel == nil || !t.Sel.Active {
+	if e.Selection == nil || !e.Selection.Active {
 		// No selection: cut the whole current line.
-		if t.Cur.Line >= 0 && t.Cur.Line < len(t.Buf.Lines) {
-			clipboard.Set(t.Buf.Lines[t.Cur.Line] + "\n")
-			g.Editor.DeleteLine()
+		if e.Cursor.Line >= 0 && e.Cursor.Line < len(e.Buf.Lines) {
+			clipboard.Set(e.Buf.Lines[e.Cursor.Line] + "\n")
+			e.DeleteLine()
 		}
 		return
 	}
 
-	text := t.Sel.Text(t.Buf.Lines, t.Cur.Line, t.Cur.Col)
+	text := e.Selection.Text(e.Buf.Lines, e.Cursor.Line, e.Cursor.Col)
 	clipboard.Set(text)
-	g.Editor.deleteSelection()
+	e.deleteSelection()
 }
 
 func (g *EditorGroupWidget) Paste() {
@@ -158,5 +161,10 @@ func (g *EditorGroupWidget) pasteIntoEditor(text string) {
 		}
 		d.revealCursorGap()
 	}
-	g.Editor.pasteText(text)
+	if e := g.editableKeyEditor(); e != nil {
+		e.pasteText(text)
+		if m := g.visualMerge(); m != nil {
+			m.flushProjection()
+		}
+	}
 }

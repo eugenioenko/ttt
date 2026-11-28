@@ -372,6 +372,7 @@ func settingsCategories() []settingsCategory {
 				SetString: func(s *config.Settings, v string) { s.Terminal.SelectionStyle = v }},
 		}},
 		{Title: i18n.Text("settings.diff"), Fields: []settingField{
+			{Label: i18n.Text("merge.setting"), Kind: settingEnum, Options: fixedOptions(mergeViewItems), GetString: func(s *config.Settings) string { return s.Editor.MergeConflictView }, SetString: func(s *config.Settings, v string) { s.Editor.MergeConflictView = v }},
 			{Label: i18n.Text("settings.diffMode"), Kind: settingEnum, Options: fixedOptions(diffModeItems),
 				GetString: func(s *config.Settings) string { return s.Editor.DiffMode },
 				SetString: func(s *config.Settings, v string) { s.Editor.DiffMode = v }},

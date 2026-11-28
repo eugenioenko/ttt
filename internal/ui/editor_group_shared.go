@@ -67,6 +67,7 @@ func (g *EditorGroupWidget) cloneTabTo(index int, target *EditorGroupWidget) boo
 	cur, vp, sel := *t.Cur, *t.Vp, *t.Sel
 	clone.ID = ""
 	clone.Cur, clone.Vp, clone.Sel = &cur, &vp, &sel
+	clone.Merge = nil
 	clone.Multi, clone.autoClosing = nil, nil
 	clone.Highlighter, clone.Diff, clone.Annotations = nil, nil, nil
 	clone.Placeholder = false
@@ -192,6 +193,10 @@ func (g *EditorGroupWidget) syncDocumentViews(source *editorTab) {
 				peer.movePathState(t.FilePath, source.FilePath)
 			}
 			t.FilePath, t.IconPath, t.Virtual = source.FilePath, source.IconPath, source.Virtual
+			if t.Merge != nil && (identityChanged || t.Undo != source.Undo) {
+				t.Merge.close()
+				t.Merge = nil
+			}
 			t.Undo, t.ReadOnly = source.Undo, source.ReadOnly
 			t.LanguageSelection, t.DetectedLanguage = source.LanguageSelection, source.DetectedLanguage
 			t.TabSize, t.UseTabs = source.TabSize, source.UseTabs
@@ -216,6 +221,10 @@ func (g *EditorGroupWidget) adoptSaveAsViews(source *editorTab, path string) {
 				continue
 			}
 			if same, err := sameSaveTarget(t.FilePath, path); err == nil && same {
+				if t.Merge != nil {
+					t.Merge.close()
+					t.Merge = nil
+				}
 				t.Buf, t.Undo = source.Buf, source.Undo
 				t.Sel.Active = false
 				t.Multi = nil

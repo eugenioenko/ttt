@@ -99,6 +99,7 @@ type App struct {
 	Repository                *RepositoryState
 	runningRepoOp             string // Progress label, empty when idle.
 	pendingCurrentChangesOpen bool
+	mergeCompletion           *asynctask.Task[mergeStageTarget]
 	diffOpenTask              *asynctask.Task[*diffOpenResult]
 	inlineDiffRepos           map[string]inlineDiffRepo
 	blame                     statusBlameState
@@ -313,6 +314,7 @@ func (a *App) Init(screen *term.TcellScreen, renderer *render.Renderer, lspManag
 		a.StatusNotify(msg)
 	}
 	a.EditorGroup.FlushNotifications()
+	a.EditorGroup.OnOpenMerge = a.OpenMergeEditor
 	a.EditorGroup.OnFileOpen = func(path, lang string, lines []string) {
 		a.NotifyLSPOpen(path, lang, lines)
 		a.RequestGitGutterForActiveFile()

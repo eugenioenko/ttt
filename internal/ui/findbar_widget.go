@@ -14,19 +14,20 @@ type FindMatch struct {
 
 type FindBarWidget struct {
 	BaseWidget
-	Input             *widgets.InputWidget
-	Matches           []FindMatch
-	Current           int
-	Options           SearchOptions
-	Borders           *term.BorderSet
-	AnchorRect        func() Rect
-	OnSearch          func(query string, opts SearchOptions) []FindMatch
-	OnNavigate        func(match FindMatch)
-	OnEditorTabChange func()
-	OnDismiss         func()
-	Debounce          Debouncer
-	focused           bool
-	OnToggleReplace   func()
+	Input               *widgets.InputWidget
+	Matches             []FindMatch
+	Current             int
+	Options             SearchOptions
+	Borders             *term.BorderSet
+	AnchorRect          func() Rect
+	OnSearch            func(query string, opts SearchOptions) []FindMatch
+	SearchTargetChanged func() bool
+	OnNavigate          func(match FindMatch)
+	OnEditorTabChange   func()
+	OnDismiss           func()
+	Debounce            Debouncer
+	focused             bool
+	OnToggleReplace     func()
 	findBarLayout
 }
 
@@ -122,6 +123,9 @@ func (f *FindBarWidget) Query() string { return f.Input.Text() }
 func (f *FindBarWidget) CurrentMatch() int { return f.Current }
 
 func (f *FindBarWidget) NavigateMatch(delta int) {
+	if f.SearchTargetChanged != nil && f.SearchTargetChanged() {
+		f.Refresh()
+	}
 	if len(f.Matches) == 0 {
 		return
 	}
