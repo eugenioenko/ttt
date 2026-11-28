@@ -506,7 +506,15 @@ func cobolSourceFormat(line string) (free, ok bool) {
 	if len(fields) < 2 || fields[0] != ">>SOURCE" {
 		return false, false
 	}
-	for _, f := range fields[1:] {
+	// Fixed-format COBOL source lines before a >>SOURCE directive may carry a
+	// six-column sequence number field and a two-column indicator field, then
+	// the directive text. Skip those fixed-format columns so a directive such as
+	// "000100 >>SOURCE FREE" is still recognized.
+	start := 1
+	if isCOBOLSequenceArea(line) {
+		start = 2 // skip the indicator field that follows the sequence field
+	}
+	for _, f := range fields[start:] {
 		switch f {
 		case "FREE":
 			return true, true
