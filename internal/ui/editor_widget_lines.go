@@ -1172,9 +1172,12 @@ func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo
 }
 
 func (e *EditorPaneWidget) ToggleLineComment() {
+	prefix, postfix := e.commentSyntax()
+	if prefix == "" && postfix == "" {
+		return
+	}
 	e.collapseMultiForLineOp()
 	before := e.undoSelectionPosition()
-	prefix, postfix := e.commentSyntax()
 	lang := e.commentLanguage()
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line

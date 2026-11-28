@@ -743,6 +743,31 @@ func TestToggleLineCommentWebAssemblyUsesDoubleSemicolon(t *testing.T) {
 	}
 }
 
+func TestToggleLineCommentSkipsLanguagesWithoutSyntax(t *testing.T) {
+	e := newCommentEditor(t, "a.json", []string{"{", "  \"a\": 1", "}"}, 1, 0)
+	e.Undo = &undo.UndoStack{}
+	e.addCursorVertical(1)
+	if !e.isMultiActive() {
+		t.Fatal("setup: expected more than one cursor")
+	}
+	lines := slices.Clone(e.Buf.Lines)
+
+	e.ToggleLineComment()
+
+	if !slices.Equal(e.Buf.Lines, lines) {
+		t.Fatalf("lines = %q, want unchanged %q", e.Buf.Lines, lines)
+	}
+	if !e.isMultiActive() {
+		t.Fatal("toggle collapsed multicursors without a comment marker")
+	}
+	if !e.Undo.AtSavePoint() {
+		t.Fatal("toggle pushed an undo step without a comment marker")
+	}
+	if e.bufferDirty {
+		t.Fatal("toggle marked the buffer dirty without a comment marker")
+	}
+}
+
 func newCommentEditor(t *testing.T, filename string, lines []string, line, col int) *EditorPaneWidget {
 	t.Helper()
 	h := highlight.New(filename)
