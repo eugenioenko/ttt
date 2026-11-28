@@ -274,8 +274,11 @@ func pickerInputText(dir string) string {
 // Open Folder, Add Folder and Clone expect the folder without the separator the path box adds.
 func folderPickerPath(text string) string {
 	path := strings.TrimSpace(text)
-	if strings.HasSuffix(path, string(os.PathSeparator)) {
-		path = filepath.Clean(path)
+	sep := string(os.PathSeparator)
+	// Only the separator goes: filepath.Clean would turn "~/../" into "." before ~ is expanded.
+	root := filepath.VolumeName(path) + sep
+	for len(path) > len(root) && strings.HasSuffix(path, sep) {
+		path = strings.TrimSuffix(path, sep)
 	}
 	return path
 }

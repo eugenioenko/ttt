@@ -139,7 +139,8 @@ func TestPickerInputTextEndsWithSeparator(t *testing.T) {
 func TestFolderPickerPathDropsTrailingSeparator(t *testing.T) {
 	sep := string(os.PathSeparator)
 	dir := filepath.Join(t.TempDir(), "repos")
-	for in, want := range map[string]string{dir + sep: dir, " " + dir + sep + " ": dir, dir: dir, sep: sep, "~" + sep: "~", "  ": ""} {
+	for in, want := range map[string]string{dir + sep: dir, " " + dir + sep + " ": dir, dir: dir, sep: sep, "~" + sep: "~", "  ": "",
+		"~" + sep + ".." + sep: "~" + sep + "..", dir + sep + sep: dir} {
 		if got := folderPickerPath(in); got != want {
 			t.Errorf("folderPickerPath(%q) = %q, want %q", in, got, want)
 		}
