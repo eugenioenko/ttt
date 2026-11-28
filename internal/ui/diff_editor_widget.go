@@ -934,11 +934,7 @@ func (d *DiffEditorWidget) Render(surface Surface) {
 				surface.SetCell(x, y, term.Cell{Ch: ' '})
 			}
 		}
-		for i, ch := range i18n.Text("general.loadingDots") {
-			if i < w {
-				surface.SetCell(i, 0, term.Cell{Ch: ch, Style: term.StyleDefault})
-			}
-		}
+		surface.DrawText(0, 0, i18n.Text("general.loadingDots"), w, term.StyleDefault)
 		return
 	}
 	wrap := d.IsWrapped()
