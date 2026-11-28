@@ -24,6 +24,7 @@ type mergeRange struct {
 	start, count int
 	choice       mergeChoice
 	custom       bool
+	accepted     []string
 }
 type mergeBlock struct {
 	mergeRange
@@ -105,7 +106,7 @@ func (m *mergeSession) sync() {
 			switch {
 			case c.Start+c.Removed <= b.start && c.Start < b.start:
 				b.start += c.Added - c.Removed
-			case c.Start >= end && !(b.count == 0 && c.Start == b.start):
+			case c.Start >= end:
 			case c.Start >= b.start && c.Start+c.Removed <= end:
 				b.count += c.Added - c.Removed
 				b.custom = true
@@ -119,6 +120,15 @@ func (m *mergeSession) sync() {
 		m.valid = false
 	}
 	m.version = m.buf.Version()
+	if !m.valid {
+		return
+	}
+	for i := range m.blocks {
+		b := &m.blocks[i]
+		if b.custom && b.choice != 0 {
+			b.custom = !slices.Equal(m.buf.Lines[b.start:b.start+b.count], b.accepted)
+		}
+	}
 }
 func (m *mergeSession) remaining() int {
 	m.sync()
@@ -190,7 +200,7 @@ func (m *mergeSession) edit(i int, choice mergeChoice) undo.EditCommand {
 	if len(lines) == 0 && b.count == len(m.buf.Lines) {
 		lines = []string{""}
 	}
-	after := mergeRange{start: b.start, count: len(lines), choice: choice}
+	after := mergeRange{start: b.start, count: len(lines), choice: choice, accepted: lines}
 	return &mergeEdit{session: m, block: i, before: b.mergeRange, after: after, oldLines: slices.Clone(m.buf.Lines[b.start : b.start+b.count]), newLines: lines}
 }
 

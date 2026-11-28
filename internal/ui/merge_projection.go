@@ -52,6 +52,9 @@ func (m *MergeEditorWidget) project() {
 	lines = append(lines, s.buf.Lines[at:]...)
 	if len(lines) == 0 {
 		lines = []string{""}
+		if len(ranges) > 0 {
+			ranges[len(ranges)-1].end = 1
+		}
 	}
 	p.Buf.SetLines(slices.Clone(lines))
 	p.clampCursor()

@@ -42,3 +42,36 @@ func TestGitConflictMarkersRespectWidthAndColumn(t *testing.T) {
 		}
 	}
 }
+
+func TestMergeEmptyCustomSideRestoresIndexedText(t *testing.T) {
+	lines := []string{"before", "<<< HEAD", "===", "incoming", ">>> branch", "after"}
+	buf := &buffer.Buffer{Lines: lines}
+	inputs := scm.ConflictInputs{MarkerSize: 3, Current: scm.FileContent{Content: "before\noriginal\nafter", Exists: true}, Incoming: scm.FileContent{Content: "before\nincoming\nafter", Exists: true}}
+	m, _ := newMergeSession(buf, inputs)
+	if m == nil || len(m.blocks) != 1 || !m.blocks[0].custom || !slices.Equal(m.blocks[0].sides[1], []string{"original"}) {
+		t.Fatalf("%+v", m)
+	}
+	if _, ok := gitConflictAt(lines, 1, 7); ok {
+		t.Fatal("short literal parsed with a different marker size")
+	}
+}
+
+func TestMergeTextEditsAtEmptyBoundaryAndUndo(t *testing.T) {
+	buf := &buffer.Buffer{Lines: []string{"<<<<<<< HEAD", "a", "=======", "b", ">>>>>>> branch", "<<<<<<< HEAD", "c", "=======", "d", ">>>>>>> branch", "tail"}}
+	m, _ := newMergeSession(buf, scm.ConflictInputs{Current: scm.FileContent{Content: "a\nc\ntail", Exists: true}, Incoming: scm.FileContent{Content: "b\nd\ntail", Exists: true}})
+	m.edit(0, mergeNeither).Apply(buf)
+	m.edit(1, mergeCurrent).Apply(buf)
+	buf.Splice(0, 0, "insert")
+	if m.remaining() != 1 || m.blocks[0].count != 0 || m.blocks[1].count != 2 {
+		t.Fatal(m.blocks)
+	}
+	buf.Splice(0, 1)
+	if m.remaining() != 0 {
+		t.Fatal(m.blocks)
+	}
+	m.edit(1, mergeNeither).Apply(buf)
+	buf.SetLine(0, "new tail")
+	if m.remaining() != 0 || !m.valid {
+		t.Fatal(m.blocks)
+	}
+}

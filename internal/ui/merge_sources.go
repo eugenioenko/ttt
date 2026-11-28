@@ -11,6 +11,16 @@ import (
 // unrelated clean merges and previous resolutions out of the source panes.
 func (s *mergeSession) sourceLines(side int, projection []string, content string) []string {
 	src := strings.Split(strings.TrimPrefix(strings.ReplaceAll(content, "\r\n", "\n"), "\ufeff"), "\n")
+	// The synthetic gutter row must not match an actual empty source line.
+	for i := range s.blocks {
+		b := &s.blocks[i]
+		if len(b.sides[side]) == 0 {
+			projection[b.anchors[side]] = "\x00"
+		}
+	}
+	if content == "" {
+		src = nil
+	}
 	bounds := make([]int, len(projection)+1)
 	old, newPos := 0, 0
 	for _, row := range diff.FullDiffLines(projection, src) {
@@ -32,9 +42,6 @@ func (s *mergeSession) sourceLines(side int, projection []string, content string
 		// include a neighboring, one-sided edit on the trailing boundary.
 		if n := len(b.sides[side]); n > 0 && lo+n <= len(src) && slices.Equal(src[lo:lo+n], b.sides[side]) {
 			hi = lo + n
-		}
-		if len(b.sides[side]) == 0 {
-			hi = lo
 		}
 		lo = max(at, lo)
 		hi = max(lo, hi)

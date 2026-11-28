@@ -120,3 +120,24 @@ func TestMergeDeletingDuplicateContextKeepsConflict(t *testing.T) {
 		t.Fatal(g.Editor.Buf.Lines, m.session.blocks[0])
 	}
 }
+
+func TestMergeEmptyResultTakesTyping(t *testing.T) {
+	g := NewEditorGroupWidget(nil, 4, true, "compact")
+	path := filepath.Join(t.TempDir(), "empty")
+	if err := os.WriteFile(path, []byte("<<<<<<< HEAD\n=======\nincoming\n>>>>>>> topic"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.OpenFile(path); err != nil {
+		t.Fatal(err)
+	}
+	if !g.OpenMerge(scm.ConflictInputs{Current: scm.FileContent{Exists: true}, Incoming: scm.FileContent{Exists: true, Content: "incoming"}}, config.MergeTwo, nil, nil) {
+		t.Fatal("open")
+	}
+	defer g.EndMerge()
+	m := g.MergeEditor()
+	g.PasteText("custom")
+	m.flushProjection()
+	if !slices.Equal(g.Editor.Buf.Lines, []string{"<<<<<<< HEAD", "custom", "=======", "incoming", ">>>>>>> topic"}) {
+		t.Fatal(g.Editor.Buf.Lines)
+	}
+}
