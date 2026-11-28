@@ -109,3 +109,14 @@ func TestMergeCrossBlockEditCanUndo(t *testing.T) {
 		t.Fatal("undo", g.Editor.Buf.Lines, m.session.blocks)
 	}
 }
+
+func TestMergeDeletingDuplicateContextKeepsConflict(t *testing.T) {
+	g, m, _ := openTestMerge(t)
+	m.preview.Buf.SetLine(0, "left")
+	m.flushProjection()
+	m.preview.Buf.Splice(0, 1)
+	m.flushProjection()
+	if g.Editor.Buf.Lines[0] != "<<<<<<< HEAD" || m.session.blocks[0].custom || m.preview.Buf.Lines[0] != "left" {
+		t.Fatal(g.Editor.Buf.Lines, m.session.blocks[0])
+	}
+}

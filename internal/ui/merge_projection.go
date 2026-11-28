@@ -82,19 +82,32 @@ func (m *MergeEditorWidget) flushProjection() {
 		return
 	}
 	old, newLines := pr.lines, p.Buf.Lines
-	start := 0
-	for start < len(old) && start < len(newLines) && old[start] == newLines[start] {
-		start++
+
+	// Equal neighboring lines can belong to different conflicts. Bound the
+	// splice by the editor's edit journal before comparing their text.
+	prefix, suffix, size := len(old), len(old), len(old)
+	replayed := p.Buf.ChangesSince(pr.paneVer, func(c buffer.Change) {
+		prefix = min(prefix, c.Start)
+		suffix = min(suffix, size-c.Start-c.Removed)
+		size += c.Added - c.Removed
+	})
+	if !replayed {
+		prefix, suffix = 0, 0
+		limit := min(len(old), len(newLines))
+		for prefix < limit && old[prefix] == newLines[prefix] {
+			prefix++
+		}
+		for suffix < limit-prefix && old[len(old)-1-suffix] == newLines[len(newLines)-1-suffix] {
+			suffix++
+		}
 	}
-	end, next := len(old), len(newLines)
-	for end > start && next > start && old[end-1] == newLines[next-1] {
-		end--
-		next--
-	}
-	if start == end && start == next {
+	start := prefix
+	end, next := len(old)-suffix, len(newLines)-suffix
+	if start <= end && start <= next && slices.Equal(old[start:end], newLines[start:next]) {
 		m.projection.paneVer = p.Buf.Version()
 		return
 	}
+
 	s := m.session
 	if s.buf.Version() != pr.fileVer {
 		// Event routing flushes every edit before another writer can run.
