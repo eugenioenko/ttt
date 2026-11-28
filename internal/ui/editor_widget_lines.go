@@ -1105,6 +1105,18 @@ func phpOpenTagContent(line string) (int, bool) {
 	return j, true
 }
 
+// findCloseTagRune returns the rune index of "?>" in runes, or -1 when absent.
+// Unlike strings.Index on the line text, this returns a rune offset so it can be
+// added directly to a rune-indexed loop variable.
+func findCloseTagRune(runes []rune) int {
+	for i := 0; i < len(runes); i++ {
+		if runes[i] == '?' && i+1 < len(runes) && runes[i+1] == '>' {
+			return i
+		}
+	}
+	return -1
+}
+
 // phpCodeStarts reports, for every line through end, whether it begins inside
 // a PHP block. Strings and comments are skipped so a ?> inside them does not
 // flip the state, except that a one-line comment still ends at ?> as PHP does.
@@ -1169,14 +1181,14 @@ func (s *phpScan) line(text string) {
 		case r == '\'' || r == '"' || r == '`':
 			s.quote = r
 		case r == '/' && i+1 < len(runes) && runes[i+1] == '/':
-			if j := strings.Index(string(runes[i:]), "?>"); j >= 0 {
+			if j := findCloseTagRune(runes[i:]); j >= 0 {
 				s.inCode = false
 				i += j + 1
 			} else {
 				return
 			}
 		case r == '#' && !(i+1 < len(runes) && runes[i+1] == '['):
-			if j := strings.Index(string(runes[i:]), "?>"); j >= 0 {
+			if j := findCloseTagRune(runes[i:]); j >= 0 {
 				s.inCode = false
 				i += j + 1
 			} else {
