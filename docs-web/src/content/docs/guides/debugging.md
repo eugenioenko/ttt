@@ -26,7 +26,7 @@ The adapter name (here, `gdb`) is the `type` used in launch configurations. The 
 
 ## Launch a program
 
-Choose **Configure** in the sidebar to create and open `.ttt/launch.json`. For a C program built with debug symbols as `bin/example`, use:
+Choose **Configure** in the sidebar to create and open `.ttt/launch.json`. TTT asks which configured adapter to use. Adapters whose `languages` include the active file's language come first, then adapters whose `markers` match a file in the workspace folder; both are labelled *detected*, and the first is preselected. The new file holds the adapter's `configurations`, or a launch entry for the active file from its `fileLaunch` recipe. For a C program built with debug symbols as `bin/example`, use:
 
 ```json
 {
