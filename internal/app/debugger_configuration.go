@@ -85,6 +85,9 @@ func (a *App) debugFile() {
 }
 
 func (a *App) configureDebugger() {
+	if a.Root.HasModalOverlay() {
+		return
+	}
 	a.refreshDebugConfiguration()
 	if path := a.debugger.panel.idle.file; path != "" {
 		a.openDebugConfiguration(path)
@@ -114,18 +117,33 @@ func (a *App) createDebugConfiguration(folder string) {
 		a.openDebugConfiguration(path)
 		return
 	}
+	if len(a.Settings.Debug.Adapters) == 0 {
+		a.StatusWarn(i18n.Text("debug.noAdapters"))
+		return
+	}
 	source := a.EditorGroup.ActiveFilePath()
 	if owner := a.Workspace.FolderForFile(source); owner == nil || owner.Path != folder || a.EditorGroup.ActiveBuffer() == nil || a.EditorGroup.IsActiveVirtual() {
 		source = ""
 	}
-	adapter := ""
-	language := highlight.DetectLanguageID(source, nil)
-	for _, name := range slices.Sorted(maps.Keys(a.Settings.Debug.Adapters)) {
-		if slices.Contains(a.Settings.Debug.Adapters[name].Languages, language) {
-			adapter = name
-			break
-		}
+	language := ""
+	if source != "" {
+		language = highlight.DetectLanguageID(source, nil)
 	}
+	names, detected := dap.RankAdapters(a.Settings.Debug.Adapters, folder, language)
+	items := make([]widgets.SelectItem, len(names))
+	for i, name := range names {
+		label := name
+		if i < detected {
+			label = i18n.Format("debug.adapterDetected", i18n.Args{"adapter": name})
+		}
+		items[i] = widgets.SelectItem{ID: name, Label: label}
+	}
+	a.showSelectDialog(i18n.Text("debug.chooseAdapter"), items, names[0], func(adapter string) {
+		a.writeDebugConfiguration(folder, source, adapter)
+	}, nil)
+}
+
+func (a *App) writeDebugConfiguration(folder, source, adapter string) {
 	path, err := dap.CreateLaunchFile(folder, source, adapter, dap.Adapter(a.Settings.Debug.Adapters[adapter]))
 	if err != nil {
 		a.StatusError(err.Error())

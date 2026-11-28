@@ -99,10 +99,53 @@ func (a Adapter) FileTarget(folder, file, name string) (Target, bool) {
 	return Target{Name: filepath.Base(file), Folder: folder, Type: name, Request: "launch", File: file, Arguments: args}, true
 }
 
+func RankAdapters(adapters map[string]debugadapter.Config, folder, language string) (names []string, detected int) {
+	var entries []string
+	if list, err := os.ReadDir(folder); err == nil {
+		for _, entry := range list {
+			entries = append(entries, entry.Name())
+		}
+	}
+	markerMatch := func(markers []string) bool {
+		for _, marker := range markers {
+			for _, entry := range entries {
+				if ok, _ := path.Match(marker, entry); ok {
+					return true
+				}
+			}
+		}
+		return false
+	}
+	var byLanguage, byMarker, rest []string
+	for _, name := range slices.Sorted(maps.Keys(adapters)) {
+		switch settings := adapters[name]; {
+		case language != "" && slices.Contains(settings.Languages, language):
+			byLanguage = append(byLanguage, name)
+		case markerMatch(settings.Markers):
+			byMarker = append(byMarker, name)
+		default:
+			rest = append(rest, name)
+		}
+	}
+	detected = len(byLanguage) + len(byMarker)
+	return slices.Concat(byLanguage, byMarker, rest), detected
+}
+
 func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string, error) {
 	path := filepath.Join(folder, ".ttt", "launch.json")
 	configs := []map[string]any{}
-	if program, err := filepath.Rel(folder, source); source != "" && adapter != "" && err == nil && filepath.IsLocal(program) {
+	for _, template := range settings.Configurations {
+		config := maps.Clone(template)
+		config["type"] = adapter
+		if name, _ := config["name"].(string); name == "" {
+			config["name"] = adapter
+		}
+		if request, _ := config["request"].(string); request == "" {
+			config["request"] = "launch"
+		}
+		configs = append(configs, config)
+	}
+	if program, err := filepath.Rel(folder, source); len(configs) == 0 && source != "" && adapter != "" && err == nil && filepath.IsLocal(program) {
 		config := map[string]any{"program": filepath.ToSlash(program)}
 		if t, ok := settings.FileTarget("${workspaceFolder}", "${workspaceFolder}/"+filepath.ToSlash(program), adapter); ok {
 			expanded, err := t.Expand(t.Arguments)
@@ -113,6 +156,9 @@ func CreateLaunchFile(folder, source, adapter string, settings Adapter) (string,
 		}
 		config["name"], config["type"], config["request"] = filepath.Base(source), adapter, "launch"
 		configs = append(configs, config)
+	}
+	if len(configs) == 0 && adapter != "" {
+		configs = append(configs, map[string]any{"name": adapter, "type": adapter, "request": "launch"})
 	}
 	data, err := json.MarshalIndent(map[string]any{"version": "0.2.0", "configurations": configs}, "", "  ")
 	if err != nil {
