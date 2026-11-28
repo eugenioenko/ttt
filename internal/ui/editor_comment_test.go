@@ -689,6 +689,37 @@ func TestToggleLineCommentVim9UsesHash(t *testing.T) {
 	}
 }
 
+// Lines before the vim9script directive are still legacy Vim script and need
+// the double quote; the directive itself must stay intact or the file's mode
+// would change.
+func TestToggleLineCommentVim9KeepsDirectiveAndUsesLegacyMarkerBeforeIt(t *testing.T) {
+	original := []string{"\" header", "vim9script", "set number"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 2, len("set number"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"\" \" header", "vim9script", "# set number"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestToggleLineCommentVim9DirectiveAloneIsUnchanged(t *testing.T) {
+	original := []string{"vim9script", "set number"}
+	e := newCommentEditor(t, "a.vim", slices.Clone(original), 0, 0)
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("lines = %q, want unchanged %q", e.Buf.Lines, original)
+	}
+}
+
 func TestToggleLineCommentVim9UncommentsHash(t *testing.T) {
 	e := newCommentEditor(t, "a.vim", []string{"vim9script", "# var x = 1"}, 1, 0)
 

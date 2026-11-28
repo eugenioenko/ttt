@@ -777,11 +777,21 @@ func (e *EditorPaneWidget) commentDelimitersPerLine(startLine, endLine int, pref
 		e.applyVueDelimiters(delims, startLine, endLine)
 		return delims
 	}
-	if lang == "viml" && isVim9Script(e.Buf.Lines) {
-		for i := range delims {
-			delims[i] = lineCommentDelims{prefix: "#", col: -1}
+	if lang == "viml" {
+		if directive := vim9ScriptLine(e.Buf.Lines); directive >= 0 {
+			for i := range delims {
+				switch line := startLine + i; {
+				case line < directive:
+					delims[i] = lineCommentDelims{prefix: "\"", col: -1}
+				case line == directive:
+					// Commenting the directive would switch the file to legacy mode.
+					delims[i] = lineCommentDelims{skip: true, col: -1}
+				default:
+					delims[i] = lineCommentDelims{prefix: "#", col: -1}
+				}
+			}
+			return delims
 		}
-		return delims
 	}
 	if !isJSXLanguage(lang) || e.Highlighter == nil {
 		return delims
@@ -807,21 +817,30 @@ func (e *EditorPaneWidget) applyVueDelimiters(delims []lineCommentDelims, startL
 	}
 }
 
-// isVim9Script reports whether lines are a Vim9 script, selected by a leading
-// vim9script command. Blank lines and comments may precede it.
-func isVim9Script(lines []string) bool {
+// vim9ScriptLine returns the index of the vim9script directive, or -1 when the
+// buffer is legacy Vim script. Blank lines and comments may precede it.
+func vim9ScriptLine(lines []string) int {
 	const marker = "vim9script"
-	for _, line := range lines {
+	for i, line := range lines {
 		trimmed := strings.TrimLeft(line, " \t")
 		if trimmed == "" || strings.HasPrefix(trimmed, "\"") || strings.HasPrefix(trimmed, "#") {
 			continue
 		}
 		if !strings.HasPrefix(trimmed, marker) {
-			return false
+			return -1
 		}
-		return len(trimmed) == len(marker) || trimmed[len(marker)] == ' ' || trimmed[len(marker)] == '\t'
+		if len(trimmed) == len(marker) || trimmed[len(marker)] == ' ' || trimmed[len(marker)] == '\t' {
+			return i
+		}
+		return -1
 	}
-	return false
+	return -1
+}
+
+// isVim9Script reports whether lines are a Vim9 script, selected by a leading
+// vim9script command.
+func isVim9Script(lines []string) bool {
+	return vim9ScriptLine(lines) >= 0
 }
 
 func (e *EditorPaneWidget) applyTwigDelimiters(delims []lineCommentDelims, startLine, endLine int) {
