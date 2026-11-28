@@ -49,7 +49,7 @@ Which entry you select decides what the diff compares:
 
 Open a conflicted Git text file from Changes to compare **Incoming** and **Current** above an editable **Result**. From the normal editor, choose **Open Merge Editor** in the banner, context menu, or command palette.
 
-Click the gutter checkbox at the start of a conflict to include that side. Selecting both inserts Incoming first. Use **Actions > Swap Order** to reverse them, or **Keep Neither** to remove the block. The arrows navigate between conflicts. These actions are also available from the command palette.
+Click the gutter checkbox at the start of a conflict to include that side. Selecting both inserts Incoming first. Use **Actions > Swap Order** to reverse them, or **Keep Neither** to remove the block. The arrows navigate between conflicts. Press F7 to cycle through the panes and Space on a source block to toggle its checkbox. These actions are also available from the command palette.
 
 Edit Result to write a custom resolution, then choose **Mark Resolved**. Save at any point to keep your progress. Pending blocks keep conflict markers on disk. **Complete Merge** saves and stages the file when all blocks are resolved.
 

@@ -12,6 +12,7 @@
   "markdown.wrapOn": "On",
   "markdown.wrapWidthMenu": "Wrap Width…",
   "markdown.wrapWidthTitle": "Markdown Wrap Width",
+  "merge.focusNext": "Focus Next Merge Pane",
   "merge.actions": "Actions",
   "merge.banner": "Merge conflicts detected   [Open Merge Editor]",
   "merge.changeView": "Change Merge Editor View",

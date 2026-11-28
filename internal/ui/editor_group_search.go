@@ -35,6 +35,10 @@ func (g *EditorGroupWidget) applySearch(query string, opts SearchOptions, matche
 	if !g.IsEditorActive() {
 		return
 	}
+	if g.SearchTargetChanged() {
+		g.clearSearchState()
+	}
+	g.searchedPane = g.SearchPane()
 	g.SearchPane().SearchQuery = query
 	g.SearchPane().SearchOptions = opts
 	g.SearchPane().SearchMatches = matches
@@ -68,11 +72,20 @@ func (g *EditorGroupWidget) ClearFindHighlights() {
 // shared editor keeps the last text tab's highlights and shows them again
 // when that tab comes back.
 func (g *EditorGroupWidget) clearSearchState() {
-	g.SearchPane().SearchQuery = ""
-	g.SearchPane().SearchOptions = SearchOptions{}
-	g.SearchPane().SearchMatches = nil
-	g.SearchPane().SearchActive = 0
-	g.SearchPane().searchByLine = nil
+	p := g.searchedPane
+	if p == nil {
+		p = g.SearchPane()
+	}
+	p.SearchQuery = ""
+	p.SearchOptions = SearchOptions{}
+	p.SearchMatches = nil
+	p.SearchActive = 0
+	p.searchByLine = nil
+	g.searchedPane = nil
+}
+
+func (g *EditorGroupWidget) SearchTargetChanged() bool {
+	return g.searchedPane != nil && g.searchedPane != g.SearchPane()
 }
 
 func (g *EditorGroupWidget) refreshFindSearch() bool {
@@ -138,6 +151,9 @@ func (g *EditorGroupWidget) ReplaceMatch(match FindMatch, replacement string) {
 		g.SearchPane().Undo.BeginTransaction()
 		defer g.SearchPane().Undo.EndTransaction()
 	}
+	if m := g.visualMerge(); m != nil {
+		defer m.flushProjection()
+	}
 	runes := []rune(g.SearchPane().Buf.Lines[match.Line])
 	endCol := min(match.Col+match.Len, len(runes))
 	g.SearchPane().exec(&undo.DeleteSelectionCommand{
@@ -159,9 +175,13 @@ func (g *EditorGroupWidget) ReplaceAll(query, replacement string, opts SearchOpt
 		return
 	}
 	matches, _ := FindInLines(g.SearchPane().Buf.Lines, query, opts)
-	if g.SearchPane().Undo != nil {
-		g.SearchPane().Undo.BeginTransaction()
-		defer g.SearchPane().Undo.EndTransaction()
+	stack := g.SearchPane().Undo
+	if m := g.visualMerge(); m != nil {
+		stack = m.result.Undo
+	}
+	if stack != nil {
+		stack.BeginTransaction()
+		defer stack.EndTransaction()
 	}
 	for _, match := range slices.Backward(matches) {
 		g.ReplaceMatch(match, replacement)

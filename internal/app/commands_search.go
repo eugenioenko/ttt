@@ -73,6 +73,7 @@ func (a *App) newFindBar() *ui.FindBarWidget {
 	findBar.Input.ControlModifiers = &a.Root.ControlModifiers
 	findBar.Borders = a.Borders
 	findBar.AnchorRect = a.activeEditorContentRect
+	findBar.SearchTargetChanged = a.EditorGroup.SearchTargetChanged
 	findBar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		if !a.EditorGroup.IsEditorActive() {
 			a.EditorGroup.SetFindSearch(query, nil, opts)
@@ -260,6 +261,7 @@ func (a *App) newReplaceBar() *ui.ReplaceBarWidget {
 	bar.ReplaceInput.ControlModifiers = &a.Root.ControlModifiers
 	bar.Borders = a.Borders
 	bar.AnchorRect = a.activeEditorContentRect
+	bar.SearchTargetChanged = a.EditorGroup.SearchTargetChanged
 	bar.OnSearch = func(query string, opts ui.SearchOptions) []ui.FindMatch {
 		matches, err := ui.FindInLines(a.EditorGroup.SearchPane().Buf.Lines, query, opts)
 		if err != nil {

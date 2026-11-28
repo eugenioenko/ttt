@@ -148,6 +148,8 @@ type EditorGroupWidget struct {
 	pendingNotify []string
 	focused       bool
 	find          findSession
+	searchedPane  *EditorPaneWidget
+	leftPressed   bool
 	// diagSources holds diagnostics keyed by source ("lsp:<server>", "plugin:<name>")
 	// then by file path. Merged per-path into each tab's Diagnostics.
 	diagSources map[string]map[string][]Diagnostic
@@ -591,6 +593,12 @@ func (g *EditorGroupWidget) SetPointerCaptureInvalidated(invalidated func()) {
 }
 
 func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
+	pressed := false
+	if mouse, ok := ev.(*tcell.EventMouse); ok {
+		left := mouse.Buttons()&tcell.Button1 != 0
+		pressed = left && !g.leftPressed
+		g.leftPressed = left
+	}
 	if mouse, ok := ev.(*tcell.EventMouse); ok && mouse.Buttons()&(tcell.Button1|tcell.Button2|tcell.Button3) != 0 {
 		x, y := mouse.Position()
 		if g.GetRect().Contains(x, y) && g.OnActivate != nil {
@@ -644,7 +652,7 @@ func (g *EditorGroupWidget) HandleEvent(ev tcell.Event) EventResult {
 	var result EventResult
 	if me, ok := ev.(*tcell.EventMouse); ok && me.Buttons() == tcell.Button1 {
 		x, y := me.Position()
-		if g.mergeBanner.Contains(x, y) && g.OnOpenMerge != nil {
+		if pressed && !g.contentOwnsPointerCapture() && g.mergeBanner.Contains(x, y) && g.OnOpenMerge != nil {
 			g.OnOpenMerge()
 			return EventConsumed
 		}

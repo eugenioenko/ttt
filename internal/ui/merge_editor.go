@@ -111,6 +111,7 @@ func (g *EditorGroupWidget) OpenMerge(inputs scm.ConflictInputs, view string, ac
 		p.OnGutterClick = func(line int) bool {
 			i, ok := session.sourceBlock(side, line)
 			if ok {
+				m.flushProjection()
 				m.selectBlock(i)
 				m.toggle(side)
 			}
@@ -182,6 +183,8 @@ func (m *MergeEditorWidget) toggle(side int) {
 func (m *MergeEditorWidget) ApplyAction(id string) {
 	m.flushProjection()
 	switch id {
+	case "focusNext":
+		m.focus = (m.focus + 1) % 3
 	case "incoming":
 		m.toggle(0)
 	case "current":
@@ -361,7 +364,7 @@ func (m *MergeEditorWidget) HandleEvent(ev tcell.Event) EventResult {
 		}
 		return EventIgnored
 	}
-	if key, ok := ev.(*tcell.EventKey); ok && key.Key() == tcell.KeyTab && m.focus < 2 {
+	if key, ok := ev.(*tcell.EventKey); ok && (key.Key() == tcell.KeyF7 || (key.Key() == tcell.KeyTab && m.focus < 2)) {
 		m.focus = (m.focus + 1) % 3
 		return EventConsumed
 	}

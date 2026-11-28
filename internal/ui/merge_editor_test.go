@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"github.com/gdamore/tcell/v3"
 	"os"
 	"path/filepath"
 	"slices"
@@ -139,5 +140,48 @@ func TestMergeEmptyResultTakesTyping(t *testing.T) {
 	m.flushProjection()
 	if !slices.Equal(g.Editor.Buf.Lines, []string{"<<<<<<< HEAD", "custom", "=======", "incoming", ">>>>>>> topic"}) {
 		t.Fatal(g.Editor.Buf.Lines)
+	}
+}
+
+func TestMergeReplaceAllKeepsBlockOwnership(t *testing.T) {
+	g, m, _ := openTestMerge(t)
+	m.Navigate(1)
+	m.ApplyAction("incoming")
+	before := slices.Clone(g.Editor.Buf.Lines)
+	g.ReplaceAll("left|new", "replacement", SearchOptions{UseRegex: true})
+	want := []string{"pre", "replacement", "middle", "replacement", "post"}
+	if !slices.Equal(m.preview.Buf.Lines, want) {
+		t.Fatal(m.preview.Buf.Lines)
+	}
+	for _, b := range m.session.blocks {
+		if !b.custom || g.Editor.Buf.Lines[b.start+1] != "replacement" {
+			t.Fatal(b, g.Editor.Buf.Lines)
+		}
+	}
+	g.Undo()
+	if !slices.Equal(before, g.Editor.Buf.Lines) {
+		t.Fatal(g.Editor.Buf.Lines)
+	}
+}
+
+func TestMergeKeyboardFocusAndSearchCleanup(t *testing.T) {
+	g, m, _ := openTestMerge(t)
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyF7, "", 0))
+	if m.focus != 0 {
+		t.Fatal(m.focus)
+	}
+	g.SetSearch("right", SearchOptions{}, []FindMatch{{Line: 1, Len: 5}})
+	m.HandleEvent(tcell.NewEventKey(tcell.KeyRune, " ", 0))
+	if m.focus != 2 || m.session.blocks[0].choice != mergeIncoming || !g.SearchTargetChanged() {
+		t.Fatal(m.focus)
+	}
+	g.SetSearch("left", SearchOptions{}, nil)
+	if m.sources[0].SearchMatches != nil || m.sources[0].SearchQuery != "" {
+		t.Fatal("stale highlight")
+	}
+	m.focus = 1
+	g.ClearSearch()
+	if m.preview.SearchQuery != "" {
+		t.Fatal("stale result highlight")
 	}
 }

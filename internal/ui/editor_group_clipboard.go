@@ -107,6 +107,9 @@ func (g *EditorGroupWidget) Cut() {
 	if t == nil || e == nil {
 		return
 	}
+	if m := g.visualMerge(); m != nil {
+		defer m.flushProjection()
+	}
 	// Cut from every cursor when multicursor mode is active.
 	if e.isMultiActive() {
 		pieces := e.multiCopyPieces()
@@ -160,5 +163,8 @@ func (g *EditorGroupWidget) pasteIntoEditor(text string) {
 	}
 	if e := g.editableKeyEditor(); e != nil {
 		e.pasteText(text)
+		if m := g.visualMerge(); m != nil {
+			m.flushProjection()
+		}
 	}
 }

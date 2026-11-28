@@ -11,21 +11,22 @@ import (
 
 type ReplaceBarWidget struct {
 	BaseWidget
-	SearchInput  *widgets.InputWidget
-	ReplaceInput *widgets.InputWidget
-	Matches      []FindMatch
-	Current      int
-	Options      SearchOptions
-	Borders      *term.BorderSet
-	AnchorRect   func() Rect
-	OnSearch     func(query string, opts SearchOptions) []FindMatch
-	OnNavigate   func(match FindMatch)
-	OnReplace    func(match FindMatch, replacement string)
-	OnReplaceAll func(query, replacement string, opts SearchOptions)
-	OnDismiss    func()
-	focused      bool
-	focusRow     int
-	OnToggleFind func()
+	SearchInput         *widgets.InputWidget
+	ReplaceInput        *widgets.InputWidget
+	Matches             []FindMatch
+	Current             int
+	Options             SearchOptions
+	Borders             *term.BorderSet
+	AnchorRect          func() Rect
+	OnSearch            func(query string, opts SearchOptions) []FindMatch
+	SearchTargetChanged func() bool
+	OnNavigate          func(match FindMatch)
+	OnReplace           func(match FindMatch, replacement string)
+	OnReplaceAll        func(query, replacement string, opts SearchOptions)
+	OnDismiss           func()
+	focused             bool
+	focusRow            int
+	OnToggleFind        func()
 	findBarLayout
 }
 
@@ -138,6 +139,9 @@ func (r *ReplaceBarWidget) Query() string { return r.SearchInput.Text() }
 func (r *ReplaceBarWidget) CurrentMatch() int { return r.Current }
 
 func (r *ReplaceBarWidget) NavigateMatch(delta int) {
+	if r.SearchTargetChanged != nil && r.SearchTargetChanged() {
+		r.Refresh()
+	}
 	if len(r.Matches) == 0 {
 		return
 	}

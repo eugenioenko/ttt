@@ -75,6 +75,7 @@ func (a *App) mergeAction(id string) {
 	case "actions":
 		items := []widgets.SelectItem{
 			{ID: "incoming", Label: i18n.Text("merge.chooseIncoming")}, {ID: "current", Label: i18n.Text("merge.chooseCurrent")},
+			{ID: "focusNext", Label: i18n.Text("merge.focusNext")},
 			{ID: "swap", Label: i18n.Text("merge.swap")}, {ID: "neither", Label: i18n.Text("merge.neither")},
 			{ID: "manual", Label: i18n.Text("merge.manual")}, {ID: "complete", Label: i18n.Text("merge.complete")},
 		}
@@ -164,7 +165,7 @@ func (a *App) registerMergeCommands() {
 	a.Reg.Register(command.Command{ID: "merge.openEditor", Title: i18n.Text("merge.open"), Handler: a.OpenMergeEditor, PaletteWhen: func() bool { return a.EditorGroup != nil && a.EditorGroup.HasMergeBanner() }})
 	a.Reg.Register(command.Command{ID: "options.mergeConflictView", Title: i18n.Text("merge.setting"), Handler: a.setMergeDefault})
 	for _, c := range []struct{ id, title string }{
-		{"incoming", i18n.Text("merge.chooseIncoming")}, {"current", i18n.Text("merge.chooseCurrent")}, {"swap", i18n.Text("merge.swap")}, {"neither", i18n.Text("merge.neither")}, {"manual", i18n.Text("merge.manual")}, {"next", i18n.Text("merge.next")}, {"previous", i18n.Text("merge.previous")}, {"view", i18n.Text("merge.changeView")}, {"actions", i18n.Text("merge.actions")}, {"complete", i18n.Text("merge.complete")},
+		{"focusNext", i18n.Text("merge.focusNext")}, {"incoming", i18n.Text("merge.chooseIncoming")}, {"current", i18n.Text("merge.chooseCurrent")}, {"swap", i18n.Text("merge.swap")}, {"neither", i18n.Text("merge.neither")}, {"manual", i18n.Text("merge.manual")}, {"next", i18n.Text("merge.next")}, {"previous", i18n.Text("merge.previous")}, {"view", i18n.Text("merge.changeView")}, {"actions", i18n.Text("merge.actions")}, {"complete", i18n.Text("merge.complete")},
 	} {
 		a.Reg.Register(command.Command{ID: "merge." + c.id, Title: c.title, PaletteWhen: func() bool {
 			return a.EditorGroup != nil && a.EditorGroup.MergeEditor() != nil && a.EditorGroup.MergeEditor().View != config.MergeText
