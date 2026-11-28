@@ -786,3 +786,87 @@ func TestPluginNetworkAPI_RedirectsStayOnTheAllowedHosts(t *testing.T) {
 		t.Errorf("requests = %v, want %v", paths, want)
 	}
 }
+
+func TestPluginEditorAPIFollowsTheActiveEditorGroup(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	dir := t.TempDir()
+	left := filepath.Join(dir, "left.txt")
+	right := filepath.Join(dir, "right.md")
+	for path, text := range map[string]string{left: "left text", right: "# right text"} {
+		if err := os.WriteFile(path, []byte(text), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// plugins get their editor API when they load, before any split
+	api := NewPluginEditorAPI(a)
+	first := a.EditorGroup
+	if err := first.OpenFile(left); err != nil {
+		t.Fatal(err)
+	}
+	a.SplitEditor()
+	if err := a.EditorGroup.OpenFile(right); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := api.FilePath(); got != right {
+		t.Fatalf("FilePath() in the new group = %q, want %q", got, right)
+	}
+	if got := api.BufferText(); strings.TrimSuffix(got, "\n") != "# right text" {
+		t.Fatalf("BufferText() in the new group = %q, want the text of %q", got, right)
+	}
+
+	a.activateEditorGroup(first)
+	if got := api.FilePath(); got != left {
+		t.Fatalf("FilePath() after focusing the first group = %q, want %q", got, left)
+	}
+}
+
+func TestPluginEditorAPIEndsTheUndoGroupOnTheGroupThatBeganIt(t *testing.T) {
+	config.OverrideConfigDir = t.TempDir()
+	t.Cleanup(func() { config.OverrideConfigDir = "" })
+	a := buildTestApp(t, config.DefaultSettings())
+	t.Cleanup(a.CloseTasks)
+	dir := t.TempDir()
+	left := filepath.Join(dir, "left.txt")
+	right := filepath.Join(dir, "right.txt")
+	for _, path := range []string{left, right} {
+		if err := os.WriteFile(path, []byte("text"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	api := NewPluginEditorAPI(a)
+	first := a.EditorGroup
+	if err := first.OpenFile(left); err != nil {
+		t.Fatal(err)
+	}
+	a.SplitEditor()
+	second := a.EditorGroup
+	if err := second.OpenFile(right); err != nil {
+		t.Fatal(err)
+	}
+
+	// the focus moves to the other pane while a plugin holds an undo group open
+	a.activateEditorGroup(first)
+	api.BeginUndoGroup()
+	api.Insert(0, 0, "a")
+	a.activateEditorGroup(second)
+	api.EndUndoGroup()
+
+	// a later undo group in the first pane must still collapse into one undo step
+	a.activateEditorGroup(first)
+	api.BeginUndoGroup()
+	api.Insert(0, 0, "b")
+	api.Insert(0, 0, "c")
+	api.EndUndoGroup()
+
+	ed := first.Editor
+	ed.Undo.Undo(ed.Buf)
+	if got := ed.Buf.Lines[0]; got != "atext" {
+		t.Fatalf("after one undo the first pane reads %q, want %q", got, "atext")
+	}
+}
