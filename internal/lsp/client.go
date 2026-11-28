@@ -211,7 +211,9 @@ func (c *Client) notifyContext(ctx context.Context, method string, params any) e
 		return err
 	case <-ctx.Done():
 		c.Close()
-		<-sent
+		if err := <-sent; err != nil {
+			slog.Debug("lsp notification failed after cancellation", "method", method, "error", err)
+		}
 		return ctx.Err()
 	}
 }

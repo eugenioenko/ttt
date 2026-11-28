@@ -262,8 +262,7 @@ func TestRPCNotifyDoesNotBlockLuaOnNonReadingPeer(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		_ = h.peer.Close()
-		<-done
-		t.Fatal("notification blocked the Lua thread while the peer was not reading")
+		t.Fatalf("notification blocked the Lua thread while the peer was not reading: %v", <-done)
 	}
 }
 

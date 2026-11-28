@@ -4,8 +4,7 @@ linters:
   default: none
   enable:
     - govet
-    # TODO: enable after fixing violations
-    # - errcheck     # https://github.com/eugenioenko/ttt/issues/505
+    - errcheck
     - staticcheck
     - ineffassign
     - unused
