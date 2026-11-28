@@ -138,7 +138,7 @@ Keybindings are defined in `internal/config/keybindings.go` (`DefaultKeybindings
 
 ### LSP Integration
 
-Language server support lives in `internal/lsp/`: a client over stdio built on `internal/jsonrpc`, with no external dependencies, one client per language, lazy-started on first use. Servers are configured under `lsp.servers` in settings (`LSPSettings` in `internal/config/settings.go`); `internal/app/app_lsp.go` wires the client into the editor.
+Language server support lives in `internal/lsp/`: a client over stdio built on `internal/jsonrpc`, with no external dependencies, one client per language, lazy-started on first use. Servers are configured under `lsp.servers` in settings (`LSPSettings` in `internal/config/settings.go`); application integration is grouped by feature in `internal/app/lsp_*.go`, with shared helpers and diagnostic application in `app_lsp.go` and outline handling in `symbols.go`.
 
 Async LSP results (completions, signature help, hover, and so on) wake the event loop with the same `PostEvent(EventInterrupt)` pattern as git blame. Document sync is full-document, not incremental.
 

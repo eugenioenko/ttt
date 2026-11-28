@@ -12,6 +12,31 @@ import (
 	"github.com/eugenioenko/ttt/internal/lsp"
 )
 
+// RefreshSymbols re-requests the outline for the active file. Cheap no-op
+// unless the Outline panel is the active sidebar panel.
+func (a *App) RefreshSymbols() {
+	if a.Symbols == nil || a.Sidebar.ActivePanel != "outline" {
+		a.stopSymbolsTask()
+		return
+	}
+	path, lang := a.editorPathLang()
+	if path == "" || !a.EditorGroup.IsEditorActive() || a.EditorGroup.IsActiveVirtual() {
+		a.stopSymbolsTask()
+		a.Symbols.Path = ""
+		a.Symbols.Clear()
+		return
+	}
+	a.RequestDocumentSymbols(path, lang)
+}
+
+// ApplySymbols replaces the outline content and syncs its selection to the
+// current cursor position.
+func (a *App) ApplySymbols(symbols []lsp.DocumentSymbol) {
+	a.Symbols.SetSymbols(symbols)
+	line, _ := a.EditorGroup.ActiveCursor()
+	a.Symbols.SelectNearest(line)
+}
+
 type symbolsReply struct {
 	symbols []lsp.DocumentSymbol
 	status  string
