@@ -1270,7 +1270,10 @@ func commentDelimitersFor(text, prefix, postfix, lang string) (string, string, b
 			return "/*", "*/", true
 		}
 		if hasCommentPrefix(text, "*") && isWholeLineComment(text, "*", ";", lang) {
-			return "*", ";", true
+			// SAS statement comments are recognized by the trailing semicolon, but
+			// the semicolon is part of the SAS statement syntax and must be preserved
+			// when uncommenting. Only the leading "*" and its separator are removed.
+			return "*", "", true
 		}
 		return "", "", false
 	}

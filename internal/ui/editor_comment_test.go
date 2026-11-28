@@ -610,7 +610,10 @@ func TestToggleLineCommentSASUncommentsStatement(t *testing.T) {
 	e := newCommentEditor(t, "a.sas", []string{"* show the input data;"}, 0, 5)
 
 	e.ToggleLineComment()
-	if got, want := e.Buf.Lines[0], "show the input data"; got != want {
+	// SAS statement comments are recognized by the trailing semicolon, but the
+	// semicolon is part of the SAS statement syntax and is preserved when
+	// uncommenting. Only the leading "*" and its separator are removed.
+	if got, want := e.Buf.Lines[0], "show the input data;"; got != want {
 		t.Fatalf("uncommented line = %q, want %q", got, want)
 	}
 }
