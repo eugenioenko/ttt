@@ -126,6 +126,9 @@ func (g *EditorGroupWidget) SaveAs(path string) bool {
 		}
 	}
 	t = g.activeTab()
+	if t.Merge != nil && t.FilePath != path {
+		g.EndMerge()
+	}
 	g.movePathState(t.FilePath, path)
 	t.FilePath = path
 	t.IconPath = path

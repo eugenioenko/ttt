@@ -25,3 +25,20 @@ func TestMergeSourcePanesUseGitVersions(t *testing.T) {
 		t.Fatal("lost pending custom result")
 	}
 }
+
+func TestGitConflictMarkersRespectWidthAndColumn(t *testing.T) {
+	lines := []string{"<<<<<<<<< HEAD", "  =======", "======= title", "||||||||| base", "old", "=========", "right", ">>>>>>>>> other"}
+	c, ok := gitConflictAt(lines, 0)
+	if !ok || c.base != 3 || c.separator != 5 || c.end != 7 {
+		t.Fatal(c, ok)
+	}
+	for _, bad := range [][]string{
+		{"<<<<<<< HEAD", "<<<<<<< nested", "=======", ">>>>>>> other"},
+		{"<<<<<<< HEAD", "======= extra", ">>>>>>> other"},
+		{"<<<<<<< HEAD", "=======", ">>>>>>>> other"},
+	} {
+		if _, ok := gitConflictAt(bad, 0); ok {
+			t.Fatalf("accepted %q", bad)
+		}
+	}
+}

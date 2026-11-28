@@ -38,7 +38,7 @@ func (g *EditorGroupWidget) EndMerge() {
 	}
 }
 func (g *EditorGroupWidget) visualMerge() *MergeEditorWidget {
-	if m := g.MergeEditor(); m != nil && m.View != config.MergeText {
+	if m := g.MergeEditor(); m != nil && m.View != config.MergeText && g.ActiveBuffer() == m.session.buf {
 		return m
 	}
 	return nil
@@ -136,8 +136,12 @@ func (m *MergeEditorWidget) CanComplete() bool {
 	if m.Remaining() != 0 || !m.session.valid {
 		return false
 	}
-	blocks, incomplete := scanConflicts(m.result.Buf.Lines)
-	return len(blocks) == 0 && !incomplete
+	for _, line := range m.session.buf.Lines {
+		if k, _ := gitMarker(line); k == '<' || k == '>' || k == '|' {
+			return false
+		}
+	}
+	return true
 }
 func (m *MergeEditorWidget) pane(i int) *EditorPaneWidget {
 	if i == 2 {

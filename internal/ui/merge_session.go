@@ -46,14 +46,18 @@ func newMergeSession(buf *buffer.Buffer, inputs scm.ConflictInputs) (*mergeSessi
 	m := &mergeSession{buf: buf, version: buf.Version(), valid: true}
 	for i := 0; i < len(buf.Lines); {
 		line := buf.Lines[i]
-		if !conflictHeader(line) {
+		kind, _ := gitMarker(line)
+		if kind != '<' {
+			if kind == '>' || kind == '|' {
+				return nil, panes
+			}
 			for side := range panes {
 				panes[side] = append(panes[side], line)
 			}
 			i++
 			continue
 		}
-		c, ok := conflictAt(buf.Lines, i)
+		c, ok := gitConflictAt(buf.Lines, i)
 		if !ok {
 			return nil, panes
 		}
@@ -128,7 +132,7 @@ func (m *mergeSession) replacement(i int, choice mergeChoice) []string {
 		return slices.Clone(b.original)
 	case mergeManual:
 		lines := m.buf.Lines[b.start : b.start+b.count]
-		if c, ok := conflictAt(lines, 0); ok && c.end == len(lines)-1 {
+		if c, ok := gitConflictAt(lines, 0); ok && c.end == len(lines)-1 {
 			end := c.separator
 			if c.base >= 0 {
 				end = c.base

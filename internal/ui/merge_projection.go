@@ -38,7 +38,7 @@ func (m *MergeEditorWidget) project() {
 		lines = append(lines, s.buf.Lines[at:b.start]...)
 		start := len(lines)
 		part := s.buf.Lines[b.start : b.start+b.count]
-		if c, ok := conflictAt(part, 0); ok && c.end == len(part)-1 {
+		if c, ok := gitConflictAt(part, 0); ok && c.end == len(part)-1 {
 			end := c.separator
 			if c.base >= 0 {
 				end = c.base
@@ -133,7 +133,7 @@ func (m *MergeEditorWidget) flushProjection() {
 		text := slices.Clone(old[a:lo])
 		text = append(text, replacement...)
 		text = append(text, old[hi:z]...)
-		c, _ := conflictAt(b.original, 0)
+		c, _ := gitConflictAt(b.original, 0)
 		tail := c.separator
 		if c.base >= 0 {
 			tail = c.base
