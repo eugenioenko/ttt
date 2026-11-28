@@ -232,6 +232,10 @@ func TestIsUnmergedContextDetectsConflicts(t *testing.T) {
 	if !IsUnmergedContext(context.Background(), dir, "f.txt") {
 		t.Fatal("conflicted file not reported as unmerged")
 	}
+	inputs, err := (repository{root: dir}).ReadConflict(context.Background(), "f.txt")
+	if err != nil || inputs.Base.Content != "base\n" || inputs.Current.Content != "mine\n" || inputs.Incoming.Content != "other\n" || inputs.Identity == "" {
+		t.Fatalf("merge inputs = %+v, %v", inputs, err)
+	}
 	if IsUnmergedContext(context.Background(), dir, "clean.txt") {
 		t.Fatal("clean file reported as unmerged")
 	}
