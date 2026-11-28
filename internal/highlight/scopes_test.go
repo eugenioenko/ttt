@@ -220,11 +220,12 @@ func TestVueContextAt(t *testing.T) {
 		"</script>",
 		"<style scoped>",
 		"  .a { color: red; }",
+		"  body { margin: 0; }",
 		"</style>",
 	}
 	want := []VueContext{
 		VueMarkup, VueMarkup, VueMarkup, VueMarkup, VueMarkup,
-		VueMarkup, VueMarkup, VueScript, VueMarkup, VueMarkup, VueStyle, VueMarkup,
+		VueMarkup, VueMarkup, VueScript, VueMarkup, VueMarkup, VueStyle, VueStyle, VueMarkup,
 	}
 	h := New("view.vue")
 	buf := &buffer.Buffer{Lines: lines}

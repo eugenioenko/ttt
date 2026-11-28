@@ -712,6 +712,22 @@ func TestToggleLineCommentVueUsesBlockCommentInStyle(t *testing.T) {
 	}
 }
 
+func TestToggleLineCommentVueElementSelectorInStyle(t *testing.T) {
+	original := []string{"<style scoped>", "  body { margin: 0; }", "</style>"}
+	e := newCommentEditor(t, "a.vue", slices.Clone(original), 1, 4)
+
+	e.ToggleLineComment()
+	want := []string{"<style scoped>", "  /* body { margin: 0; } */", "</style>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
 func TestToggleLineCommentWebAssemblyUsesDoubleSemicolon(t *testing.T) {
 	original := "(func (export \"f\"))"
 	e := newCommentEditor(t, "a.wat", []string{original}, 0, 0)

@@ -191,6 +191,15 @@ func (h *Highlighter) VueContextAt(buf *buffer.Buffer, line int) VueContext {
 		scopes = tok.Scopes
 		break
 	}
+	// Element selectors inside a <style> block carry entity.name.tag.css, which
+	// the tag checks below would otherwise read as markup.
+	for _, scope := range scopes {
+		if hasScopePrefix(scope, "source.css") || hasScopePrefix(scope, "source.scss") ||
+			hasScopePrefix(scope, "source.less") || hasScopePrefix(scope, "source.sass") ||
+			hasScopePrefix(scope, "source.stylus") || hasScopePrefix(scope, "source.postcss") {
+			return VueStyle
+		}
+	}
 	for _, scope := range scopes {
 		if hasScopePrefix(scope, "punctuation.definition.tag") ||
 			hasScopePrefix(scope, "entity.name.tag") ||
@@ -199,13 +208,8 @@ func (h *Highlighter) VueContextAt(buf *buffer.Buffer, line int) VueContext {
 		}
 	}
 	for _, scope := range scopes {
-		switch {
-		case hasScopePrefix(scope, "source.js"), hasScopePrefix(scope, "source.ts"):
+		if hasScopePrefix(scope, "source.js") || hasScopePrefix(scope, "source.ts") {
 			return VueScript
-		case hasScopePrefix(scope, "source.css"), hasScopePrefix(scope, "source.scss"),
-			hasScopePrefix(scope, "source.less"), hasScopePrefix(scope, "source.sass"),
-			hasScopePrefix(scope, "source.stylus"), hasScopePrefix(scope, "source.postcss"):
-			return VueStyle
 		}
 	}
 	return VueMarkup
