@@ -137,7 +137,7 @@ func (m *MergeEditorWidget) CanComplete() bool {
 		return false
 	}
 	for _, line := range m.session.buf.Lines {
-		if k, _ := gitMarker(line); k == '<' || k == '>' || k == '|' {
+		if k := gitMarker(line, m.session.markerSize); k == '<' || k == '>' || k == '|' {
 			return false
 		}
 	}

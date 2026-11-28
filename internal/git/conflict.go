@@ -3,6 +3,8 @@ package git
 import (
 	"context"
 	"errors"
+	"os/exec"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -14,7 +16,11 @@ func (r repository) ReadConflict(ctx context.Context, path string) (scm.Conflict
 	if err != nil {
 		return scm.ConflictInputs{}, err
 	}
-	var inputs scm.ConflictInputs
+	width, err := r.conflictMarkerSize(ctx, path)
+	if err != nil {
+		return scm.ConflictInputs{}, err
+	}
+	inputs := scm.ConflictInputs{MarkerSize: width, Identity: strconv.Itoa(width) + ":"}
 	sides := [...]*scm.FileContent{nil, &inputs.Base, &inputs.Current, &inputs.Incoming}
 	for _, entry := range entries {
 		if entry.Stage < 1 || entry.Stage > 3 || (entry.Mode != "100644" && entry.Mode != "100755") {
@@ -35,4 +41,34 @@ func (r repository) ReadConflict(ctx context.Context, path string) (scm.Conflict
 		return scm.ConflictInputs{}, errors.ErrUnsupported
 	}
 	return inputs, nil
+}
+
+func (r repository) conflictMarkerSize(ctx context.Context, path string) (int, error) {
+	out, err := gitCommandContext(ctx, "-C", r.root, "check-attr", "-z", "merge", "conflict-marker-size", "--", path).Output()
+	if err != nil {
+		return 0, err
+	}
+	attrs := strings.Split(string(out), "\x00")
+	if len(attrs) != 7 {
+		return 0, errors.ErrUnsupported
+	}
+	driver := attrs[2]
+	if driver == "unspecified" {
+		out, err = gitCommandContext(ctx, "-C", r.root, "config", "--get", "merge.default").Output()
+		var exit *exec.ExitError
+		if err != nil && !(errors.As(err, &exit) && exit.ExitCode() == 1) {
+			return 0, err
+		}
+		driver = strings.TrimSpace(string(out))
+	}
+	switch driver {
+	case "", "set", "text":
+	default:
+		return 0, errors.ErrUnsupported
+	}
+	width, err := strconv.Atoi(attrs[5])
+	if err != nil || width < 1 {
+		width = 7
+	}
+	return width, nil
 }

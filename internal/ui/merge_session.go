@@ -32,11 +32,12 @@ type mergeBlock struct {
 	anchors  [2]int
 }
 type mergeSession struct {
-	buf     *buffer.Buffer
-	version uint64
-	blocks  []mergeBlock
-	valid   bool
-	labels  [2]string
+	buf        *buffer.Buffer
+	version    uint64
+	markerSize int
+	blocks     []mergeBlock
+	valid      bool
+	labels     [2]string
 }
 
 // Input excerpts come from the materialized conflict. Other lines in the
@@ -44,9 +45,13 @@ type mergeSession struct {
 func newMergeSession(buf *buffer.Buffer, inputs scm.ConflictInputs) (*mergeSession, [2][]string) {
 	var panes [2][]string
 	m := &mergeSession{buf: buf, version: buf.Version(), valid: true}
+	m.markerSize = inputs.MarkerSize
+	if m.markerSize <= 0 {
+		m.markerSize = 7
+	}
 	for i := 0; i < len(buf.Lines); {
 		line := buf.Lines[i]
-		kind, _ := gitMarker(line)
+		kind := gitMarker(line, m.markerSize)
 		if kind != '<' {
 			if kind == '>' || kind == '|' {
 				return nil, panes
@@ -57,7 +62,7 @@ func newMergeSession(buf *buffer.Buffer, inputs scm.ConflictInputs) (*mergeSessi
 			i++
 			continue
 		}
-		c, ok := gitConflictAt(buf.Lines, i)
+		c, ok := gitConflictAt(buf.Lines, i, m.markerSize)
 		if !ok {
 			return nil, panes
 		}
@@ -132,7 +137,7 @@ func (m *mergeSession) replacement(i int, choice mergeChoice) []string {
 		return slices.Clone(b.original)
 	case mergeManual:
 		lines := m.buf.Lines[b.start : b.start+b.count]
-		if c, ok := gitConflictAt(lines, 0); ok && c.end == len(lines)-1 {
+		if c, ok := gitConflictAt(lines, 0, m.markerSize); ok && c.end == len(lines)-1 {
 			end := c.separator
 			if c.base >= 0 {
 				end = c.base

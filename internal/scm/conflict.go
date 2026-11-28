@@ -11,4 +11,5 @@ type ConflictReader interface {
 type ConflictInputs struct {
 	Base, Current, Incoming FileContent
 	Identity                string
+	MarkerSize              int
 }

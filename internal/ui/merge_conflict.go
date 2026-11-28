@@ -22,6 +22,10 @@ func conflictAt(lines []string, header int) (mergeConflict, bool) {
 	if header < 0 || header >= len(lines) || !conflictHeader(lines[header]) {
 		return mergeConflict{}, false
 	}
+	if !strings.HasPrefix(strings.TrimSpace(lines[header]), "<<<<<<<") {
+		width := strings.IndexByte(lines[header], ' ')
+		return gitConflictAt(lines, header, width)
+	}
 	c := mergeConflict{start: header, separator: -1, end: -1, base: -1}
 	for i := header + 1; i < len(lines); i++ {
 		marker := strings.TrimSpace(lines[i])
@@ -44,7 +48,11 @@ func conflictHeader(line string) bool {
 		case ' ', '\t':
 			continue
 		}
-		return strings.HasPrefix(line[i:], "<<<<<<<")
+		if strings.HasPrefix(line[i:], "<<<<<<<") {
+			return true
+		}
+		width := strings.IndexByte(line, ' ')
+		return i == 0 && width > 0 && width < 7 && gitMarker(line, width) == '<'
 	}
 	return false
 }
