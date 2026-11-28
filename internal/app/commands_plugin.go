@@ -262,12 +262,16 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 		}
 	}
 	if err != nil {
-		a.ShowConfirmDialogEx(i18n.Text("plugins.updateFailed"), err.Error(), []string{i18n.Text("general.close")}, []func(){
+		a.ShowConfirmDialogEx(i18n.Text("plugins.updateFailed"), i18n.Format("plugins.updateFailedReason", i18n.Args{"name": result.update.Name(), "reason": err.Error()}), []string{i18n.Text("general.close")}, []func(){
 			func() { a.DismissDialog() },
 		})
 		return
 	}
 	if needsApproval && p != nil {
+		if a.pluginUpdateApprovals == nil {
+			a.pluginUpdateApprovals = map[*plugin.Plugin]bool{}
+		}
+		a.pluginUpdateApprovals[p] = true
 		a.PendingPluginApprovals = append(a.PendingPluginApprovals, p)
 		if len(a.PendingPluginApprovals) == 1 {
 			a.ShowPluginApprovalDialog(p)
@@ -282,6 +286,7 @@ func (a *App) HandlePluginUpdateResult(result *PluginUpdateResult) {
 			a.installPluginThemes(p)
 			a.installPluginLanguages(p)
 		}
+		a.StatusNotify(i18n.Format("status.pluginUpToDate", i18n.Args{"name": p.Name}))
 	}
 	if a.PluginsPanel != nil {
 		a.PluginsPanel.Refresh()
@@ -408,6 +413,7 @@ func (a *App) PluginToggleByName(name string, enabled bool) {
 }
 
 func (a *App) PluginUpdateByName(name string) {
+	a.StatusNotify(i18n.Format("status.updatingPlugin", i18n.Args{"name": name}))
 	update := a.PluginManager.PrepareUpdate(name)
 	go func() {
 		err := update.Fetch()

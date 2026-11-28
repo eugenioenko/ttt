@@ -65,7 +65,11 @@ func (a *App) ShowPluginApprovalDialog(p *plugin.Plugin) {
 			if err := a.PluginManager.ApproveAndLoad(p); err == nil {
 				a.WirePlugin(p)
 				a.installPluginGrammars(p)
+				if a.pluginUpdateApprovals[p] {
+					a.StatusNotify(i18n.Format("status.pluginUpToDate", i18n.Args{"name": p.Name}))
+				}
 			}
+			delete(a.pluginUpdateApprovals, p)
 			a.updatePluginDetailButtons()
 			if a.PluginsPanel != nil {
 				a.PluginsPanel.Refresh()
@@ -133,6 +137,7 @@ func (a *App) requestPluginApproval(p *plugin.Plugin) {
 // ttt-installed clone (or disables an on-disk one) so it stops prompting,
 // resets the install button, and advances to the next pending approval.
 func (a *App) denyPluginApproval(p *plugin.Plugin) {
+	delete(a.pluginUpdateApprovals, p)
 	if err := a.PluginManager.DenyPlugin(p); err != nil {
 		slog.Error("deny plugin", "error", err)
 	}

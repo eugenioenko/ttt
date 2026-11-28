@@ -128,6 +128,7 @@ type App struct {
 	PluginManager          *plugin.Manager
 	PluginsPanel           *PluginsPanel
 	PendingPluginApprovals []*plugin.Plugin
+	pluginUpdateApprovals  map[*plugin.Plugin]bool
 	approvalDialog         ui.Widget
 	pluginDetailWidgets    map[string]*pluginDetailState
 	pluginDrawer           ui.Widget

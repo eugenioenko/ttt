@@ -152,6 +152,7 @@ func TestPluginUpdateSwapsLuaStateOnUIGoroutine(t *testing.T) {
 	h.assertContains("pdf sidebar 2.0.0")
 	h.assertContains("pdf page 2.0.0")
 	h.assertNotContains("Binary file")
+	h.assertContains("pdfview is up to date.")
 }
 
 func TestDisabledPluginUpdateRefreshesActiveTheme(t *testing.T) {
@@ -225,6 +226,22 @@ func TestPluginUpdateNeedingApprovalReleasesPanels(t *testing.T) {
 	}
 	h.assertContains("pdfview requests")
 	h.assertNotContains("pdf page")
+	h.assertNotContains("is up to date.")
+
+	clickDialogButton(t, h, "Allow")
+	h.assertContains("pdfview is up to date.")
+}
+
+func TestPluginUpdateFailureNamesPluginAndReason(t *testing.T) {
+	h, _, pdf := newUpdatablePluginHarness(t, "")
+	defer h.stop()
+	gitIn(t, filepath.Join(h.dir, "config", "plugins", "pdfview"), "remote", "set-url", "origin", filepath.Join(h.dir, "missing-remote"))
+
+	h.awaitPluginUpdate("pdfview", pdf)
+
+	h.assertContains("Update Failed")
+	h.assertContains("Could not update pdfview:")
+	h.assertNotContains("is up to date.")
 }
 
 func clickDialogButton(t *testing.T, h *testHarness, label string) {
