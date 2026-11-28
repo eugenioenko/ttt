@@ -291,6 +291,7 @@ func (e *PluginEditorAPI) EndUndoGroup() {
 		return
 	}
 	stack := e.undoGroups[n-1]
+	e.undoGroups[n-1] = nil
 	e.undoGroups = e.undoGroups[:n-1]
 	if stack != nil {
 		stack.EndTransaction()
