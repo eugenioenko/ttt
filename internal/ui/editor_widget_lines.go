@@ -861,7 +861,15 @@ func (e *EditorPaneWidget) applyTwigDelimiters(delims []lineCommentDelims, start
 func (e *EditorPaneWidget) applySvelteDelimiters(delims []lineCommentDelims, startLine, endLine int) {
 	for i := range delims {
 		switch e.Highlighter.SvelteContextAt(e.Buf, startLine+i) {
-		case highlight.SvelteScript, highlight.SvelteExpression:
+		case highlight.SvelteScript:
+			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+		case highlight.SvelteExpression:
+			// A line that carries the expression's closing brace cannot take a
+			// // comment: it would comment out the brace and break the template.
+			if svelteExpressionCloses(e.Buf.Lines[startLine+i]) {
+				delims[i] = lineCommentDelims{skip: true, col: -1}
+				continue
+			}
 			delims[i] = lineCommentDelims{prefix: "//", col: -1}
 		case highlight.SvelteStyle:
 			delims[i] = lineCommentDelims{prefix: "/*", postfix: "*/", col: -1}
@@ -869,6 +877,50 @@ func (e *EditorPaneWidget) applySvelteDelimiters(delims []lineCommentDelims, sta
 			delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
 		}
 	}
+}
+
+// svelteExpressionCloses reports whether line holds the } that ends a template
+// expression opened on an earlier line. Braces nested within the line (an
+// object literal) and braces inside strings and comments do not count.
+func svelteExpressionCloses(line string) bool {
+	depth := 0
+	for i := 0; i < len(line); i++ {
+		switch c := line[i]; {
+		case c == '/' && i+1 < len(line) && line[i+1] == '/':
+			return false
+		case c == '/' && i+1 < len(line) && line[i+1] == '*':
+			end := strings.Index(line[i+2:], "*/")
+			if end < 0 {
+				return false
+			}
+			i += end + 3
+		case c == '\'' || c == '"' || c == '`':
+			i = skipScriptLiteral(line, i)
+		case c == '{':
+			depth++
+		case c == '}':
+			if depth == 0 {
+				return true
+			}
+			depth--
+		}
+	}
+	return false
+}
+
+// skipScriptLiteral returns the index just past the JavaScript string or
+// template literal opening at i.
+func skipScriptLiteral(text string, i int) int {
+	quote := text[i]
+	for i++; i < len(text); i++ {
+		switch text[i] {
+		case '\\':
+			i++
+		case quote:
+			return i + 1
+		}
+	}
+	return len(text)
 }
 
 func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startLine, endLine int) {
@@ -1301,6 +1353,9 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 	commentCol := -1
 	if !allCommented {
 		for l := startLine; l <= endLine; l++ {
+			if delims[l-startLine].skip {
+				continue
+			}
 			line := e.Buf.Lines[l]
 			if leadingWhitespace(line) == line {
 				continue
@@ -1315,8 +1370,8 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			// A tab crossing the shallowest indent ends at the next tab stop.
 			// Align before the earliest such tab to preserve every indent byte.
 			shallowest := commentCol
-			for _, line := range e.Buf.Lines[startLine : endLine+1] {
-				if leadingWhitespace(line) == line {
+			for l, line := range e.Buf.Lines[startLine : endLine+1] {
+				if delims[l].skip || leadingWhitespace(line) == line {
 					continue
 				}
 				col := visualColToBufCol(line, shallowest, tabW)

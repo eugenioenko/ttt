@@ -584,6 +584,45 @@ func TestToggleLineCommentSvelteUsesLineCommentInExpression(t *testing.T) {
 	}
 }
 
+// The closing line of a multi-line template expression must stay untouched:
+// a // marker there would comment out the } and leave the template open.
+func TestToggleLineCommentSvelteSkipsExpressionClosingLine(t *testing.T) {
+	original := []string{"<div>", "  {items.map((item) => (", "    item.name", "  ))}", "</div>"}
+	e := newCommentEditor(t, "a.svelte", slices.Clone(original), 3, len("  ))}"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(2, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<div>", "  {items.map((item) => (", "    // item.name", "  ))}", "</div>"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
+func TestSvelteExpressionCloses(t *testing.T) {
+	for _, tc := range []struct {
+		line string
+		want bool
+	}{
+		{"  ))}", true},
+		{"}", true},
+		{"  item.name", false},
+		{"  {a: 1}", false},
+		{"  '}'", false},
+		{"  `}`", false},
+		{"  // }", false},
+	} {
+		if got := svelteExpressionCloses(tc.line); got != tc.want {
+			t.Errorf("svelteExpressionCloses(%q) = %v, want %v", tc.line, got, tc.want)
+		}
+	}
+}
+
 func TestToggleLineCommentTwigUsesTwigComment(t *testing.T) {
 	original := []string{"<div>", "  <p>Hello</p>", "</div>"}
 	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, 6)
