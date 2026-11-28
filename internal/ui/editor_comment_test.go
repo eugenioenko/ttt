@@ -586,7 +586,7 @@ func TestToggleLineCommentRSTPerLineComments(t *testing.T) {
 	if !slices.Equal(e.Buf.Lines, want) {
 		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, want)
 	}
-	}
+}
 
 // Ordinary inline comments such as ".. Keep this" are preserved as comments
 // and toggle normally.
@@ -868,8 +868,6 @@ func TestToggleLineCommentTwigLeavesLiteralCommentInVerbatim(t *testing.T) {
 		t.Fatalf("second toggle left verbatim line changed = %q, want %q", e.Buf.Lines[1], original[1])
 	}
 }
-
-
 
 func TestToggleLineCommentVimLegacyUsesDoubleQuote(t *testing.T) {
 	original := []string{"\" a header", "let x = 1"}
