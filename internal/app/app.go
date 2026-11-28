@@ -99,6 +99,7 @@ type App struct {
 	Repository                *RepositoryState
 	runningRepoOp             string // Progress label, empty when idle.
 	pendingCurrentChangesOpen bool
+	mergeCompletion           *asynctask.Task[mergeStageTarget]
 	diffOpenTask              *asynctask.Task[*diffOpenResult]
 	inlineDiffRepos           map[string]inlineDiffRepo
 	blame                     statusBlameState

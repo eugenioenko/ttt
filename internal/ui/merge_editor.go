@@ -37,6 +37,15 @@ func (g *EditorGroupWidget) EndMerge() {
 		t.Merge = nil
 	}
 }
+func (g *EditorGroupWidget) EndMergeSession(m *MergeEditorWidget) {
+	for i := range g.tabs {
+		if m != nil && g.tabs[i].Merge == m {
+			m.close()
+			g.tabs[i].Merge = nil
+			return
+		}
+	}
+}
 func (g *EditorGroupWidget) visualMerge() *MergeEditorWidget {
 	if m := g.MergeEditor(); m != nil && m.View != config.MergeText && g.ActiveBuffer() == m.session.buf {
 		return m

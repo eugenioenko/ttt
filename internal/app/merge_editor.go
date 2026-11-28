@@ -3,6 +3,8 @@ package app
 import (
 	"context"
 	"errors"
+	"github.com/eugenioenko/ttt/internal/asynctask"
+	"os"
 	"path/filepath"
 
 	"github.com/eugenioenko/ttt/internal/command"
@@ -102,49 +104,101 @@ func (a *App) completeMerge() {
 	if root == "" {
 		root = filepath.Dir(path)
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), repositoryStatusTimeout)
-	defer cancel()
-	repo, err := a.Repository.repositorySource(root).resolve(ctx)
-	if err != nil {
-		a.StatusError(err.Error())
+	source := a.Repository.repositorySource(root)
+	buf := g.ActiveBuffer()
+	version, identity := buf.Version(), m.Identity
+	active := func() bool {
+		return a.EditorGroup == g && g.ActiveFilePath() == path && g.ActiveBuffer() == buf && g.MergeEditor() == m
+	}
+	if a.mergeCompletion == nil {
+		a.mergeCompletion = NewTask[mergeStageTarget](a, asynctask.TaskOptions{})
+	}
+	if a.mergeCompletion.Pending() {
 		return
+	}
+	a.mergeCompletion.Schedule(func(ctx context.Context) (mergeStageTarget, error) {
+		return prepareMergeStage(ctx, source, path, identity)
+	}, func(target mergeStageTarget, err error) {
+		if !active() || buf.Version() != version {
+			return
+		}
+		if err != nil {
+			a.StatusWarn(err.Error())
+			return
+		}
+		a.saveFile(func() {
+			if !active() || !m.CanComplete() {
+				return
+			}
+			saved, err := os.Stat(path)
+			if err != nil {
+				a.StatusError(err.Error())
+				return
+			}
+			a.mergeCompletion.Schedule(func(ctx context.Context) (mergeStageTarget, error) {
+				return target, target.stageSaved(ctx, identity, path, saved)
+			}, func(_ mergeStageTarget, err error) {
+				if err != nil {
+					a.StatusError(err.Error())
+					return
+				}
+				g.EndMergeSession(m)
+				a.Changes.applied(nil)
+			})
+		})
+	})
+}
+
+type mergeStageTarget struct {
+	reader scm.ConflictReader
+	stager scm.Staging
+	rel    string
+}
+
+func prepareMergeStage(ctx context.Context, source repositorySource, path, identity string) (mergeStageTarget, error) {
+	ctx, cancel := context.WithTimeout(ctx, repositoryStatusTimeout)
+	defer cancel()
+	repo, err := source.resolve(ctx)
+	if err != nil {
+		return mergeStageTarget{}, err
 	}
 	reader, ok := repo.(scm.ConflictReader)
 	stager, canStage := repo.(scm.Staging)
 	rel, err := filepath.Rel(repo.Root(), path)
 	if !ok || !canStage || err != nil {
-		a.StatusWarn(i18n.Text("merge.unsupported"))
-		return
+		return mergeStageTarget{}, errors.ErrUnsupported
 	}
-	rel = filepath.ToSlash(rel)
-	check := func(ctx context.Context) bool {
-		inputs, err := reader.ReadConflict(ctx, rel)
-		if err != nil || inputs.Identity != m.Identity {
-			a.StatusWarn(i18n.Text("merge.changed"))
-			return false
-		}
-		return true
-	}
-	if !check(ctx) {
-		return
-	}
-	a.saveFile(func() {
-		if a.EditorGroup != g || g.ActiveFilePath() != path || g.MergeEditor() != m || !m.CanComplete() {
-			return
-		}
-		ctx, cancel := context.WithTimeout(context.Background(), repositoryStatusTimeout)
-		defer cancel()
-		if !check(ctx) {
-			return
-		}
-		if err := stager.Stage(ctx, []string{rel}); err != nil {
-			a.StatusError(err.Error())
-			return
-		}
-		g.EndMerge()
-		a.Changes.applied(nil)
-	})
+	target := mergeStageTarget{reader: reader, stager: stager, rel: filepath.ToSlash(rel)}
+	return target, target.check(ctx, identity)
 }
+
+func (target mergeStageTarget) stageSaved(ctx context.Context, identity, path string, saved os.FileInfo) error {
+	ctx, cancel := context.WithTimeout(ctx, repositoryStatusTimeout)
+	defer cancel()
+	if err := target.check(ctx, identity); err != nil {
+		return err
+	}
+	now, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	if !os.SameFile(now, saved) || now.Size() != saved.Size() || !now.ModTime().Equal(saved.ModTime()) {
+		return errors.New(i18n.Text("merge.changed"))
+	}
+	return target.stager.Stage(ctx, []string{target.rel})
+}
+
+func (t mergeStageTarget) check(ctx context.Context, identity string) error {
+	got, err := t.reader.ConflictIdentity(ctx, t.rel)
+	if err != nil && !errors.Is(err, errors.ErrUnsupported) {
+		return err
+	}
+	if err != nil || got != identity {
+		return errors.New(i18n.Text("merge.changed"))
+	}
+	return nil
+}
+
 func (a *App) openSelectedMerge() {
 	dir, change, ok := a.Changes.SelectedFile()
 	if !ok || change.Kind != scm.Conflicted {
