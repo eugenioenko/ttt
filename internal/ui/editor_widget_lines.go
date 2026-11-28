@@ -1386,20 +1386,53 @@ func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo
 	}
 	trimmed := func(l int) string { return strings.TrimLeft(e.Buf.Lines[l], " \t") }
 
+	// Identify the outer RST comment and its indented continuation markers.
+	// An outer comment is a line with a ".. " marker whose continuations are
+	// lines indented strictly more than the outer comment's indentation.
+	// Lines at the same indentation as the outer comment are treated as
+	// independent sibling comments.
+	first := nonBlank[0]
+	outerBase := indent(first)
+	outerIsMarker := isRSTCommentMarker(trimmed(first))
+
+	// Find the extent of the outer comment: the first line plus any
+	// continuations indented strictly more than outerBase.
+	outerEnd := first
+	if outerIsMarker {
+		for _, l := range nonBlank[1:] {
+			if indent(l) <= outerBase {
+				break
+			}
+			outerEnd = l
+		}
+	}
+
+	// perLine is true when every non-blank line is a marker at the same
+	// indentation (no continuations anywhere).
 	perLine := true
-	for _, l := range nonBlank {
+	for i, l := range nonBlank {
 		if !isRSTCommentMarker(trimmed(l)) {
 			perLine = false
 			break
 		}
+		if i > 0 && indent(l) != indent(nonBlank[i-1]) {
+			perLine = false
+			break
+		}
 	}
-	first := nonBlank[0]
-	block := !perLine && isRSTCommentMarker(trimmed(first))
+
+	// block is true when the first line is a marker followed by at least one
+	// continuation indented more than it.
+	block := outerIsMarker && outerEnd > first
+
+	// If the first line is a marker with continuations but there are sibling
+	// markers after the continuations at the same indent, treat the siblings
+	// as per-line comments. The outer comment + its continuations form a
+	// block; the siblings are independent.
 	if block {
-		base := indent(first)
-		for _, l := range nonBlank[1:] {
-			if indent(l) <= base {
-				block = false
+		for _, l := range nonBlank[outerEnd+1:] {
+			if isRSTCommentMarker(trimmed(l)) && indent(l) == outerBase {
+				perLine = true
 				break
 			}
 		}
@@ -1475,50 +1508,53 @@ func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo
 		}
 	}
 
+	// Handle masked markup lines first, since they need special treatment
+	// regardless of the block/perLine structure.
+	if len(masked) > 0 {
+		for _, l := range nonBlank {
+			if masked[l] {
+				t := strings.TrimLeft(e.Buf.Lines[l], " \t")
+				payload := strings.TrimSpace(t[3:])
+				base := indent(l)
+				remove(l, base, markerLen(l))
+				newContent := "..\n   " + payload
+				cmd := &undo.ReplaceLinesCommand{
+					Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{newContent},
+				}
+				cmd.Apply(e.Buf)
+				cmds = append(cmds, cmd)
+				oldLen := len([]rune(e.Buf.Lines[l]))
+				newLen := len([]rune(newContent))
+				delta := newLen - oldLen
+				mapColumns(l, func(c int, isStart bool) int {
+					if c > base && c <= base+2 {
+						return base + 2
+					}
+					if c > base+2 {
+						return c + delta
+					}
+					return c
+				})
+			}
+		}
+		return
+	}
+
 	switch {
-	case perLine && len(masked) == 0:
-		// All lines are plain comments; strip the marker from each.
+	case perLine:
+		// All lines are independent markers at the same indent. Strip each.
 		for _, l := range nonBlank {
 			remove(l, indent(l), markerLen(l))
 		}
-	case len(masked) > 0:
-					// At least one line carries masked markup. Convert each masked line to
-			// block comment form (marker on its own line, payload indented under it)
-			// and leave plain-comment and non-comment lines alone.
-			for _, l := range nonBlank {
-				if masked[l] {
-					t := strings.TrimLeft(e.Buf.Lines[l], " \t")
-					payload := strings.TrimSpace(t[3:])
-					base := indent(l)
-					// Remove the existing ".. " marker.
-					remove(l, base, markerLen(l))
-					// Build the new content: "..\n   <payload>"
-					newContent := "..\n   " + payload
-					// Use a replace command to set the new line content.
-					cmd := &undo.ReplaceLinesCommand{
-						Start: l, OldLines: []string{e.Buf.Lines[l]}, NewLines: []string{newContent},
-					}
-					cmd.Apply(e.Buf)
-					cmds = append(cmds, cmd)
-					// Update column mapping for the changed line.
-					oldLen := len([]rune(e.Buf.Lines[l]))
-					newLen := len([]rune(newContent))
-					delta := newLen - oldLen
-					mapColumns(l, func(c int, isStart bool) int {
-						if c > base && c <= base+2 {
-							return base + 2
-						}
-						if c > base+2 {
-							return c + delta
-						}
-						return c
-					})
-				}
-			}
 	case block:
+		// The first line is a marker with continuations. Remove the marker from
+		// the first line and the indentation from the continuations.
 		base := indent(first)
 		remove(first, base, markerLen(first))
 		for _, l := range nonBlank[1:] {
+			if l > outerEnd {
+				break
+			}
 			runes := []rune(e.Buf.Lines[l])
 			n := 0
 			for n < 3 && base+n < len(runes) && runes[base+n] == ' ' {
@@ -1526,7 +1562,14 @@ func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo
 			}
 			remove(l, base, n)
 		}
+		// Handle sibling markers after the outer comment's continuations.
+		for _, l := range nonBlank[outerEnd+1:] {
+			if isRSTCommentMarker(trimmed(l)) && indent(l) == outerBase {
+				remove(l, indent(l), markerLen(l))
+			}
+		}
 	default:
+		// Lines are not comments; add markers using block form.
 		base := indent(first)
 		for _, l := range nonBlank {
 			base = min(base, indent(l))

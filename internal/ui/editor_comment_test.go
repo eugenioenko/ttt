@@ -586,7 +586,7 @@ func TestToggleLineCommentRSTPerLineComments(t *testing.T) {
 	if !slices.Equal(e.Buf.Lines, want) {
 		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, want)
 	}
-}
+	}
 
 // Ordinary inline comments such as ".. Keep this" are preserved as comments
 // and toggle normally.
