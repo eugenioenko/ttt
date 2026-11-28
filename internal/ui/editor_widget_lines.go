@@ -934,6 +934,13 @@ func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startL
 			continue
 		}
 		if col, ok := phpOpenTagContent(line); ok {
+			// <?= implies an echo, so a // after the tag would leave it with no
+			// expression to print. Nothing safely disables a short echo from
+			// inside the construct, so leave those lines alone.
+			if phpShortEchoTag(line) {
+				delims[i] = lineCommentDelims{skip: true, col: col}
+				continue
+			}
 			delims[i] = phpCodeDelims(line, col, false)
 			continue
 		}
@@ -1028,6 +1035,11 @@ func phpCloseTagContext(text string) (protected, real, balanced bool) {
 		}
 	}
 	return protected, real, !block && quote == 0
+}
+
+// phpShortEchoTag reports whether line starts with the <?= short echo tag.
+func phpShortEchoTag(line string) bool {
+	return strings.HasPrefix(strings.TrimLeft(line, " \t"), "<?=")
 }
 
 // phpLeadingOpenTag reports whether line starts with a PHP opening tag.

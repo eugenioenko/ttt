@@ -432,6 +432,27 @@ func TestToggleLineCommentPHPRealCloseTagKeepsLineComment(t *testing.T) {
 	}
 }
 
+// <?= implies echo, so a // after the tag would leave an echo without an
+// expression. The line is left alone, and the rest of the selection still
+// toggles back cleanly.
+func TestToggleLineCommentPHPLeavesShortEcho(t *testing.T) {
+	original := []string{"<?= $name ?>", "<div>hi</div>"}
+	e := newCommentEditor(t, "a.php", slices.Clone(original), 1, len("<div>hi</div>"))
+	e.Selection = &selection.Selection{}
+	e.Selection.Start(0, 0)
+
+	e.ToggleLineComment()
+	want := []string{"<?= $name ?>", "<!-- <div>hi</div> -->"}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
 // A mixed file picks the marker per line and restores every line.
 func TestToggleLineCommentPHPMixedSelection(t *testing.T) {
 	original := []string{"<?php", "$name = 'x';", "?>", "<div>hi</div>"}
