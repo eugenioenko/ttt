@@ -859,7 +859,15 @@ func (e *EditorPaneWidget) applyTwigDelimiters(delims []lineCommentDelims, start
 		case highlight.TwigStyle:
 			delims[i] = lineCommentDelims{prefix: "/*", postfix: "*/", col: -1}
 		case highlight.TwigVerbatim:
-			delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+			// In a verbatim block, Twig comments are literal text, not actual
+			// comments, so only HTML comments are recognized. Lines whose first
+			// non-blank content is a Twig comment opener are left unchanged.
+			trimmed := strings.TrimLeft(e.Buf.Lines[startLine+i], " \t")
+			if strings.HasPrefix(trimmed, "{#") {
+				delims[i] = lineCommentDelims{skip: true, col: -1}
+			} else {
+				delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+			}
 		default:
 			delims[i] = lineCommentDelims{prefix: "{#", postfix: "#}", col: -1}
 		}
@@ -1204,9 +1212,11 @@ func commentDelimitersFor(text, prefix, postfix, lang string) (string, string, b
 		return "", "", false
 	}
 	// Twig files carry both Twig and HTML comments; markup, script, and style
-	// lines are recognized by the marker each context uses.
+	// lines are recognized by the marker each context uses. Inside a verbatim
+	// block, Twig comments are literal text, so only recognize them when the
+	// line's context actually uses Twig comment delimiters.
 	if lang == "twig" {
-		if hasCommentPrefix(text, "{#") && isWholeLineComment(text, "{#", "#}", lang) {
+		if prefix == "{#" && hasCommentPrefix(text, "{#") && isWholeLineComment(text, "{#", "#}", lang) {
 			return "{#", "#}", true
 		}
 		if hasCommentPrefix(text, "<!--") && isWholeLineComment(text, "<!--", "-->", lang) {

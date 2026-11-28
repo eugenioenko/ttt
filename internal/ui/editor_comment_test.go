@@ -772,6 +772,23 @@ func TestToggleLineCommentTwigUncommentsHTMLComment(t *testing.T) {
 	}
 }
 
+// Twig comments inside a verbatim block are literal text, not actual comments,
+// so they must not be recognized or removed when toggling.
+func TestToggleLineCommentTwigLeavesLiteralCommentInVerbatim(t *testing.T) {
+	original := []string{"{% verbatim %}", "  {# this is literal #}", "{% endverbatim %}"}
+	e := newCommentEditor(t, "a.twig", slices.Clone(original), 1, len("{# this is literal #}"+"  "))
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("verbatim line with literal Twig comment = %q, want unchanged %q", e.Buf.Lines[1], original[1])
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("second toggle left verbatim line changed = %q, want %q", e.Buf.Lines[1], original[1])
+	}
+}
+
 func TestToggleLineCommentVimLegacyUsesDoubleQuote(t *testing.T) {
 	original := []string{"\" a header", "let x = 1"}
 	e := newCommentEditor(t, "a.vim", slices.Clone(original), 1, 0)
