@@ -356,24 +356,46 @@ func (e *EditorPaneWidget) commentSyntax() (prefix, postfix string) {
 			prefix = "#"
 		case "elm", "haskell", "lean", "lua", "plsql", "sql", "vhdl":
 			prefix = "--"
-		case "angular-html", "html", "html-derivative", "xml":
+		// Markdown has no comment of its own; an HTML comment is what most
+		// parsers pass through, so it also takes the XML escaping below.
+		case "angular-html", "html", "html-derivative", "markdown", "svelte", "vue", "xml":
 			return "<!--", "-->"
 		case "css", "less", "scss":
 			return "/*", "*/"
+		// SAS has no line comment marker; a block comment is the only form
+		// that safely wraps a statement containing a semicolon. The
+		// "* ... ;" comment statement is still recognized when unwrapping.
+		case "sas":
+			return "/*", "*/"
 		case "coq", "ocaml":
 			return "(*", "*)"
-		case "jinja":
+		case "handlebars":
+			return "{{!", "}}"
+		case "jinja", "twig":
 			return "{#", "#}"
 		case "smalltalk":
 			return "\"", "\""
-		case "ahk", "clojure", "common-lisp", "fennel", "hy", "reg", "scheme":
+		// Assembly comment prefixes vary by dialect; the bundled x86 grammar
+		// uses ";" for every file it claims.
+		case "ahk", "asm", "clojure", "common-lisp", "fennel", "hy", "ini", "reg", "scheme":
 			prefix = ";"
+		case "cobol":
+			prefix = "*>"
+		// WebAssembly text uses two semicolons; a single one is not a comment.
+		case "wasm":
+			prefix = ";;"
+		case "rst":
+			prefix = ".."
 		case "bat":
 			prefix = "REM"
 		case "erlang", "tex":
 			prefix = "%"
 		case "vb":
 			prefix = "'"
+		// Legacy Vim script uses a double quote; Vim9 script, selected by a
+		// leading vim9script command, uses a hash instead.
+		case "viml":
+			prefix = "\""
 		}
 	}
 	return prefix, ""
@@ -386,6 +408,59 @@ func (e *EditorPaneWidget) commentLanguage() string {
 		return ""
 	}
 	return highlight.CanonicalLanguageID(e.Highlighter.LanguageID())
+}
+
+// commentMarkerStart returns the rune column where a comment marker belongs
+// and the line's text from there with trailing whitespace removed. COBOL
+// fixed-format source may carry a sequence number field in its first six
+// columns, which is not source text and must not receive the marker.
+func (e *EditorPaneWidget) commentMarkerStart(line string) (int, string) {
+	runes := []rune(line)
+	indent := len(runes) - len([]rune(strings.TrimLeft(line, " \t")))
+	if indent == len(runes) {
+		return indent, ""
+	}
+	if e.commentLanguage() == "php" {
+		if col, ok := phpOpenTagContent(line); ok {
+			return col, strings.TrimRight(string(runes[col:]), " \t")
+		}
+	}
+	if e.commentLanguage() == "cobol" {
+		if col := cobolCommentColumn(line); col > indent {
+			return col, strings.TrimRight(string(runes[col:]), " \t")
+		}
+	}
+	return indent, strings.TrimRight(string(runes[indent:]), " \t")
+}
+
+// cobolCommentColumn places the marker after the indentation, or after a
+// fixed-format sequence number field so it starts in the indicator area.
+func cobolCommentColumn(line string) int {
+	indent := len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
+	if indent < 6 && isCOBOLSequenceArea(line) {
+		return 6
+	}
+	return indent
+}
+
+// isCOBOLSequenceArea reports whether the first six runes look like a fixed-
+// format sequence number field: digits and blanks with at least one digit.
+func isCOBOLSequenceArea(line string) bool {
+	runes := []rune(line)
+	if len(runes) < 6 {
+		return false
+	}
+	digit := false
+	for _, r := range runes[:6] {
+		switch {
+		case r >= '0' && r <= '9':
+			digit = true
+		case r == ' ':
+		default:
+			return false
+		}
+	}
+	return digit
 }
 
 // escapeXMLCommentText spells every character that may not appear inside an
@@ -605,6 +680,341 @@ func isQuotedStringIDRune(r rune) bool {
 	return false
 }
 
+func isJSXLanguage(lang string) bool {
+	switch lang {
+	case "javascriptreact", "jsx", "tsx", "typescriptreact":
+		return true
+	}
+	return false
+}
+
+type lineCommentDelims struct {
+	prefix, postfix string
+	// col is the rune column for the prefix, or -1 for the range's shared
+	// column. PHP opening tags sit before the code their line comments.
+	col int
+	// skip leaves a line untouched: it cannot carry a comment marker without
+	// breaking the surrounding syntax, such as a lone <?php tag.
+	skip bool
+}
+
+// commentDelimitersPerLine returns the delimiters to use for each line of the
+// range. JSX and TSX depend on whether a line starts in markup or in code, and
+// PHP on whether it starts inside a PHP block; every other language uses one
+// form for the whole range.
+func (e *EditorPaneWidget) commentDelimitersPerLine(startLine, endLine int, prefix, postfix, lang string) []lineCommentDelims {
+	delims := make([]lineCommentDelims, endLine-startLine+1)
+	for i := range delims {
+		delims[i] = lineCommentDelims{prefix: prefix, postfix: postfix, col: -1}
+	}
+	if lang == "php" {
+		e.applyPHPDelimiters(delims, startLine, endLine)
+		return delims
+	}
+	if lang == "svelte" {
+		e.applySvelteDelimiters(delims, startLine, endLine)
+		return delims
+	}
+	if lang == "twig" {
+		e.applyTwigDelimiters(delims, startLine, endLine)
+		return delims
+	}
+	if lang == "vue" {
+		e.applyVueDelimiters(delims, startLine, endLine)
+		return delims
+	}
+	if lang == "viml" && isVim9Script(e.Buf.Lines) {
+		for i := range delims {
+			delims[i] = lineCommentDelims{prefix: "#", col: -1}
+		}
+		return delims
+	}
+	if !isJSXLanguage(lang) || e.Highlighter == nil {
+		return delims
+	}
+	for i := range delims {
+		if e.Highlighter.JSXMarkupAt(e.Buf, startLine+i) {
+			delims[i] = lineCommentDelims{prefix: "{/*", postfix: "*/}", col: -1}
+		}
+	}
+	return delims
+}
+
+func (e *EditorPaneWidget) applyVueDelimiters(delims []lineCommentDelims, startLine, endLine int) {
+	for i := range delims {
+		switch e.Highlighter.VueContextAt(e.Buf, startLine+i) {
+		case highlight.VueScript:
+			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+		case highlight.VueStyle:
+			delims[i] = lineCommentDelims{prefix: "/*", postfix: "*/", col: -1}
+		default:
+			delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+		}
+	}
+}
+
+// isVim9Script reports whether lines are a Vim9 script, selected by a leading
+// vim9script command. Blank lines and comments may precede it.
+func isVim9Script(lines []string) bool {
+	const marker = "vim9script"
+	for _, line := range lines {
+		trimmed := strings.TrimLeft(line, " \t")
+		if trimmed == "" || strings.HasPrefix(trimmed, "\"") || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		if !strings.HasPrefix(trimmed, marker) {
+			return false
+		}
+		return len(trimmed) == len(marker) || trimmed[len(marker)] == ' ' || trimmed[len(marker)] == '\t'
+	}
+	return false
+}
+
+func (e *EditorPaneWidget) applyTwigDelimiters(delims []lineCommentDelims, startLine, endLine int) {
+	for i := range delims {
+		switch e.Highlighter.TwigContextAt(e.Buf, startLine+i) {
+		case highlight.TwigScript:
+			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+		case highlight.TwigStyle:
+			delims[i] = lineCommentDelims{prefix: "/*", postfix: "*/", col: -1}
+		case highlight.TwigVerbatim:
+			delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+		default:
+			delims[i] = lineCommentDelims{prefix: "{#", postfix: "#}", col: -1}
+		}
+	}
+}
+
+func (e *EditorPaneWidget) applySvelteDelimiters(delims []lineCommentDelims, startLine, endLine int) {
+	for i := range delims {
+		switch e.Highlighter.SvelteContextAt(e.Buf, startLine+i) {
+		case highlight.SvelteScript, highlight.SvelteExpression:
+			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+		case highlight.SvelteStyle:
+			delims[i] = lineCommentDelims{prefix: "/*", postfix: "*/", col: -1}
+		default:
+			delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+		}
+	}
+}
+
+func (e *EditorPaneWidget) applyPHPDelimiters(delims []lineCommentDelims, startLine, endLine int) {
+	starts := phpCodeStarts(e.Buf.Lines, endLine)
+	for i := range delims {
+		line := e.Buf.Lines[startLine+i]
+		if starts[startLine+i] {
+			delims[i] = lineCommentDelims{prefix: "//", col: -1}
+			continue
+		}
+		if col, ok := phpOpenTagContent(line); ok {
+			delims[i] = lineCommentDelims{prefix: "//", col: col}
+			continue
+		}
+		if phpLeadingOpenTag(line) {
+			delims[i].skip = true
+			continue
+		}
+		delims[i] = lineCommentDelims{prefix: "<!--", postfix: "-->", col: -1}
+	}
+}
+
+// phpLeadingOpenTag reports whether line starts with a PHP opening tag.
+func phpLeadingOpenTag(line string) bool {
+	runes := []rune(line)
+	i := 0
+	for i < len(runes) && (runes[i] == ' ' || runes[i] == '\t') {
+		i++
+	}
+	rest := string(runes[i:])
+	return (len(rest) >= 5 && strings.EqualFold(rest[:5], "<?php")) || strings.HasPrefix(rest, "<?=")
+}
+
+// phpOpenTagContent returns the rune column just past a leading PHP opening
+// tag and its following blanks when code follows on the same line. A marker
+// placed there comments the code while leaving the tag effective.
+func phpOpenTagContent(line string) (int, bool) {
+	runes := []rune(line)
+	i := 0
+	for i < len(runes) && (runes[i] == ' ' || runes[i] == '\t') {
+		i++
+	}
+	rest := string(runes[i:])
+	var n int
+	switch {
+	case len(rest) >= 5 && strings.EqualFold(rest[:5], "<?php"):
+		n = 5
+	case strings.HasPrefix(rest, "<?="):
+		n = 3
+	default:
+		return 0, false
+	}
+	j := i + n
+	if j >= len(runes) || (runes[j] != ' ' && runes[j] != '\t') {
+		return 0, false
+	}
+	for j < len(runes) && (runes[j] == ' ' || runes[j] == '\t') {
+		j++
+	}
+	if j >= len(runes) {
+		return 0, false
+	}
+	return j, true
+}
+
+// phpCodeStarts reports, for every line through end, whether it begins inside
+// a PHP block. Strings and comments are skipped so a ?> inside them does not
+// flip the state, except that a one-line comment still ends at ?> as PHP does.
+func phpCodeStarts(lines []string, end int) []bool {
+	if end >= len(lines) {
+		end = len(lines) - 1
+	}
+	starts := make([]bool, end+1)
+	var scan phpScan
+	for i := 0; i <= end; i++ {
+		starts[i] = scan.inCode
+		scan.line(lines[i])
+	}
+	return starts
+}
+
+type phpScan struct {
+	inCode bool
+	block  bool
+	quote  rune
+}
+
+func (s *phpScan) line(text string) {
+	runes := []rune(text)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if s.block {
+			if r == '*' && i+1 < len(runes) && runes[i+1] == '/' {
+				s.block = false
+				i++
+			}
+			continue
+		}
+		if s.quote != 0 {
+			if r == '\\' {
+				i++
+				continue
+			}
+			if r == s.quote {
+				s.quote = 0
+			}
+			continue
+		}
+		if !s.inCode {
+			if r == '<' && i+1 < len(runes) && runes[i+1] == '?' {
+				rest := string(runes[i:])
+				switch {
+				case len(rest) >= 5 && strings.EqualFold(rest[:5], "<?php"):
+					s.inCode = true
+					i += 4
+				case strings.HasPrefix(rest, "<?="):
+					s.inCode = true
+					i += 2
+				}
+			}
+			continue
+		}
+		switch {
+		case r == '?' && i+1 < len(runes) && runes[i+1] == '>':
+			s.inCode = false
+			i++
+		case r == '\'' || r == '"' || r == '`':
+			s.quote = r
+		case r == '/' && i+1 < len(runes) && runes[i+1] == '/':
+			if j := strings.Index(string(runes[i:]), "?>"); j >= 0 {
+				s.inCode = false
+				i += j + 1
+			} else {
+				return
+			}
+		case r == '#' && !(i+1 < len(runes) && runes[i+1] == '['):
+			if j := strings.Index(string(runes[i:]), "?>"); j >= 0 {
+				s.inCode = false
+				i += j + 1
+			} else {
+				return
+			}
+		case r == '/' && i+1 < len(runes) && runes[i+1] == '*':
+			s.block = true
+			i++
+		}
+	}
+}
+
+// commentDelimitersFor returns the delimiters that make text a whole-line
+// comment. Handlebars also has a long form, {{!-- ... --}}, which is the only
+// spelling that can wrap an expression containing }}. JSX and TSX accept
+// either form, but only the marker matching the line's context is inserted.
+func commentDelimitersFor(text, prefix, postfix, lang string) (string, string, bool) {
+	if isJSXLanguage(lang) {
+		if hasCommentPrefix(text, "{/*") && isWholeLineComment(text, "{/*", "*/}", lang) {
+			return "{/*", "*/}", true
+		}
+		if prefix == "//" && hasCommentPrefix(text, "//") {
+			return "//", "", true
+		}
+		return "", "", false
+	}
+	// PHP code uses "//"; an HTML-context line uses the generic <!-- -->
+	// branch below.
+	if lang == "php" && prefix == "//" {
+		if hasCommentPrefix(text, "//") {
+			return "//", "", true
+		}
+		return "", "", false
+	}
+	// Twig files carry both Twig and HTML comments; markup, script, and style
+	// lines are recognized by the marker each context uses.
+	if lang == "twig" {
+		if hasCommentPrefix(text, "{#") && isWholeLineComment(text, "{#", "#}", lang) {
+			return "{#", "#}", true
+		}
+		if hasCommentPrefix(text, "<!--") && isWholeLineComment(text, "<!--", "-->", lang) {
+			return "<!--", "-->", true
+		}
+	}
+	if lang == "sas" {
+		if hasCommentPrefix(text, "/*") && isWholeLineComment(text, "/*", "*/", lang) {
+			return "/*", "*/", true
+		}
+		if hasCommentPrefix(text, "*") && isWholeLineComment(text, "*", ";", lang) {
+			return "*", ";", true
+		}
+		return "", "", false
+	}
+	if lang == "handlebars" {
+		if hasCommentPrefix(text, "{{!--") && isWholeLineComment(text, "{{!--", "--}}", lang) {
+			return "{{!--", "--}}", true
+		}
+		if hasCommentPrefix(text, "{{!") && isWholeLineComment(text, "{{!", "}}", lang) {
+			return "{{!", "}}", true
+		}
+		return "", "", false
+	}
+	// INI parsers accept either marker; "#" is common even though the default
+	// marker this editor inserts is ";".
+	if lang == "ini" {
+		if hasCommentPrefix(text, "#") {
+			return "#", "", true
+		}
+		if hasCommentPrefix(text, ";") {
+			return ";", "", true
+		}
+		return "", "", false
+	}
+	if !hasCommentPrefix(text, prefix) {
+		return "", "", false
+	}
+	if postfix != "" && !isWholeLineComment(text, prefix, postfix, lang) {
+		return "", "", false
+	}
+	return prefix, postfix, true
+}
+
 func hasCommentPrefix(trimmed, prefix string) bool {
 	if !isWordCommentPrefix(prefix) {
 		return strings.HasPrefix(trimmed, prefix)
@@ -616,12 +1026,150 @@ func hasCommentPrefix(trimmed, prefix string) bool {
 	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
 }
 
+// isRSTCommentMarker reports whether trimmed starts a reStructuredText
+// comment: two periods followed by whitespace or the end of the line.
+func isRSTCommentMarker(trimmed string) bool {
+	if !strings.HasPrefix(trimmed, "..") {
+		return false
+	}
+	rest := trimmed[2:]
+	return rest == "" || rest[0] == ' ' || rest[0] == '\t'
+}
+
+// toggleRSTComment toggles an explicit markup comment block. The marker goes
+// on the first non-blank line and every other line is indented under it,
+// because a ".. " on each line would start a separate comment. Both that block
+// form and a list of per-line comments are recognized when uncommenting.
+func (e *EditorPaneWidget) toggleRSTComment(startLine, endLine int, before *undo.EditPosition) {
+	nonBlank := make([]int, 0, endLine-startLine+1)
+	for l := startLine; l <= endLine; l++ {
+		if strings.TrimSpace(e.Buf.Lines[l]) != "" {
+			nonBlank = append(nonBlank, l)
+		}
+	}
+	if len(nonBlank) == 0 {
+		return
+	}
+	indent := func(l int) int {
+		line := e.Buf.Lines[l]
+		return len([]rune(line)) - len([]rune(strings.TrimLeft(line, " \t")))
+	}
+	trimmed := func(l int) string { return strings.TrimLeft(e.Buf.Lines[l], " \t") }
+
+	perLine := true
+	for _, l := range nonBlank {
+		if !isRSTCommentMarker(trimmed(l)) {
+			perLine = false
+			break
+		}
+	}
+	first := nonBlank[0]
+	block := !perLine && isRSTCommentMarker(trimmed(first))
+	if block {
+		base := indent(first)
+		for _, l := range nonBlank[1:] {
+			if indent(l) <= base {
+				block = false
+				break
+			}
+		}
+	}
+
+	selected := e.Selection != nil && e.Selection.Active
+	cursorAtStart := false
+	if selected {
+		start, _ := e.Selection.Range(e.Cursor.Line, e.Cursor.Col)
+		cursorAtStart = start.Line == e.Cursor.Line && start.Col == e.Cursor.Col
+	}
+	mapColumns := func(line int, transform func(int, bool) int) {
+		if line == e.Cursor.Line {
+			e.Cursor.Col = transform(e.Cursor.Col, selected && cursorAtStart)
+		}
+		if selected && line == e.Selection.Anchor.Line {
+			e.Selection.Anchor.Col = transform(e.Selection.Anchor.Col, !cursorAtStart)
+		}
+	}
+	var cmds []undo.EditCommand
+	insert := func(line, col int, text string) {
+		cmd := &undo.InsertStringCommand{Line: line, Col: col, Text: text}
+		cmd.Apply(e.Buf)
+		cmds = append(cmds, cmd)
+		n := len([]rune(text))
+		mapColumns(line, func(c int, isStart bool) int {
+			if c > col || (c == col && !isStart) {
+				return c + n
+			}
+			return c
+		})
+	}
+	remove := func(line, col, count int) {
+		if count <= 0 {
+			return
+		}
+		cmd := &undo.DeleteSelectionCommand{
+			StartLine: line, StartCol: col,
+			EndLine: line, EndCol: col + count,
+		}
+		cmd.Apply(e.Buf)
+		cmds = append(cmds, cmd)
+		mapColumns(line, func(c int, _ bool) int {
+			if c > col {
+				return max(col, c-count)
+			}
+			return c
+		})
+	}
+
+	markerLen := func(l int) int {
+		runes := []rune(e.Buf.Lines[l])
+		col := indent(l)
+		n := 2
+		if col+2 < len(runes) && (runes[col+2] == ' ' || runes[col+2] == '\t') {
+			n++
+		}
+		return n
+	}
+
+	switch {
+	case perLine:
+		for _, l := range nonBlank {
+			remove(l, indent(l), markerLen(l))
+		}
+	case block:
+		base := indent(first)
+		remove(first, base, markerLen(first))
+		for _, l := range nonBlank[1:] {
+			runes := []rune(e.Buf.Lines[l])
+			n := 0
+			for n < 3 && base+n < len(runes) && runes[base+n] == ' ' {
+				n++
+			}
+			remove(l, base, n)
+		}
+	default:
+		base := indent(first)
+		for _, l := range nonBlank {
+			base = min(base, indent(l))
+		}
+		insert(first, base, ".. ")
+		for _, l := range nonBlank[1:] {
+			insert(l, base, "   ")
+		}
+	}
+
+	e.clampCursor()
+	if len(cmds) > 0 && e.Undo != nil {
+		e.Undo.Push(&undo.BatchCommand{Commands: cmds, Before: before, After: e.undoSelectionPosition()})
+		e.bufferDirty = true
+	}
+	e.scrollViewport()
+}
+
 func (e *EditorPaneWidget) ToggleLineComment() {
 	e.collapseMultiForLineOp()
 	before := e.undoSelectionPosition()
 	prefix, postfix := e.commentSyntax()
-	prefixLen := len([]rune(prefix))
-	postfixLen := len([]rune(postfix))
+	lang := e.commentLanguage()
 
 	startLine, endLine := e.Cursor.Line, e.Cursor.Line
 	if e.Selection != nil && e.Selection.Active {
@@ -635,18 +1183,34 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 	startLine = e.Buf.ClampLine(startLine)
 	endLine = e.Buf.ClampLine(endLine)
 
+	if lang == "rst" {
+		e.toggleRSTComment(startLine, endLine, before)
+		return
+	}
+
+	// {{! ... }} ends at the first }}, so a line holding an expression like
+	// {{name}} needs the long form to keep the comment from closing early.
+	if lang == "handlebars" {
+		for l := startLine; l <= endLine; l++ {
+			if strings.Contains(e.Buf.Lines[l], "}}") {
+				prefix, postfix = "{{!--", "--}}"
+				break
+			}
+		}
+	}
+	delims := e.commentDelimitersPerLine(startLine, endLine, prefix, postfix, lang)
+
 	allCommented := true
 	for l := startLine; l <= endLine; l++ {
-		trimmed := strings.TrimRight(strings.TrimLeft(e.Buf.Lines[l], " \t"), " \t")
+		d := delims[l-startLine]
+		if d.skip {
+			continue
+		}
+		_, trimmed := e.commentMarkerStart(e.Buf.Lines[l])
 		if trimmed == "" {
 			continue
 		}
-		commented := hasCommentPrefix(trimmed, prefix)
-		if commented && postfix != "" {
-			// Uncomment only when a single wrapper covers the whole line.
-			commented = isWholeLineComment(trimmed, prefix, postfix, e.commentLanguage())
-		}
-		if !commented {
+		if _, _, ok := commentDelimitersFor(trimmed, d.prefix, d.postfix, lang); !ok {
 			allCommented = false
 			break
 		}
@@ -657,11 +1221,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 	if !allCommented {
 		for l := startLine; l <= endLine; l++ {
 			line := e.Buf.Lines[l]
-			whitespace := leadingWhitespace(line)
-			if whitespace == line {
+			if leadingWhitespace(line) == line {
 				continue
 			}
-			indent := bufColToVisualCol(line, len([]rune(whitespace)), tabW)
+			marker, _ := e.commentMarkerStart(line)
+			indent := bufColToVisualCol(line, marker, tabW)
 			if commentCol < 0 || indent < commentCol {
 				commentCol = indent
 			}
@@ -707,15 +1271,21 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 	var cmds []undo.EditCommand
 
 	for l := startLine; l <= endLine; l++ {
+		d := delims[l-startLine]
+		if d.skip {
+			continue
+		}
 		runes := []rune(e.Buf.Lines[l])
-		trimmed := strings.TrimLeft(string(runes), " \t")
+		indent, trimmed := e.commentMarkerStart(e.Buf.Lines[l])
 		if trimmed == "" {
 			continue
 		}
-		indent := len(runes) - len([]rune(trimmed))
 
 		if allCommented {
-			removeLen := prefixLen
+			removePrefix, removePostfix, _ := commentDelimitersFor(trimmed, d.prefix, d.postfix, lang)
+			removePrefixLen := len([]rune(removePrefix))
+			removePostfixLen := len([]rune(removePostfix))
+			removeLen := removePrefixLen
 			if indent+removeLen < len(runes) && runes[indent+removeLen] == ' ' {
 				removeLen++
 			}
@@ -726,10 +1296,10 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)
 			removeColumns(l, indent, removeLen)
-			if postfix != "" {
+			if removePostfix != "" {
 				tail := []rune(strings.TrimRight(e.Buf.Lines[l], " \t"))
-				postStart := len(tail) - postfixLen
-				postRemoveLen := postfixLen
+				postStart := len(tail) - removePostfixLen
+				postRemoveLen := removePostfixLen
 				if postStart > 0 && tail[postStart-1] == ' ' {
 					postStart--
 					postRemoveLen++
@@ -743,7 +1313,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 					cmds = append(cmds, del)
 					removeColumns(l, postStart, postRemoveLen)
 				}
-				if prefix == "<!--" {
+				if removePrefix == "<!--" {
 					if unescaped := unescapeXMLCommentText(e.Buf.Lines[l]); unescaped != e.Buf.Lines[l] {
 						line := e.Buf.Lines[l]
 						mapColumns(l, func(c int, isStart bool) int {
@@ -758,6 +1328,9 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				}
 			}
 		} else {
+			prefix, postfix := d.prefix, d.postfix
+			prefixLen := len([]rune(prefix))
+			postfixLen := len([]rune(postfix))
 			if prefix == "<!--" {
 				if escaped := escapeXMLCommentText(e.Buf.Lines[l]); escaped != e.Buf.Lines[l] {
 					mapColumns(l, func(c int, _ bool) int {
@@ -773,6 +1346,9 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 				}
 			}
 			col := visualColToBufCol(e.Buf.Lines[l], commentCol, tabW)
+			if d.col >= 0 {
+				col = d.col
+			}
 			cmd := &undo.InsertStringCommand{Line: l, Col: col, Text: prefix + " "}
 			cmd.Apply(e.Buf)
 			cmds = append(cmds, cmd)

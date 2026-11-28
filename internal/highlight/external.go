@@ -3,6 +3,7 @@ package highlight
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
@@ -210,6 +211,11 @@ func (c *grammarCatalog) forFilename(name string) (grammarRef, bool) {
 		if id, ok := extraFilenames[strings.ToLower(name)]; ok {
 			info, ok := grammars.InfoForID(id)
 			return refFromInfo(info), ok
+		}
+		if id, ok := extraExtensions[strings.ToLower(filepath.Ext(name))]; ok {
+			if info, ok := grammars.InfoForID(id); ok {
+				return refFromInfo(info), true
+			}
 		}
 		trimmed := name
 		for _, suffix := range backupSuffixes {

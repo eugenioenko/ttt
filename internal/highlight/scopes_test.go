@@ -3,6 +3,7 @@ package highlight
 import (
 	"testing"
 
+	"github.com/eugenioenko/ttt/internal/core/buffer"
 	"github.com/eugenioenko/ttt/internal/term"
 )
 
@@ -115,6 +116,122 @@ func TestCSSSelectorsUseSelectorStyle(t *testing.T) {
 	}
 	if got := styleAt(html.HighlightLineAt(lines, 2), 0); got != term.StyleSyntaxSelector {
 		t.Errorf("selector inside <style> = %v, want selector", got)
+	}
+}
+
+// JSXMarkupAt must follow the line's leading context: markup lines need the
+// JSX comment form, while JS code inside an expression does not.
+func TestJSXMarkupAt(t *testing.T) {
+	lines := []string{
+		"export function App() {",
+		"  return (",
+		"    <div className=\"wrap\">",
+		"      <h1>Hello</h1>",
+		"      {items.map((item) => (",
+		"        // a js comment",
+		"        <li key={item.id}>{item}</li>",
+		"      ))}",
+		"      {cond && <span>yes</span>}",
+		"      {/* existing comment */}",
+		"    </div>",
+		"  );",
+		"}",
+	}
+	want := []bool{false, false, true, true, true, false, true, false, true, true, true, false, false}
+	h := New("view.tsx")
+	buf := &buffer.Buffer{Lines: lines}
+	for i, w := range want {
+		if got := h.JSXMarkupAt(buf, i); got != w {
+			t.Errorf("line %d (%q) markup = %v, want %v", i, lines[i], got, w)
+		}
+	}
+}
+
+func TestSvelteContextAt(t *testing.T) {
+	lines := []string{
+		"<script>",
+		"  let x = 1;",
+		"</script>",
+		"<div>",
+		"  {items.map((item) => (",
+		"    item.name",
+		"  ))}",
+		"</div>",
+		"<style>",
+		"  .a { color: red; }",
+		"</style>",
+		"plain text",
+	}
+	want := []SvelteContext{
+		SvelteMarkup, SvelteScript, SvelteMarkup, SvelteMarkup,
+		SvelteMarkup, SvelteExpression, SvelteExpression, SvelteMarkup,
+		SvelteMarkup, SvelteStyle, SvelteMarkup, SvelteMarkup,
+	}
+	h := New("view.svelte")
+	buf := &buffer.Buffer{Lines: lines}
+	for i, w := range want {
+		if got := h.SvelteContextAt(buf, i); got != w {
+			t.Errorf("line %d (%q) context = %v, want %v", i, lines[i], got, w)
+		}
+	}
+}
+
+func TestTwigContextAt(t *testing.T) {
+	lines := []string{
+		"<div class=\"a\">",
+		"  {{ name }}",
+		"  {# existing #}",
+		"</div>",
+		"<script>",
+		"  let x = 1;",
+		"</script>",
+		"<style>",
+		"  .a { color: red; }",
+		"</style>",
+		"{% verbatim %}",
+		"  <p>{# literal #}</p>",
+		"{% endverbatim %}",
+	}
+	want := []TwigContext{
+		TwigMarkup, TwigMarkup, TwigMarkup, TwigMarkup,
+		TwigMarkup, TwigScript, TwigMarkup,
+		TwigMarkup, TwigStyle, TwigMarkup,
+		TwigMarkup, TwigVerbatim, TwigMarkup,
+	}
+	h := New("view.twig")
+	buf := &buffer.Buffer{Lines: lines}
+	for i, w := range want {
+		if got := h.TwigContextAt(buf, i); got != w {
+			t.Errorf("line %d (%q) context = %v, want %v", i, lines[i], got, w)
+		}
+	}
+}
+
+func TestVueContextAt(t *testing.T) {
+	lines := []string{
+		"<template>",
+		"  <div class=\"a\">",
+		"    {{ name }}",
+		"    <p>text</p>",
+		"  </div>",
+		"</template>",
+		"<script setup lang=\"ts\">",
+		"  const x = 1;",
+		"</script>",
+		"<style scoped>",
+		"  .a { color: red; }",
+		"</style>",
+	}
+	want := []VueContext{
+		VueMarkup, VueMarkup, VueMarkup, VueMarkup, VueMarkup,
+		VueMarkup, VueMarkup, VueScript, VueMarkup, VueMarkup, VueStyle, VueMarkup,
+	}
+	h := New("view.vue")
+	buf := &buffer.Buffer{Lines: lines}
+	for i, w := range want {
+		if got := h.VueContextAt(buf, i); got != w {
+			t.Errorf("line %d (%q) context = %v, want %v", i, lines[i], got, w)
+		}
 	}
 }
 

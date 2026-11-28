@@ -79,6 +79,13 @@ var extraFilenames = map[string]string{
 	"jenkinsfile": "groovy",
 }
 
+// Conventional extensions the grammar catalog does not declare for the
+// grammar that should claim them.
+var extraExtensions = map[string]string{
+	".wat":  "wasm",
+	".wast": "wasm",
+}
+
 var backupSuffixes = []string{".bak", ".orig", ".old", "~"}
 
 // New returns nil when no grammar matches the file name.
