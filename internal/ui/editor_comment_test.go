@@ -117,6 +117,41 @@ func TestToggleLineCommentCOBOLSkipsSequenceNumberArea(t *testing.T) {
 	}
 }
 
+// A fixed-format sequence field can be alphanumeric, not just digits; its six
+// columns stay in place so the marker still lands in the indicator column.
+func TestToggleLineCommentCOBOLAlphanumericSequenceArea(t *testing.T) {
+	const original = "AB0001 MOVE WS-A TO WS-B."
+	e := newCommentEditor(t, "a.cob", []string{original}, 0, 0)
+
+	e.ToggleLineComment()
+	if got, want := e.Buf.Lines[0], "AB0001*>  MOVE WS-A TO WS-B."; got != want {
+		t.Fatalf("commented line = %q, want %q", got, want)
+	}
+
+	e.ToggleLineComment()
+	if got := e.Buf.Lines[0]; got != original {
+		t.Fatalf("uncommented line = %q, want %q", got, original)
+	}
+}
+
+// Free-format source has no sequence area, so the marker follows the
+// indentation instead of the six-column fixed-format rule.
+func TestToggleLineCommentCOBOLFreeFormat(t *testing.T) {
+	original := []string{">>SOURCE FORMAT FREE", "  MOVE WS-A TO WS-B."}
+	e := newCommentEditor(t, "a.cob", slices.Clone(original), 1, 2)
+
+	e.ToggleLineComment()
+	want := []string{">>SOURCE FORMAT FREE", "  *> MOVE WS-A TO WS-B."}
+	if !slices.Equal(e.Buf.Lines, want) {
+		t.Fatalf("commented lines = %q, want %q", e.Buf.Lines, want)
+	}
+
+	e.ToggleLineComment()
+	if !slices.Equal(e.Buf.Lines, original) {
+		t.Fatalf("uncommented lines = %q, want %q", e.Buf.Lines, original)
+	}
+}
+
 // Handlebars' short comment form is "{{! ... }}", and unwrapping must find it
 // again even though the wrapped line now ends in "}}".
 func TestToggleLineCommentHandlebarsUsesBraceMarker(t *testing.T) {

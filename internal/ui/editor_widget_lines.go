@@ -433,7 +433,7 @@ func (e *EditorPaneWidget) commentLanguage() string {
 // and the line's text from there with trailing whitespace removed. COBOL
 // fixed-format source may carry a sequence number field in its first six
 // columns, which is not source text and must not receive the marker.
-func (e *EditorPaneWidget) commentMarkerStart(line string) (int, string) {
+func (e *EditorPaneWidget) commentMarkerStart(line string, cobolFixed bool) (int, string) {
 	runes := []rune(line)
 	indent := len(runes) - len([]rune(strings.TrimLeft(line, " \t")))
 	if indent == len(runes) {
@@ -444,7 +444,7 @@ func (e *EditorPaneWidget) commentMarkerStart(line string) (int, string) {
 			return col, strings.TrimRight(string(runes[col:]), " \t")
 		}
 	}
-	if e.commentLanguage() == "cobol" {
+	if cobolFixed && e.commentLanguage() == "cobol" {
 		if col := cobolCommentColumn(line); col > indent {
 			return col, strings.TrimRight(string(runes[col:]), " \t")
 		}
@@ -463,23 +463,58 @@ func cobolCommentColumn(line string) int {
 }
 
 // isCOBOLSequenceArea reports whether the first six runes look like a fixed-
-// format sequence number field: digits and blanks with at least one digit.
+// format sequence number field: letters, digits, and blanks with at least one
+// letter or digit. Sequence fields can be alphanumeric, and the columns must be
+// preserved so the statement does not shift into the indicator column.
 func isCOBOLSequenceArea(line string) bool {
 	runes := []rune(line)
 	if len(runes) < 6 {
 		return false
 	}
-	digit := false
+	alnum := false
 	for _, r := range runes[:6] {
 		switch {
-		case r >= '0' && r <= '9':
-			digit = true
+		case r >= '0' && r <= '9', r >= 'A' && r <= 'Z', r >= 'a' && r <= 'z':
+			alnum = true
 		case r == ' ':
 		default:
 			return false
 		}
 	}
-	return digit
+	return alnum
+}
+
+// cobolFixedFormatLines reports whether each line is fixed-format source.
+// COBOL defaults to fixed format; a >>SOURCE directive can switch it, and a
+// later directive switches it back.
+func cobolFixedFormatLines(lines []string) []bool {
+	fixed := make([]bool, len(lines))
+	state := true
+	for i, line := range lines {
+		if free, ok := cobolSourceFormat(line); ok {
+			state = !free
+		}
+		fixed[i] = state
+	}
+	return fixed
+}
+
+// cobolSourceFormat reports whether a >>SOURCE directive selects free (true)
+// or fixed (false) source format. FORMAT and IS are optional words.
+func cobolSourceFormat(line string) (free, ok bool) {
+	fields := strings.Fields(strings.ToUpper(strings.TrimSpace(line)))
+	if len(fields) < 2 || fields[0] != ">>SOURCE" {
+		return false, false
+	}
+	for _, f := range fields[1:] {
+		switch f {
+		case "FREE":
+			return true, true
+		case "FIXED":
+			return false, true
+		}
+	}
+	return false, false
 }
 
 // escapeXMLCommentText spells every character that may not appear inside an
@@ -1221,6 +1256,11 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		}
 	}
 	delims := e.commentDelimitersPerLine(startLine, endLine, prefix, postfix, lang)
+	var cobolFixed []bool
+	if lang == "cobol" {
+		cobolFixed = cobolFixedFormatLines(e.Buf.Lines)
+	}
+	fixedAt := func(l int) bool { return l >= 0 && l < len(cobolFixed) && cobolFixed[l] }
 
 	allCommented := true
 	for l := startLine; l <= endLine; l++ {
@@ -1228,7 +1268,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 		if d.skip {
 			continue
 		}
-		_, trimmed := e.commentMarkerStart(e.Buf.Lines[l])
+		_, trimmed := e.commentMarkerStart(e.Buf.Lines[l], fixedAt(l))
 		if trimmed == "" {
 			continue
 		}
@@ -1246,7 +1286,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			if leadingWhitespace(line) == line {
 				continue
 			}
-			marker, _ := e.commentMarkerStart(line)
+			marker, _ := e.commentMarkerStart(line, fixedAt(l))
 			indent := bufColToVisualCol(line, marker, tabW)
 			if commentCol < 0 || indent < commentCol {
 				commentCol = indent
@@ -1298,7 +1338,7 @@ func (e *EditorPaneWidget) ToggleLineComment() {
 			continue
 		}
 		runes := []rune(e.Buf.Lines[l])
-		indent, trimmed := e.commentMarkerStart(e.Buf.Lines[l])
+		indent, trimmed := e.commentMarkerStart(e.Buf.Lines[l], fixedAt(l))
 		if trimmed == "" {
 			continue
 		}
